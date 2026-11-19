@@ -690,8 +690,13 @@ namespace engine {
 
 		storage::btree tree = { ctx.pages, table.root, false };
 		bool found = false;
+		bool cascades = false;
 
-		fine = fine && change_indexes ( ctx, table, values, rowid, false );
+		for ( uint32_t i = 0; i < count; i++ )
+			if ( hits [ i ].key->on_delete != sql::FOREIGN_RESTRICT )
+				cascades = true;
+
+		fine = fine && begin_writes ( ctx, cascades ) && change_indexes ( ctx, table, values, rowid, false );
 
 		if ( fine && !storage::table_delete ( tree, rowid, found ) )
 			fine = fail_storage ( ctx, "a row could not be deleted" );
@@ -843,7 +848,7 @@ namespace engine {
 
 		}
 
-		if ( !change_indexes ( ctx, table, old, old_rowid, false, now, new_rowid ) )
+		if ( !begin_writes ( ctx, false ) || !change_indexes ( ctx, table, old, old_rowid, false, now, new_rowid ) )
 			return false;
 
 		if ( new_rowid != old_rowid ) {
@@ -1061,7 +1066,7 @@ namespace engine {
 
 		}
 
-		if ( !store_row ( ctx, table, rowid, values, false ) || !change_indexes ( ctx, table, values, rowid, true ) )
+		if ( !begin_writes ( ctx, false ) || !store_row ( ctx, table, rowid, values, false ) || !change_indexes ( ctx, table, values, rowid, true ) )
 			return false;
 
 		ctx.last_rowid = rowid;
@@ -1323,6 +1328,9 @@ namespace engine {
 
 		}
 
+		if ( ( row_count > 1 || upserting || item->conflict == sql::CONFLICT_REPLACE ) && !begin_writes ( ctx, true ) )
+			return false;
+
 		for ( uint32_t r = 0; r < row_count; r++ ) {
 
 			base::arena_mark mark = ctx.scratch->mark ( );
@@ -1560,6 +1568,9 @@ namespace engine {
 		if ( !matching_rowids ( ctx, plan, state, rowids, count ) )
 			return false;
 
+		if ( ( count > 1 || item->conflict == sql::CONFLICT_REPLACE ) && !begin_writes ( ctx, true ) )
+			return false;
+
 		source_state& source = state.sources [ 0 ];
 
 		for ( uint32_t r = 0; r < count; r++ ) {
@@ -1625,6 +1636,9 @@ namespace engine {
 		uint32_t count = 0;
 
 		if ( !start_target ( ctx, target->plan, state ) || !matching_rowids ( ctx, target->plan, state, rowids, count ) )
+			return false;
+
+		if ( count > 1 && !begin_writes ( ctx, true ) )
 			return false;
 
 		for ( uint32_t r = 0; r < count; r++ ) {

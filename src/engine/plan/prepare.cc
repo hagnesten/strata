@@ -21,6 +21,30 @@ namespace engine {
 
 	}
 
+	bool begin_writes ( run_context& ctx, bool risky ) {
+
+		if ( !ctx.mark_pending )
+			return true;
+
+		ctx.mark_pending = false;
+
+		if ( !risky ) {
+
+			ctx.unmarked_writes = true;
+
+			return true;
+
+		}
+
+		if ( !storage::begin_statement ( *ctx.pages ) )
+			return fail_storage ( ctx, "the statement could not start" );
+
+		ctx.marked = true;
+
+		return true;
+
+	}
+
 	bool fail_storage ( run_context& ctx, const char* what ) {
 
 		if ( !ctx.problem->size ) {

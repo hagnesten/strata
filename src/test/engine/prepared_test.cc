@@ -236,6 +236,38 @@ namespace test {
 
 	}
 
+	static void statement_undo ( engine::database& db ) {
+
+		run ( db, "CREATE TABLE undo_items ( id INTEGER PRIMARY KEY, b TEXT UNIQUE, n INTEGER NOT NULL )" );
+		run ( db, "CREATE INDEX undo_n ON undo_items ( n )" );
+		run ( db, "BEGIN" );
+		run ( db, "INSERT INTO undo_items VALUES ( 1, 'a', 10 )" );
+		fails ( db, "INSERT INTO undo_items VALUES ( 2, 'a', 20 )", "UNIQUE" );
+		expect ( db.in_transaction, "a failed single-row insert keeps the transaction open" );
+		fails ( db, "INSERT INTO undo_items VALUES ( 2, 'x', NULL )", "NOT NULL" );
+		run ( db, "INSERT INTO undo_items VALUES ( 3, 'c', 30 )" );
+		fails ( db, "INSERT INTO undo_items VALUES ( 4, 'd', 40 ), ( 5, 'e', 50 ), ( 6, 'a', 60 )", "UNIQUE" );
+		expect ( db.in_transaction, "a failed multi-row insert keeps the transaction open" );
+		rows ( db, "SELECT id, b, n FROM undo_items ORDER BY id", "1|a|10\n3|c|30" );
+		fails ( db, "UPDATE undo_items SET b = 'c' WHERE id = 1", "UNIQUE" );
+		fails ( db, "UPDATE undo_items SET n = NULL WHERE id = 3", "NOT NULL" );
+		run ( db, "UPDATE undo_items SET n = n + 1 WHERE id = 1" );
+		fails ( db, "UPDATE undo_items SET b = 'z' WHERE id > 0", "UNIQUE" );
+		rows ( db, "SELECT id, b, n FROM undo_items ORDER BY id", "1|a|11\n3|c|30" );
+		rows ( db, "SELECT id FROM undo_items WHERE n = 11", "1" );
+		run ( db, "SAVEPOINT inner_step" );
+		run ( db, "DELETE FROM undo_items WHERE id = 3" );
+		run ( db, "INSERT INTO undo_items VALUES ( 7, 'g', 70 )" );
+		run ( db, "ROLLBACK TO inner_step" );
+		rows ( db, "SELECT id, b, n FROM undo_items ORDER BY id", "1|a|11\n3|c|30" );
+		run ( db, "RELEASE inner_step" );
+		run ( db, "COMMIT" );
+		rows ( db, "SELECT id, b, n FROM undo_items ORDER BY id", "1|a|11\n3|c|30" );
+		rows ( db, "SELECT count ( * ) FROM undo_items WHERE n BETWEEN 0 AND 100", "2" );
+		run ( db, "DROP TABLE undo_items" );
+
+	}
+
 	void prepared_tests ( engine::database& db ) {
 
 		section ( "prepared statements" );
@@ -243,6 +275,7 @@ namespace test {
 		select_runs ( db );
 		change_runs ( db );
 		schema_runs ( db );
+		statement_undo ( db );
 
 	}
 

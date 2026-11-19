@@ -296,10 +296,15 @@ namespace engine {
 
 		}
 
-		if ( item.in_transaction && !storage::begin_statement ( item.pages ) )
+		bool lazy = item.in_transaction && ( statement->kind == sql::STATEMENT_INSERT || statement->kind == sql::STATEMENT_UPDATE || statement->kind == sql::STATEMENT_DELETE );
+
+		if ( item.in_transaction && !lazy && !storage::begin_statement ( item.pages ) )
 			return pager_problem ( item, "the statement could not start" );
 
+		ctx.mark_pending = lazy;
+
 		bool fine = run_body ( ctx, statement, sink );
+		bool marked = item.in_transaction && ( !lazy || ctx.marked );
 
 		if ( fine && !item.in_transaction && !storage::commit_pager ( item.pages ) ) {
 
@@ -308,7 +313,7 @@ namespace engine {
 
 		}
 
-		if ( fine && item.in_transaction && !storage::end_statement ( item.pages ) ) {
+		if ( fine && marked && !storage::end_statement ( item.pages ) ) {
 
 			pager_problem ( item, "the statement could not finish" );
 			fine = false;
@@ -317,10 +322,18 @@ namespace engine {
 
 		if ( !fine ) {
 
-			if ( item.in_transaction )
+			if ( marked )
 				storage::undo_statement ( item.pages );
-			else
+			else if ( !item.in_transaction )
 				storage::rollback_pager ( item.pages );
+			else if ( ctx.unmarked_writes ) {
+
+				storage::rollback_pager ( item.pages );
+				forget_savepoints ( item );
+				item.in_transaction = false;
+				item.problem.add ( ", so the transaction was rolled back" );
+
+			}
 
 			if ( ctx.schema_changed || item.schema->version != item.pages.header.schema_version )
 				reload_schema ( item );

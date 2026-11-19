@@ -447,6 +447,9 @@ namespace engine {
 		uint32_t depth;
 		uint32_t next_id;
 		bool schema_changed;
+		bool mark_pending;
+		bool marked;
+		bool unmarked_writes;
 
 	};
 
@@ -572,6 +575,8 @@ namespace engine {
 	bool fail_named ( run_context& ctx, const char* first, const char* name, const char* rest );
 
 	bool fail_storage ( run_context& ctx, const char* what );
+
+	bool begin_writes ( run_context& ctx, bool risky );
 
 	prepared_select* prepare_select ( run_context& ctx, sql::select_statement* item, prepared_select* parent );
 
