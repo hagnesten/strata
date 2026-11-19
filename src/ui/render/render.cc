@@ -97,14 +97,16 @@ namespace ui {
 		const wchar_t* code = has_family ( out.writer, L"Consolas" ) ? L"Consolas" : L"Courier New";
 		const wchar_t* face = L"Segoe UI";
 
-		bool fine = make_font ( out, FONT_UI, face, 12.5f, DWRITE_FONT_WEIGHT_NORMAL );
+		bool fine = make_font ( out, FONT_UI, face, 14.0f, DWRITE_FONT_WEIGHT_NORMAL );
 
-		fine = fine && make_font ( out, FONT_STRONG, face, 12.5f, DWRITE_FONT_WEIGHT_MEDIUM );
-		fine = fine && make_font ( out, FONT_SMALL, face, 11.5f, DWRITE_FONT_WEIGHT_NORMAL );
-		fine = fine && make_font ( out, FONT_CAPTION, face, 10.5f, DWRITE_FONT_WEIGHT_MEDIUM );
-		fine = fine && make_font ( out, FONT_CODE, code, 13.0f, DWRITE_FONT_WEIGHT_NORMAL );
-		fine = fine && make_font ( out, FONT_CODE_SMALL, code, 12.0f, DWRITE_FONT_WEIGHT_NORMAL );
-		fine = fine && make_font ( out, FONT_TITLE, face, 14.5f, DWRITE_FONT_WEIGHT_MEDIUM );
+		fine = fine && make_font ( out, FONT_STRONG, face, 14.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD );
+		fine = fine && make_font ( out, FONT_SMALL, face, 12.5f, DWRITE_FONT_WEIGHT_NORMAL );
+		fine = fine && make_font ( out, FONT_CAPTION, face, 11.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD );
+		fine = fine && make_font ( out, FONT_CODE, code, 13.5f, DWRITE_FONT_WEIGHT_NORMAL );
+		fine = fine && make_font ( out, FONT_CODE_SMALL, code, 12.5f, DWRITE_FONT_WEIGHT_NORMAL );
+		fine = fine && make_font ( out, FONT_TITLE, face, 19.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD );
+		fine = fine && make_font ( out, FONT_VALUE, face, 22.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD );
+		fine = fine && make_font ( out, FONT_BRAND, face, 15.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD );
 
 		if ( !fine )
 			return false;
@@ -479,6 +481,13 @@ namespace ui {
 
 		item.brush->SetColor ( as_d2d ( shade ) );
 		item.target->FillEllipse ( { { x, y }, radius, radius }, item.brush );
+
+	}
+
+	void ring ( renderer& item, float x, float y, float radius, color shade, float width ) {
+
+		item.brush->SetColor ( as_d2d ( shade ) );
+		item.target->DrawEllipse ( { { x, y }, radius, radius }, item.brush, width );
 
 	}
 

@@ -66,6 +66,7 @@
     <ClCompile Include="src\engine\search\snippets.cc" />
     <ClCompile Include="src\base\math\math.cc" />
     <ClCompile Include="src\test\engine\search_test.cc" />
+    <ClCompile Include="src\test\engine\check_test.cc" />
     <ClCompile Include="src\engine\catalog\statistics.cc" />
     <ClCompile Include="src\engine\schema\analyze.cc" />
     <ClCompile Include="src\storage\btree\estimate.cc" />
@@ -104,6 +105,26 @@
     <ClCompile Include="src\studio\views\map_view.cc" />
     <ClCompile Include="src\studio\views\pages_view.cc" />
     <ClCompile Include="src\studio\sample\sample.cc" />
+    <ClCompile Include="src\studio\app\window.cc" />
+    <ClCompile Include="src\studio\app\capture.cc" />
+    <ClCompile Include="src\studio\app\script.cc" />
+    <ClCompile Include="src\studio\app\executable.cc" />
+    <ClCompile Include="src\studio\editor\complete.cc" />
+    <ClCompile Include="src\studio\widgets\field.cc" />
+    <ClCompile Include="src\studio\widgets\icons.cc" />
+    <ClCompile Include="src\studio\files\settings.cc" />
+    <ClCompile Include="src\studio\files\picker.cc" />
+    <ClCompile Include="src\studio\query\tabs.cc" />
+    <ClCompile Include="src\studio\query\library.cc" />
+    <ClCompile Include="src\studio\query\suggest.cc" />
+    <ClCompile Include="src\studio\editing\editing.cc" />
+    <ClCompile Include="src\studio\transfer\formats.cc" />
+    <ClCompile Include="src\studio\transfer\transfer.cc" />
+    <ClCompile Include="src\studio\chart\chart.cc" />
+    <ClCompile Include="src\studio\designer\designer.cc" />
+    <ClCompile Include="src\studio\views\check_view.cc" />
+    <ClCompile Include="src\engine\check\check.cc" />
+    <ClCompile Include="src\base\file\folder.cc" />
     <ClCompile Include="src\app\main\main.cc" />
   </ItemGroup>
   <ItemGroup>
@@ -142,6 +163,16 @@
     <ClInclude Include="src\studio\grid\grid.hh" />
     <ClInclude Include="src\studio\editor\editor.hh" />
     <ClInclude Include="src\studio\app\studio.hh" />
+    <ClInclude Include="src\studio\widgets\field.hh" />
+    <ClInclude Include="src\studio\widgets\icons.hh" />
+    <ClInclude Include="src\studio\files\files.hh" />
+    <ClInclude Include="src\studio\query\library.hh" />
+    <ClInclude Include="src\studio\editing\editing.hh" />
+    <ClInclude Include="src\studio\transfer\transfer.hh" />
+    <ClInclude Include="src\studio\chart\chart.hh" />
+    <ClInclude Include="src\studio\designer\designer.hh" />
+    <ClInclude Include="src\engine\check\check.hh" />
+    <ClInclude Include="src\base\file\folder.hh" />
     <ClInclude Include="src\app\main\main.hh" />
   </ItemGroup>
   <ItemGroup>

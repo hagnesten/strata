@@ -31,4 +31,6 @@ namespace test {
 
 	void search_tests ( engine::database& db );
 
+	void check_tests ( engine::database& db );
+
 }

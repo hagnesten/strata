@@ -17,6 +17,8 @@ namespace base {
 
 	bool same_bytes ( const void* a, const void* b, size_t size );
 
+	void swap_bytes ( void* a, void* b, size_t size );
+
 	template < typename type > type* make ( size_t count ) {
 
 		return static_cast < type* > ( allocate ( sizeof ( type ) * count ) );

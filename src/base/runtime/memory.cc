@@ -95,4 +95,20 @@ namespace base {
 
 	}
 
+	void swap_bytes ( void* a, void* b, size_t size ) {
+
+		uint8_t* left = static_cast < uint8_t* > ( a );
+		uint8_t* right = static_cast < uint8_t* > ( b );
+
+		for ( size_t i = 0; i < size; i++ ) {
+
+			uint8_t held = left [ i ];
+
+			left [ i ] = right [ i ];
+			right [ i ] = held;
+
+		}
+
+	}
+
 }

@@ -70,6 +70,9 @@ namespace studio {
 
 				ui::fill_round ( draw, box, 2, shade );
 
+				if ( app.check.done && app.check.bad && page <= app.check.pages && app.check.bad [ page ] )
+					ui::outline_round ( draw, { box.x - 1, box.y - 1, box.w + 2, box.h + 2 }, 3, ui::rgb ( THEME_ERROR ), 2.0f );
+
 				if ( selected )
 					ui::outline_round ( draw, { box.x - 2, box.y - 2, box.w + 4, box.h + 4 }, 3, ui::rgb ( THEME_TEXT ), 1.5f );
 
@@ -306,9 +309,11 @@ namespace studio {
 
 		ui::fill ( app.draw, area, ui::rgb ( THEME_BACKGROUND ) );
 
+		header_action actions [ 1 ] = { { ICON_CHECK, "Check file", false, app.db && app.db->open } };
+
 		if ( !app.db || !app.db->open ) {
 
-			ui::text ( app.draw, ui::FONT_UI, "No database is open", area, ui::rgb ( THEME_FAINT ), ui::ALIGN_CENTER );
+			draw_page_header ( app, area, "Pages", "No database is open", actions, 1 );
 
 			return;
 
@@ -316,10 +321,22 @@ namespace studio {
 
 		ensure_pages ( app );
 
-		float detail = clamp ( app.draw.code_small_advance * 72 + 40, 480, area.w * 0.6f );
+		base::text subtitle;
 
-		draw_page_map ( app, { area.x, area.y, area.w - detail, area.h } );
-		draw_page_detail ( app, { area.x + area.w - detail, area.y, detail, area.h } );
+		grouped ( subtitle, app.page_total );
+		subtitle.add ( app.page_total == 1 ? " page of " : " pages of " ).number ( PAGE_SIZE ).add ( " bytes   " ).number ( app.db->pages.header.free_count ).add ( " free   schema version " ).number ( app.db->pages.header.schema_version );
+
+		if ( app.check.done )
+			subtitle.add ( app.check.problem_count ? "   the last check found problems" : "   the last check passed" );
+
+		if ( draw_page_header ( app, area, "Pages", subtitle.value ( ), actions, 1 ) == 0 )
+			run_check ( app );
+
+		ui::rect body = { area.x, area.y + LAYOUT_HEADER_BAR, area.w, area.h - LAYOUT_HEADER_BAR };
+		float detail = clamp ( app.draw.code_small_advance * 72 + 40, 500, body.w * 0.6f );
+
+		draw_page_map ( app, { body.x, body.y, body.w - detail, body.h } );
+		draw_page_detail ( app, { body.x + body.w - detail, body.y, detail, body.h } );
 
 	}
 

@@ -534,20 +534,43 @@ namespace studio {
 
 	void draw_map_view ( studio_state& app, const ui::rect& area ) {
 
+		ui_context& ui = app.ui;
+		bool schema = app.map == MAP_SCHEMA;
+		ui::rect body = { area.x, area.y + LAYOUT_HEADER_BAR, area.w, area.h - LAYOUT_HEADER_BAR };
+
 		ui::fill ( app.draw, area, ui::rgb ( THEME_BACKGROUND ) );
 
 		if ( !app.db || !app.db->open || !app.db->schema->table_count ) {
 
-			ui::text ( app.draw, ui::FONT_UI, "There are no tables to draw yet", area, ui::rgb ( THEME_FAINT ), ui::ALIGN_CENTER );
+			draw_page_header ( app, area, "Map", "Tables, their links and how their pages are stored", nullptr, 0 );
+			ui::text ( app.draw, ui::FONT_UI, "There are no tables to draw yet", body, ui::rgb ( THEME_FAINT ), ui::ALIGN_CENTER );
 
 			return;
 
 		}
 
+		base::text subtitle;
+
+		if ( schema )
+			subtitle.add ( "Tables and the foreign keys between them" );
+		else if ( app.table >= 0 )
+			subtitle.add ( "B-trees of " ).add ( app.db->schema->tables [ app.table ].name ).add ( " and its indexes, page by page" );
+
+		draw_page_header ( app, area, schema ? "Schema map" : "Storage map", subtitle.value ( ), nullptr, 0 );
+
+		float right = area.x + area.w - LAYOUT_MARGIN;
+		float y = area.y + ( LAYOUT_HEADER_BAR - LAYOUT_BUTTON ) * 0.5f;
+
+		if ( segment ( ui, make_id ( "map.storage" ), { right - 110, y, 110, LAYOUT_BUTTON }, "Storage", !schema, false, true ) )
+			app.map = MAP_STORAGE;
+
+		if ( segment ( ui, make_id ( "map.schema" ), { right - 220, y, 110, LAYOUT_BUTTON }, "Schema", schema, true, false ) )
+			app.map = MAP_SCHEMA;
+
 		if ( app.map == MAP_SCHEMA )
-			draw_schema_map ( app, area );
+			draw_schema_map ( app, body );
 		else
-			draw_storage_map ( app, area );
+			draw_storage_map ( app, body );
 
 	}
 

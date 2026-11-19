@@ -359,6 +359,20 @@ namespace studio {
 
 	}
 
+	bool editor_word_char ( char value ) {
+
+		return word_char ( value );
+
+	}
+
+	void editor_replace ( editor_state& editor, size_t from, size_t to, const char* value, size_t size ) {
+
+		remember ( editor, false );
+		replace_range ( editor, from, to, value, size );
+		rebuild ( editor );
+
+	}
+
 	static void insert_text ( editor_state& editor, const char* value, size_t size, bool typing ) {
 
 		remember ( editor, typing );
@@ -443,6 +457,8 @@ namespace studio {
 		input_state& input = *ui.input;
 		bool run = false;
 
+		bool suggest = false;
+
 		for ( uint32_t k = 0; k < input.key_count; k++ ) {
 
 			uint32_t key = input.keys [ k ];
@@ -451,6 +467,14 @@ namespace studio {
 
 			if ( editor.dirty )
 				rebuild ( editor );
+
+			if ( editor.complete.open && !input.ctrl && completion_key ( editor, key ) )
+				continue;
+
+			if ( key == VK_BACK && editor.complete.open )
+				suggest = true;
+			else if ( key != VK_SHIFT && key != VK_CONTROL )
+				editor.complete.open = false;
 
 			if ( !vertical )
 				editor.wanted = false;
@@ -717,8 +741,19 @@ namespace studio {
 
 				typed.code ( code );
 				insert_text ( editor, typed.value ( ), typed.size, code != ' ' );
+				suggest = code < 0x80 && ( word_char ( static_cast < char > ( code ) ) || code == '.' );
+
+				if ( !suggest )
+					editor.complete.open = false;
 
 			}
+
+		}
+
+		if ( suggest && editor.suggest ) {
+
+			rebuild ( editor );
+			refresh_completion ( editor );
 
 		}
 
@@ -788,6 +823,7 @@ namespace studio {
 
 			editor.dragging = !input.double_click;
 			editor.wanted = false;
+			editor.complete.open = false;
 			ui.redraw = true;
 
 		}
@@ -803,6 +839,9 @@ namespace studio {
 			editor.dragging = false;
 
 		bool focused = ui.focus == editor.id;
+
+		if ( !focused )
+			editor.complete.open = false;
 
 		if ( focused && ( input.key_count || input.char_count ) ) {
 
@@ -920,6 +959,15 @@ namespace studio {
 				float x = body.x + 6 + static_cast < float > ( column_of ( editor, editor.caret ) ) * advance - editor.scroll_x;
 
 				ui::fill ( draw, { x - 0.5f, y + 2, 2, LAYOUT_LINE - 4 }, ui::rgb ( THEME_ACCENT_SOFT ) );
+
+				if ( editor.complete.open ) {
+
+					float typed = static_cast < float > ( base::count_codes ( reinterpret_cast < const uint8_t* > ( text ) + editor.complete.start, editor.caret - editor.complete.start ) ) * advance;
+
+					editor.complete.x = x - typed - 8;
+					editor.complete.y = y + LAYOUT_LINE + 2;
+
+				}
 
 			}
 

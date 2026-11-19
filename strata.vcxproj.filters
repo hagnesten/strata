@@ -109,6 +109,27 @@
     <Filter Include="src\base\math">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D36}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\studio\files">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D37}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\studio\query">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D38}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\studio\editing">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D39}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\studio\transfer">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D3A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\studio\chart">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D3B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\studio\designer">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D3C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\check">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D3D}</UniqueIdentifier>
+    </Filter>
     <Filter Include="src\app\shell">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D22}</UniqueIdentifier>
     </Filter>
@@ -200,6 +221,7 @@
     <ClCompile Include="src\engine\search\snippets.cc"><Filter>src\engine\search</Filter></ClCompile>
     <ClCompile Include="src\base\math\math.cc"><Filter>src\base\math</Filter></ClCompile>
     <ClCompile Include="src\test\engine\search_test.cc"><Filter>src\test\engine</Filter></ClCompile>
+    <ClCompile Include="src\test\engine\check_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\engine\catalog\statistics.cc"><Filter>src\engine\catalog</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\analyze.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\storage\btree\estimate.cc"><Filter>src\storage\btree</Filter></ClCompile>
@@ -238,6 +260,26 @@
     <ClCompile Include="src\studio\views\map_view.cc"><Filter>src\studio\views</Filter></ClCompile>
     <ClCompile Include="src\studio\views\pages_view.cc"><Filter>src\studio\views</Filter></ClCompile>
     <ClCompile Include="src\studio\sample\sample.cc"><Filter>src\studio\sample</Filter></ClCompile>
+    <ClCompile Include="src\studio\app\window.cc"><Filter>src\studio\app</Filter></ClCompile>
+    <ClCompile Include="src\studio\app\capture.cc"><Filter>src\studio\app</Filter></ClCompile>
+    <ClCompile Include="src\studio\app\script.cc"><Filter>src\studio\app</Filter></ClCompile>
+    <ClCompile Include="src\studio\app\executable.cc"><Filter>src\studio\app</Filter></ClCompile>
+    <ClCompile Include="src\studio\editor\complete.cc"><Filter>src\studio\editor</Filter></ClCompile>
+    <ClCompile Include="src\studio\widgets\field.cc"><Filter>src\studio\widgets</Filter></ClCompile>
+    <ClCompile Include="src\studio\widgets\icons.cc"><Filter>src\studio\widgets</Filter></ClCompile>
+    <ClCompile Include="src\studio\files\settings.cc"><Filter>src\studio\files</Filter></ClCompile>
+    <ClCompile Include="src\studio\files\picker.cc"><Filter>src\studio\files</Filter></ClCompile>
+    <ClCompile Include="src\studio\query\tabs.cc"><Filter>src\studio\query</Filter></ClCompile>
+    <ClCompile Include="src\studio\query\library.cc"><Filter>src\studio\query</Filter></ClCompile>
+    <ClCompile Include="src\studio\query\suggest.cc"><Filter>src\studio\query</Filter></ClCompile>
+    <ClCompile Include="src\studio\editing\editing.cc"><Filter>src\studio\editing</Filter></ClCompile>
+    <ClCompile Include="src\studio\transfer\formats.cc"><Filter>src\studio\transfer</Filter></ClCompile>
+    <ClCompile Include="src\studio\transfer\transfer.cc"><Filter>src\studio\transfer</Filter></ClCompile>
+    <ClCompile Include="src\studio\chart\chart.cc"><Filter>src\studio\chart</Filter></ClCompile>
+    <ClCompile Include="src\studio\designer\designer.cc"><Filter>src\studio\designer</Filter></ClCompile>
+    <ClCompile Include="src\studio\views\check_view.cc"><Filter>src\studio\views</Filter></ClCompile>
+    <ClCompile Include="src\engine\check\check.cc"><Filter>src\engine\check</Filter></ClCompile>
+    <ClCompile Include="src\base\file\folder.cc"><Filter>src\base\file</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base\runtime\memory.hh"><Filter>src\base\runtime</Filter></ClInclude>
@@ -276,6 +318,16 @@
     <ClInclude Include="src\studio\grid\grid.hh"><Filter>src\studio\grid</Filter></ClInclude>
     <ClInclude Include="src\studio\editor\editor.hh"><Filter>src\studio\editor</Filter></ClInclude>
     <ClInclude Include="src\studio\app\studio.hh"><Filter>src\studio\app</Filter></ClInclude>
+    <ClInclude Include="src\studio\widgets\field.hh"><Filter>src\studio\widgets</Filter></ClInclude>
+    <ClInclude Include="src\studio\widgets\icons.hh"><Filter>src\studio\widgets</Filter></ClInclude>
+    <ClInclude Include="src\studio\files\files.hh"><Filter>src\studio\files</Filter></ClInclude>
+    <ClInclude Include="src\studio\query\library.hh"><Filter>src\studio\query</Filter></ClInclude>
+    <ClInclude Include="src\studio\editing\editing.hh"><Filter>src\studio\editing</Filter></ClInclude>
+    <ClInclude Include="src\studio\transfer\transfer.hh"><Filter>src\studio\transfer</Filter></ClInclude>
+    <ClInclude Include="src\studio\chart\chart.hh"><Filter>src\studio\chart</Filter></ClInclude>
+    <ClInclude Include="src\studio\designer\designer.hh"><Filter>src\studio\designer</Filter></ClInclude>
+    <ClInclude Include="src\engine\check\check.hh"><Filter>src\engine\check</Filter></ClInclude>
+    <ClInclude Include="src\base\file\folder.hh"><Filter>src\base\file</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="props\strata.props"><Filter>props</Filter></None>

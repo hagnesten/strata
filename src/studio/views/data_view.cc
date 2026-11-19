@@ -1,167 +1,76 @@
 ﻿#include "studio/app/studio.hh"
+#include "sql/print/print.hh"
 
 namespace studio {
 
-	static float section ( ui_context& ui, float x, float y, float w, const char* label ) {
+	static void draw_stats ( studio_state& app, const ui::rect& area, const engine::table_info& table, const table_stats& stats ) {
 
-		ui::line ( *ui.draw, x, y + 0.5f, x + w, y + 0.5f, ui::rgb ( THEME_DIVIDER ) );
-		caption ( ui, { x + 16, y + 6, w - 32, LAYOUT_CAPTION }, label );
-
-		return y + 6 + LAYOUT_CAPTION;
-
-	}
-
-	static float pair ( ui_context& ui, float x, float y, float w, const char* key, const base::text& value, uint32_t shade = THEME_TEXT ) {
-
-		key_value ( ui, { x + 16, y, w - 32, 24 }, key, value.value ( ), ui::rgb ( shade ) );
-
-		return y + 24;
-
-	}
-
-	static void draw_inspector ( studio_state& app, const ui::rect& area, engine::table_info& table, const table_stats& stats ) {
-
-		ui_context& ui = app.ui;
 		ui::renderer& draw = app.draw;
 		engine::catalog& schema = *app.db->schema;
-		float x = area.x;
-		float w = area.w;
-		float y = area.y;
+		float w = ( area.w - LAYOUT_MARGIN ) / 5;
+		float x = area.x + LAYOUT_MARGIN;
 		base::text value;
+		base::text detail;
 
-		ui::fill ( draw, area, ui::rgb ( THEME_PANEL ) );
-		ui::line ( draw, area.x + 0.5f, area.y, area.x + 0.5f, area.y + area.h, ui::rgb ( THEME_DIVIDER ) );
-		ui::push_clip ( draw, area );
-		caption ( ui, { x + 16, y + 6, w - 32, LAYOUT_CAPTION }, "Table" );
-		y += 6 + LAYOUT_CAPTION;
+		ui::fill ( draw, area, ui::rgb ( THEME_BACKGROUND ) );
+		ui::line ( draw, area.x, area.y + area.h - 0.5f, area.x + area.w, area.y + area.h - 0.5f, ui::rgb ( THEME_DIVIDER ) );
+
 		grouped ( value, stats.rows );
-		y = pair ( ui, x, y, w, "Rows", value );
-		value.clear ( );
-		value.number ( table.column_count );
-		y = pair ( ui, x, y, w, "Columns", value );
-		value.clear ( );
 
-		if ( table.rowid_column >= 0 )
-			value.add ( table.columns [ table.rowid_column ].name ).add ( " (row id)" );
-		else if ( table.primary_count ) {
+		if ( app.data_grid.rows < stats.rows ) {
 
-			for ( uint32_t k = 0; k < table.primary_count; k++ )
-				value.add ( k ? ", " : "" ).add ( table.columns [ table.primary [ k ] ].name );
+			detail.add ( "showing the first " );
+			grouped ( detail, app.data_grid.rows );
 
 		} else
-			value.add ( "row id" );
+			detail.add ( stats.rows == 1 ? "one row" : "all shown" );
 
-		y = pair ( ui, x, y, w, "Key", value );
+		x = draw_stat ( app, x, area.y, w, "Rows", value.value ( ), detail.value ( ), true );
 		value.clear ( );
-		value.number ( table.root );
-		y = pair ( ui, x, y, w, "Root page", value, THEME_ACCENT_SOFT );
+		detail.clear ( );
+		value.number ( table.column_count );
 
-		y = section ( ui, x, y + 8, w, "Storage" );
+		if ( table.rowid_column >= 0 )
+			detail.add ( "key " ).add ( table.columns [ table.rowid_column ].name );
+		else if ( table.primary_count )
+			detail.add ( "key " ).add ( table.columns [ table.primary [ 0 ] ].name ).add ( table.primary_count > 1 ? " and more" : "" );
+		else
+			detail.add ( "keyed by row id" );
+
+		x = draw_stat ( app, x, area.y, w, "Columns", value.value ( ), detail.value ( ), true );
 		value.clear ( );
-		value.number ( stats.pages );
-		y = pair ( ui, x, y, w, "Pages", value );
+		detail.clear ( );
+		grouped ( value, stats.pages + stats.overflow );
+		detail.number ( stats.leaves ).add ( stats.leaves == 1 ? " leaf, " : " leaves, " ).number ( stats.depth + 1 ).add ( stats.depth ? " levels" : " level" );
+		x = draw_stat ( app, x, area.y, w, "Pages", value.value ( ), detail.value ( ), true );
 		value.clear ( );
-		value.number ( stats.leaves );
-		y = pair ( ui, x, y, w, "Leaves", value );
-		value.clear ( );
-		value.number ( stats.depth + 1 );
-		y = pair ( ui, x, y, w, "Levels", value );
-		value.clear ( );
-		value.number ( stats.overflow );
-		y = pair ( ui, x, y, w, "Overflow pages", value );
-		value.clear ( );
-		size_text ( value, static_cast < uint64_t > ( stats.pages ) * PAGE_SIZE );
-		y = pair ( ui, x, y, w, "On disk", value );
+		detail.clear ( );
+		size_text ( value, static_cast < uint64_t > ( stats.pages + stats.overflow ) * PAGE_SIZE );
 
 		float fill = stats.pages ? static_cast < float > ( stats.used ) / static_cast < float > ( static_cast < uint64_t > ( stats.pages ) * PAGE_USABLE ) : 0;
 
+		detail.number ( static_cast < uint64_t > ( fill * 100 + 0.5f ) ).add ( "% page fill, root page " ).number ( table.root );
+		x = draw_stat ( app, x, area.y, w, "On disk", value.value ( ), detail.value ( ), true );
 		value.clear ( );
-		value.number ( static_cast < uint64_t > ( fill * 100 + 0.5f ) ).add ( '%' );
-		y = pair ( ui, x, y, w, "Page fill", value );
+		detail.clear ( );
 
-		ui::rect bar = { x + 16, y + 4, w - 32, 4 };
-
-		ui::fill_round ( draw, bar, 2, ui::rgb ( THEME_RAISED ) );
-		ui::fill_round ( draw, { bar.x, bar.y, bar.w * clamp ( fill, 0, 1 ), bar.h }, 2, ui::rgb ( THEME_ACCENT ) );
-		y += 20;
-
-		y = section ( ui, x, y, w, "Columns" );
-
-		for ( uint32_t c = 0; c < table.column_count; c++ ) {
-
-			const engine::column_info& column = table.columns [ c ];
-			base::text flags;
-
-			if ( column.type && *column.type )
-				flags.add ( column.type );
-
-			if ( column.rowid )
-				flags.add ( flags.size ? " \xC2\xB7 key" : "key" );
-
-			if ( column.not_null && !column.rowid )
-				flags.add ( flags.size ? " \xC2\xB7 not null" : "not null" );
-
-			ui::text ( draw, ui::FONT_UI, column.name, { x + 16, y, w * 0.5f - 16, 24 }, ui::rgb ( THEME_TEXT ) );
-			ui::text ( draw, ui::FONT_SMALL, flags.value ( ), flags.size, { x + w * 0.5f, y, w * 0.5f - 16, 24 }, ui::rgb ( THEME_DIM ) );
-			y += 24;
-
-		}
-
-		bool any_index = false;
+		uint32_t indexes = 0;
 
 		for ( uint32_t i = 0; i < schema.index_count; i++ ) {
 
-			engine::index_info& index = schema.indexes [ i ];
-
-			if ( !base::same_folded ( index.table, table.name ) )
+			if ( !base::same_folded ( schema.indexes [ i ].table, table.name ) )
 				continue;
 
-			if ( !any_index )
-				y = section ( ui, x, y + 8, w, "Indexes" );
+			if ( indexes )
+				detail.add ( ", " );
 
-			any_index = true;
-
-			base::text columns;
-
-			for ( uint32_t k = 0; k < index.column_count; k++ )
-				columns.add ( k ? ", " : "" ).add ( table.columns [ index.columns [ k ] ].name );
-
-			ui::text ( draw, ui::FONT_UI, index.automatic ? ( index.unique ? "unique" : "automatic" ) : index.name, { x + 16, y, w * 0.5f - 16, 24 }, ui::rgb ( index.automatic ? THEME_DIM : THEME_TEXT ) );
-			ui::text ( draw, ui::FONT_UI, columns.value ( ), columns.size, { x + w * 0.5f, y, w * 0.5f - 16, 24 }, ui::rgb ( THEME_DIM ) );
-			y += 24;
+			detail.add ( schema.indexes [ i ].automatic ? "unique" : schema.indexes [ i ].name );
+			indexes++;
 
 		}
 
-		if ( table.foreign_count ) {
-
-			y = section ( ui, x, y + 8, w, "References" );
-
-			for ( uint32_t f = 0; f < table.foreign_count; f++ ) {
-
-				const engine::foreign_key& key = table.foreign [ f ];
-				base::text left;
-				base::text right;
-
-				for ( uint32_t k = 0; k < key.column_count; k++ )
-					left.add ( k ? ", " : "" ).add ( table.columns [ key.columns [ k ] ].name );
-
-				right.add ( key.parent );
-
-				if ( key.on_delete == sql::FOREIGN_CASCADE )
-					right.add ( " \xC2\xB7 cascade" );
-				else if ( key.on_delete == sql::FOREIGN_SET_NULL )
-					right.add ( " \xC2\xB7 set null" );
-
-				ui::text ( draw, ui::FONT_UI, left.value ( ), left.size, { x + 16, y, w * 0.5f - 28, 24 }, ui::rgb ( THEME_TEXT ) );
-				ui::text ( draw, ui::FONT_SMALL, "\xE2\x86\x92", { x + w * 0.5f - 16, y, 16, 24 }, ui::rgb ( THEME_FUNCTION ) );
-				ui::text ( draw, ui::FONT_SMALL, right.value ( ), right.size, { x + w * 0.5f, y, w * 0.5f - 16, 24 }, ui::rgb ( THEME_DIM ) );
-				y += 24;
-
-			}
-
-		}
-
-		ui::pop_clip ( draw );
+		value.number ( indexes );
+		draw_stat ( app, x, area.y, w, "Indexes", value.value ( ), indexes ? detail.value ( ) : "none yet", false );
 
 	}
 
@@ -169,9 +78,16 @@ namespace studio {
 
 		ui::renderer& draw = app.draw;
 
+		ui::fill ( draw, area, ui::rgb ( THEME_BACKGROUND ) );
+
 		if ( !app.db || !app.db->open || app.table < 0 ) {
 
-			ui::text ( draw, ui::FONT_UI, app.db && app.db->open ? "This database has no tables yet. Make one in the Query tab." : "No database is open. Drop a file on the window.", area, ui::rgb ( THEME_FAINT ), ui::ALIGN_CENTER );
+			header_action actions [ 1 ] = { { ICON_PLUS, "New table", true, app.db != nullptr } };
+
+			if ( draw_page_header ( app, area, "Data", app.db && app.db->open ? "This database has no tables yet" : "No database is open", actions, 1 ) == 0 )
+				open_designer ( app, -1 );
+
+			ui::text ( draw, ui::FONT_UI, app.db && app.db->open ? "Make a table with New table, or import a CSV file" : "Open a database with Ctrl+O or drop a file on the window", { area.x, area.y + LAYOUT_HEADER_BAR, area.w, area.h - LAYOUT_HEADER_BAR }, ui::rgb ( THEME_FAINT ), ui::ALIGN_CENTER );
 
 			return;
 
@@ -182,25 +98,91 @@ namespace studio {
 		ensure_stats ( app, app.table );
 
 		const table_stats& stats = app.stats [ app.table ];
-		float inspector = LAYOUT_INSPECTOR;
-		ui::rect head = { area.x, area.y, area.w - inspector, 54 };
+		bool row_picked = app.data_grid.selected_row >= 0 && app.data_grid.selected_row < static_cast < int32_t > ( app.data_grid.rows );
+		header_action actions [ 5 ] = {
 
-		ui::fill ( draw, head, ui::rgb ( THEME_BACKGROUND ) );
-		table_glyph ( draw, head.x + 18, head.y + 13, ui::rgb ( THEME_ACCENT ) );
-		ui::text ( draw, ui::FONT_TITLE, table.name, { head.x + 40, head.y + 4, head.w - 60, 26 }, ui::rgb ( THEME_TEXT ) );
+			{ ICON_IMPORT, "Import", false, true },
+			{ ICON_EXPORT, "Export", false, true },
+			{ ICON_EDIT, "Design", false, true },
+			{ ICON_TRASH, "Delete row", false, row_picked },
+			{ ICON_PLUS, "Add row", true, true },
 
-		base::text line;
+		};
+		base::text subtitle;
 
-		grouped ( line, stats.rows );
-		line.add ( stats.rows == 1 ? " row   " : " rows   " ).number ( table.column_count ).add ( table.column_count == 1 ? " column   " : " columns   " ).number ( stats.pages ).add ( stats.pages == 1 ? " page" : " pages" );
+		subtitle.add ( "Double-click a cell to change it   Delete removes the selected row" );
 
-		if ( app.data_grid.rows < stats.rows )
-			line.add ( "   showing the first " ).number ( app.data_grid.rows );
+		switch ( draw_page_header ( app, area, table.name, subtitle.value ( ), actions, 5 ) ) {
 
-		ui::text ( draw, ui::FONT_SMALL, line.value ( ), line.size, { head.x + 40, head.y + 28, head.w - 60, 18 }, ui::rgb ( THEME_DIM ) );
-		ui::line ( draw, head.x, head.y + head.h - 0.5f, head.x + head.w, head.y + head.h - 0.5f, ui::rgb ( THEME_DIVIDER ) );
-		draw_grid ( app.ui, app.data_grid, { area.x, area.y + head.h, area.w - inspector, area.h - head.h }, stats.rows ? "Loading rows" : "This table is empty" );
-		draw_inspector ( app, { area.x + area.w - inspector, area.y, inspector, area.h }, table, stats );
+			case 0:
+				open_import ( app );
+				break;
+
+			case 1: {
+
+				base::text sql;
+
+				sql.add ( "SELECT * FROM " );
+				sql::print_name ( sql, table.name );
+				open_export ( app, sql.value ( ), table.name );
+
+				break;
+
+			}
+
+			case 2:
+				open_designer ( app, app.table );
+				break;
+
+			case 3:
+				delete_table_row ( app );
+				break;
+
+			case 4:
+				add_table_row ( app );
+				break;
+
+			default:
+				break;
+
+		}
+
+		if ( app.table < 0 || !app.db->schema->table_count )
+			return;
+
+		float y = area.y + LAYOUT_HEADER_BAR;
+
+		draw_stats ( app, { area.x, y, area.w, LAYOUT_STATS }, app.db->schema->tables [ app.table ], app.stats [ app.table ] );
+		y += LAYOUT_STATS;
+
+		if ( app.db->in_transaction ) {
+
+			draw_change_bar ( app, { area.x, y, area.w, CHANGE_BAR } );
+			y += CHANGE_BAR;
+
+		}
+
+		ui::rect grid = { area.x, y, area.w, area.y + area.h - y };
+
+		draw_grid ( app.ui, app.data_grid, grid, stats.rows ? "Loading rows" : "This table is empty. Add a row to start." );
+
+		if ( app.data_grid.activated ) {
+
+			app.data_grid.activated = false;
+
+			if ( app.data_grid.selected_row >= 0 && app.data_grid.selected_column >= static_cast < int32_t > ( app.data_grid.hidden ) )
+				begin_cell_edit ( app, static_cast < uint32_t > ( app.data_grid.selected_row ), static_cast < uint32_t > ( app.data_grid.selected_column ) );
+
+		}
+
+		if ( app.data_grid.erase ) {
+
+			app.data_grid.erase = false;
+			delete_table_row ( app );
+
+		}
+
+		draw_cell_edit ( app, grid );
 
 	}
 

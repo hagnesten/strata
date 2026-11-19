@@ -1,11 +1,8 @@
 #include "studio/app/studio.hh"
 #include "sql/print/print.hh"
 #include "base/file/file.hh"
-#include "base/console/console.hh"
 
 #include <windows.h>
-#include <shellapi.h>
-#include <dwmapi.h>
 
 namespace studio {
 
@@ -138,6 +135,7 @@ namespace studio {
 		app.trees_for = -1;
 		app.pages_ready = false;
 		app.page_loaded = false;
+		app.edit.active = false;
 
 		uint32_t count = app.db ? app.db->schema->table_count : 0;
 
@@ -149,28 +147,69 @@ namespace studio {
 
 	}
 
-	void select_table ( studio_state& app, int32_t table ) {
+	static void load_rows ( studio_state& app ) {
 
-		app.table = table;
-		app.trees_for = -1;
+		uint64_t id = app.data_grid.id;
+
 		clear_grid ( app.data_grid );
+		app.data_grid.id = id;
+		app.data_grid.hidden = 1;
 
-		if ( !app.db || table < 0 || table >= static_cast < int32_t > ( app.db->schema->table_count ) )
+		if ( !app.db || app.table < 0 || app.table >= static_cast < int32_t > ( app.db->schema->table_count ) )
 			return;
 
-		engine::table_info& info = app.db->schema->tables [ table ];
+		engine::table_info& info = app.db->schema->tables [ app.table ];
 		base::text sql;
 		engine::query_sink sink = { &app.data_grid, grid_columns, grid_row };
 
-		sql.add ( "SELECT * FROM " );
+		sql.add ( "SELECT rowid, * FROM " );
 		sql::print_name ( sql, info.name );
-		sql.add ( " LIMIT 20000" );
+		sql.add ( " LIMIT " ).number ( STUDIO_DATA_LIMIT );
 
 		if ( !engine::execute ( *app.db, sql.value ( ), nullptr, 0, &sink ) )
 			set_status ( app, app.db->problem.value ( ), true );
 
+		app.data_grid.hidden = 1;
 		finish_grid ( app.data_grid, app.draw );
+
+	}
+
+	void select_table ( studio_state& app, int32_t table ) {
+
+		app.table = table;
+		app.trees_for = -1;
+		app.edit.active = false;
+		load_rows ( app );
 		ensure_stats ( app, table );
+
+	}
+
+	void reload_table ( studio_state& app ) {
+
+		float scroll_x = app.data_grid.scroll_x;
+		float scroll_y = app.data_grid.scroll_y;
+		int32_t row = app.data_grid.selected_row;
+		int32_t column = app.data_grid.selected_column;
+		grid_column widths [ 64 ];
+		uint32_t kept = app.data_grid.column_count < 64 ? app.data_grid.column_count : 64;
+
+		for ( uint32_t c = 0; c < kept; c++ )
+			widths [ c ] = app.data_grid.columns [ c ];
+
+		if ( app.table >= 0 && app.table < static_cast < int32_t > ( CATALOG_TABLES ) )
+			app.stats [ app.table ].known = false;
+
+		load_rows ( app );
+		ensure_stats ( app, app.table );
+
+		if ( app.data_grid.column_count == kept )
+			for ( uint32_t c = 0; c < kept; c++ )
+				app.data_grid.columns [ c ].width = widths [ c ].width;
+
+		app.data_grid.scroll_x = scroll_x;
+		app.data_grid.scroll_y = scroll_y;
+		app.data_grid.selected_row = row < static_cast < int32_t > ( app.data_grid.rows ) ? row : static_cast < int32_t > ( app.data_grid.rows ) - 1;
+		app.data_grid.selected_column = column;
 
 	}
 
@@ -185,18 +224,28 @@ namespace studio {
 
 		}
 
-		engine::close_database ( *app.db );
+		engine::database* fresh = base::make < engine::database > ( 1 );
 
-		if ( !engine::open_database ( *app.db, path ) ) {
+		if ( !fresh )
+			return false;
+
+		if ( !engine::open_database ( *fresh, path ) ) {
 
 			base::text message;
 
-			message.add ( "Could not open " ).add ( path ).add ( ": " ).add ( app.db->problem.value ( ) );
+			message.add ( "Could not open " ).add ( path ).add ( ": " ).add ( fresh->problem.value ( ) );
 			set_status ( app, message.value ( ), true );
+			fresh->problem.~text ( );
+			base::release ( fresh );
 
 			return false;
 
 		}
+
+		engine::close_database ( *app.db );
+		app.db->problem.~text ( );
+		base::release ( app.db );
+		app.db = fresh;
 
 		base::copy_text ( app.path, sizeof ( app.path ), path );
 		app.file_name = app.path;
@@ -206,8 +255,10 @@ namespace studio {
 				app.file_name = at + 1;
 
 		app.table = -1;
+		engine::forget_report ( app.check );
 		refresh_schema ( app );
 		select_table ( app, app.table );
+		remember_file ( app, path );
 
 		base::text message;
 
@@ -255,12 +306,44 @@ namespace studio {
 
 		plan_data& plan = *static_cast < plan_data* > ( context );
 
+		( void ) names;
+		( void ) count;
 		plan.memory.reset ( );
 		plan.rows = nullptr;
 		plan.count = 0;
 		plan.room = 0;
 
 		return true;
+
+	}
+
+	bool run_sql ( studio_state& app, const char* sql, const storage::value* parameters, uint32_t count ) {
+
+		if ( !app.db )
+			return false;
+
+		if ( engine::execute ( *app.db, sql, parameters, count, nullptr ) )
+			return true;
+
+		set_status ( app, app.db->problem.value ( ), true );
+
+		return false;
+
+	}
+
+	void after_change ( studio_state& app ) {
+
+		int32_t table = app.table;
+		uint32_t version = app.db ? app.db->schema->version : 0;
+
+		refresh_schema ( app );
+
+		if ( app.db && table >= 0 && table < static_cast < int32_t > ( app.db->schema->table_count ) )
+			app.table = table;
+
+		( void ) version;
+		reload_table ( app );
+		engine::forget_report ( app.check );
 
 	}
 
@@ -274,6 +357,11 @@ namespace studio {
 		size_t base_offset = 0;
 
 		editor_run_text ( app.editor, body, base_offset );
+
+		if ( !body.size )
+			return;
+
+		note_history ( app, body.value ( ), body.size );
 
 		if ( explain )
 			sql.add ( "EXPLAIN QUERY PLAN " );
@@ -307,6 +395,12 @@ namespace studio {
 
 			fine = engine::execute ( *app.db, sql.value ( ), nullptr, 0, &sink );
 			finish_grid ( app.result_grid, app.draw );
+			app.result_sql.clear ( );
+
+			if ( fine && app.result_grid.loaded )
+				app.result_sql.add ( body.value ( ), body.size );
+
+			reset_chart ( app.chart, app.result_grid );
 
 		}
 
@@ -356,8 +450,9 @@ namespace studio {
 
 			} else if ( app.result_grid.loaded ) {
 
-				app.result = RESULT_GRID;
-				message.number ( app.result_grid.rows ).add ( app.result_grid.rows == 1 ? " row" : " rows" );
+				app.result = app.result == RESULT_CHART ? RESULT_CHART : RESULT_GRID;
+				grouped ( message, app.result_grid.rows );
+				message.add ( app.result_grid.rows == 1 ? " row" : " rows" );
 
 				if ( app.result_grid.truncated )
 					message.add ( " shown, more were cut off" );
@@ -378,18 +473,8 @@ namespace studio {
 
 		}
 
-		if ( version != app.db->schema->version || changes != app.db->total_changes || app.db->in_transaction || was_open ) {
-
-			int32_t table = app.table;
-
-			refresh_schema ( app );
-
-			if ( table >= 0 && table < static_cast < int32_t > ( app.db->schema->table_count ) )
-				app.table = table;
-
-			select_table ( app, app.table );
-
-		}
+		if ( version != app.db->schema->version || changes != app.db->total_changes || app.db->in_transaction || was_open )
+			after_change ( app );
 
 	}
 
@@ -580,6 +665,72 @@ namespace studio {
 
 	}
 
+	void run_check ( studio_state& app ) {
+
+		if ( !app.db )
+			return;
+
+		double started = now_ms ( app );
+		bool clean = engine::check_database ( *app.db, app.check );
+		base::text message;
+
+		if ( clean ) {
+
+			message.add ( "No problems in " );
+			grouped ( message, app.check.pages );
+			message.add ( " pages, " ).number ( app.check.trees ).add ( " trees and " );
+			grouped ( message, app.check.rows );
+			message.add ( " rows" );
+
+		} else {
+
+			message.number ( app.check.problem_count ).add ( app.check.problem_count == 1 ? " problem found" : " problems found" );
+
+		}
+
+		message.add ( " in " ).decimal ( static_cast < uint64_t > ( ( now_ms ( app ) - started ) * 10 ), 10, 1 ).add ( " ms" );
+		set_status ( app, message.value ( ), !clean );
+		app.check_scroll = 0;
+		app.overlay = OVERLAY_CHECK;
+
+	}
+
+	static void handle_shortcuts ( studio_state& app ) {
+
+		ui_context& ui = app.ui;
+		input_state& input = app.input;
+
+		if ( input.ctrl ) {
+
+			for ( uint32_t k = 0; k < input.key_count; k++ ) {
+
+				uint32_t key = input.keys [ k ];
+
+				if ( key >= '1' && key <= '4' ) {
+
+					app.view = static_cast < view_kind > ( key - '1' );
+					ui.redraw = true;
+
+				}
+
+			}
+
+			if ( key_hit ( ui, 'O' ) )
+				open_picker ( app );
+
+			if ( app.view == VIEW_QUERY && key_hit ( ui, 'T' ) )
+				add_tab ( app, "" );
+
+			if ( app.view == VIEW_QUERY && key_hit ( ui, 'W' ) && app.tab_count > 1 )
+				close_tab ( app, app.tab );
+
+		}
+
+		if ( app.view == VIEW_QUERY && ui.focus != app.editor.id && key_hit ( ui, VK_F5 ) )
+			run_editor ( app, false );
+
+	}
+
 	void draw_frame ( studio_state& app ) {
 
 		ui::renderer& draw = app.draw;
@@ -593,33 +744,39 @@ namespace studio {
 		ui.cursor = CURSOR_ARROW;
 		ui.hover_set = false;
 
-		if ( app.input.ctrl ) {
+		bool modal = app.overlay != OVERLAY_NONE;
+		input_state held = app.input;
 
-			for ( uint32_t k = 0; k < app.input.key_count; k++ ) {
+		if ( modal && key_hit ( ui, VK_ESCAPE ) ) {
 
-				uint32_t key = app.input.keys [ k ];
-
-				if ( key >= '1' && key <= '4' ) {
-
-					app.view = static_cast < view_kind > ( key - '1' );
-					ui.redraw = true;
-
-				}
-
-			}
+			app.overlay = OVERLAY_NONE;
+			modal = false;
+			app.input.key_count = 0;
 
 		}
 
-		if ( app.view == VIEW_QUERY && ui.focus != app.editor.id && key_hit ( ui, VK_F5 ) )
-			run_editor ( app, false );
+		if ( modal ) {
+
+			app.input.pressed = false;
+			app.input.released = false;
+			app.input.double_click = false;
+			app.input.right_pressed = false;
+			app.input.wheel = 0;
+			app.input.key_count = 0;
+			app.input.char_count = 0;
+			app.input.x = -100000;
+			app.input.y = -100000;
+
+		} else
+			handle_shortcuts ( app );
 
 		ui::fill ( draw, { 0, 0, width, height }, ui::rgb ( THEME_BACKGROUND ) );
 
-		float sidebar = clamp ( app.sidebar_width, 180, width * 0.45f );
-		ui::rect toolbar = { 0, 0, width, LAYOUT_TOOLBAR };
+		float sidebar = clamp ( app.sidebar_width, 200, width * 0.4f );
+		ui::rect title = { 0, 0, width, LAYOUT_TITLE };
 		ui::rect status = { 0, height - LAYOUT_STATUS, width, LAYOUT_STATUS };
-		ui::rect side = { 0, LAYOUT_TOOLBAR, sidebar, height - LAYOUT_TOOLBAR - LAYOUT_STATUS };
-		ui::rect content = { sidebar + 1, LAYOUT_TOOLBAR, width - sidebar - 1, side.h };
+		ui::rect side = { 0, LAYOUT_TITLE, sidebar, height - LAYOUT_TITLE - LAYOUT_STATUS };
+		ui::rect content = { sidebar + 1, LAYOUT_TITLE, width - sidebar - 1, side.h };
 
 		switch ( app.view ) {
 
@@ -631,769 +788,28 @@ namespace studio {
 		}
 
 		draw_sidebar ( app, side );
-		ui::line ( draw, sidebar + 0.5f, LAYOUT_TOOLBAR, sidebar + 0.5f, height - LAYOUT_STATUS, ui::rgb ( THEME_DIVIDER ) );
-		splitter ( ui, make_id ( "sidebar.split" ), { sidebar - 3, LAYOUT_TOOLBAR, 6, side.h }, true, app.sidebar_width, 180, width * 0.45f );
-		draw_toolbar ( app, toolbar );
+		ui::line ( draw, sidebar + 0.5f, LAYOUT_TITLE, sidebar + 0.5f, height - LAYOUT_STATUS, ui::rgb ( THEME_DIVIDER ) );
+		splitter ( ui, make_id ( "sidebar.split" ), { sidebar - 3, LAYOUT_TITLE, 6, side.h }, true, app.sidebar_width, 200, width * 0.4f );
+		draw_titlebar ( app, title );
 		draw_status ( app, status );
 
-	}
-
-	static void request_frame ( studio_state& app ) {
-
-		InvalidateRect ( app.window, nullptr, FALSE );
-
-	}
-
-	static void finish_input ( studio_state& app ) {
-
-		input_state& input = app.input;
-
-		if ( !input.down )
-			app.ui.active = 0;
-
-		input.pressed = false;
-		input.released = false;
-		input.double_click = false;
-		input.right_pressed = false;
-		input.wheel = 0;
-		input.key_count = 0;
-		input.char_count = 0;
-
-		if ( app.ui.redraw ) {
-
-			app.ui.redraw = false;
-
-			if ( app.window )
-				request_frame ( app );
-
-		}
-
-	}
-
-	static void render ( studio_state& app ) {
-
-		if ( !ui::begin_frame ( app.draw ) )
+		if ( !modal )
 			return;
 
-		draw_frame ( app );
-		ui::end_frame ( app.draw );
-		finish_input ( app );
+		app.input = held;
+		ui.hot = 0;
 
-	}
+		ui::rect whole = { 0, 0, width, height };
 
-	static void modifiers ( input_state& input ) {
+		switch ( app.overlay ) {
 
-		input.shift = GetKeyState ( VK_SHIFT ) < 0;
-		input.ctrl = GetKeyState ( VK_CONTROL ) < 0;
-		input.alt = GetKeyState ( VK_MENU ) < 0;
-
-	}
-
-	static LRESULT CALLBACK window_proc ( HWND window, UINT message, WPARAM wide, LPARAM lparam ) {
-
-		studio_state* app = reinterpret_cast < studio_state* > ( GetWindowLongPtrW ( window, GWLP_USERDATA ) );
-
-		if ( !app || !app->draw.factory || !app->draw.target )
-			return DefWindowProcW ( window, message, wide, lparam );
-
-		input_state& input = app->input;
-		float scale = app->draw.scale > 0 ? app->draw.scale : 1.0f;
-
-		switch ( message ) {
-
-			case WM_MOUSEMOVE:
-				input.x = static_cast < float > ( static_cast < int16_t > ( LOWORD ( lparam ) ) ) / scale;
-				input.y = static_cast < float > ( static_cast < int16_t > ( HIWORD ( lparam ) ) ) / scale;
-				modifiers ( input );
-				request_frame ( *app );
-
-				return 0;
-
-			case WM_LBUTTONDOWN:
-			case WM_LBUTTONDBLCLK:
-				input.x = static_cast < float > ( static_cast < int16_t > ( LOWORD ( lparam ) ) ) / scale;
-				input.y = static_cast < float > ( static_cast < int16_t > ( HIWORD ( lparam ) ) ) / scale;
-				input.pressed = true;
-				input.down = true;
-				input.double_click = message == WM_LBUTTONDBLCLK;
-				modifiers ( input );
-				SetCapture ( window );
-				render ( *app );
-
-				return 0;
-
-			case WM_LBUTTONUP:
-				input.released = true;
-				input.down = false;
-				modifiers ( input );
-				ReleaseCapture ( );
-				render ( *app );
-
-				return 0;
-
-			case WM_RBUTTONDOWN:
-				input.right_pressed = true;
-				request_frame ( *app );
-
-				return 0;
-
-			case WM_MOUSEWHEEL: {
-
-				POINT point = { static_cast < int16_t > ( LOWORD ( lparam ) ), static_cast < int16_t > ( HIWORD ( lparam ) ) };
-
-				ScreenToClient ( window, &point );
-				input.x = static_cast < float > ( point.x ) / scale;
-				input.y = static_cast < float > ( point.y ) / scale;
-				input.wheel += static_cast < float > ( static_cast < int16_t > ( HIWORD ( wide ) ) ) / WHEEL_DELTA;
-				modifiers ( input );
-				render ( *app );
-
-				return 0;
-
-			}
-
-			case WM_KEYDOWN:
-			case WM_SYSKEYDOWN:
-				modifiers ( input );
-
-				if ( input.key_count < INPUT_KEYS )
-					input.keys [ input.key_count++ ] = static_cast < uint32_t > ( wide );
-
-				render ( *app );
-
-				if ( message == WM_SYSKEYDOWN && wide != VK_F10 )
-					return DefWindowProcW ( window, message, wide, lparam );
-
-				return 0;
-
-			case WM_CHAR: {
-
-				uint32_t code = static_cast < uint32_t > ( wide );
-
-				if ( code >= 0xD800 && code < 0xDC00 ) {
-
-					app->surrogate = code;
-
-					return 0;
-
-				}
-
-				if ( code >= 0xDC00 && code < 0xE000 && app->surrogate )
-					code = 0x10000 + ( ( app->surrogate - 0xD800 ) << 10 ) + ( code - 0xDC00 );
-
-				app->surrogate = 0;
-				modifiers ( input );
-
-				if ( input.char_count < INPUT_CHARS )
-					input.chars [ input.char_count++ ] = code;
-
-				render ( *app );
-
-				return 0;
-
-			}
-
-			case WM_SIZE:
-				ui::resize_window ( app->draw, LOWORD ( lparam ), HIWORD ( lparam ), scale );
-				request_frame ( *app );
-
-				return 0;
-
-			case WM_DPICHANGED: {
-
-				RECT* suggested = reinterpret_cast < RECT* > ( lparam );
-
-				app->draw.scale = static_cast < float > ( HIWORD ( wide ) ) / 96.0f;
-				ui::attach_window ( app->draw, window, app->draw.scale );
-				SetWindowPos ( window, nullptr, suggested->left, suggested->top, suggested->right - suggested->left, suggested->bottom - suggested->top, SWP_NOZORDER | SWP_NOACTIVATE );
-
-				return 0;
-
-			}
-
-			case WM_SETCURSOR:
-				if ( LOWORD ( lparam ) == HTCLIENT ) {
-
-					const wchar_t* shape = IDC_ARROW;
-
-					switch ( app->ui.cursor ) {
-
-						case CURSOR_TEXT: shape = IDC_IBEAM; break;
-						case CURSOR_SIZE_WE: shape = IDC_SIZEWE; break;
-						case CURSOR_SIZE_NS: shape = IDC_SIZENS; break;
-						case CURSOR_HAND: shape = IDC_HAND; break;
-						case CURSOR_MOVE: shape = IDC_SIZEALL; break;
-						default: break;
-
-					}
-
-					SetCursor ( LoadCursorW ( nullptr, shape ) );
-
-					return TRUE;
-
-				}
-
-				break;
-
-			case WM_PAINT: {
-
-				PAINTSTRUCT paint;
-
-				BeginPaint ( window, &paint );
-				render ( *app );
-				EndPaint ( window, &paint );
-
-				return 0;
-
-			}
-
-			case WM_ERASEBKGND:
-				return 1;
-
-			case WM_GETMINMAXINFO: {
-
-				MINMAXINFO* limits = reinterpret_cast < MINMAXINFO* > ( lparam );
-
-				limits->ptMinTrackSize.x = static_cast < LONG > ( 980 * scale );
-				limits->ptMinTrackSize.y = static_cast < LONG > ( 620 * scale );
-
-				return 0;
-
-			}
-
-			case WM_DROPFILES: {
-
-				HDROP drop = reinterpret_cast < HDROP > ( wide );
-				wchar_t name [ MAX_PATH ];
-
-				if ( DragQueryFileW ( drop, 0, name, MAX_PATH ) ) {
-
-					char path [ FILE_PATH_ROOM ];
-
-					if ( WideCharToMultiByte ( CP_UTF8, 0, name, -1, path, sizeof ( path ), nullptr, nullptr ) > 0 )
-						open_database_file ( *app, path );
-
-				}
-
-				DragFinish ( drop );
-				request_frame ( *app );
-
-				return 0;
-
-			}
-
-			case WM_DESTROY:
-				PostQuitMessage ( 0 );
-
-				return 0;
-
-			default:
-				break;
+			case OVERLAY_OPEN: draw_open_overlay ( app, whole ); break;
+			case OVERLAY_TRANSFER: draw_transfer_overlay ( app, whole ); break;
+			case OVERLAY_DESIGN: draw_designer_overlay ( app, whole ); break;
+			case OVERLAY_CHECK: draw_check_overlay ( app, whole ); break;
+			default: break;
 
 		}
-
-		return DefWindowProcW ( window, message, wide, lparam );
-
-	}
-
-	static studio_state* make_state ( ) {
-
-		studio_state* app = base::make < studio_state > ( 1 );
-
-		if ( !app )
-			return nullptr;
-
-		LARGE_INTEGER frequency;
-
-		QueryPerformanceFrequency ( &frequency );
-		app->frequency = static_cast < uint64_t > ( frequency.QuadPart );
-		app->sidebar_width = LAYOUT_SIDEBAR;
-		app->editor_height = 250;
-		app->table = -1;
-		app->trees_for = -1;
-		app->view = VIEW_DATA;
-		app->dragging_card = -1;
-		app->data_grid.id = make_id ( "grid.data" );
-		app->result_grid.id = make_id ( "grid.result" );
-		app->editor.id = make_id ( "editor" );
-		app->editor.marked = -1;
-		clear_grid ( app->data_grid );
-		clear_grid ( app->result_grid );
-		app->data_grid.id = make_id ( "grid.data" );
-		app->result_grid.id = make_id ( "grid.result" );
-		set_editor_text ( app->editor, "SELECT c.name, count(o.id) AS orders, round(sum(i.quantity * p.price), 2) AS spent\nFROM customers c\nJOIN orders o ON o.customer = c.id\nJOIN order_items i ON i.order_id = o.id\nJOIN products p ON p.id = i.product\nGROUP BY c.id\nORDER BY spent DESC\nLIMIT 50;" );
-
-		return app;
-
-	}
-
-	static bool sample_path ( char* out, size_t room ) {
-
-		wchar_t wide [ MAX_PATH ];
-		DWORD size = GetEnvironmentVariableW ( L"USERPROFILE", wide, MAX_PATH );
-
-		if ( !size || size >= MAX_PATH )
-			return false;
-
-		char folder [ FILE_PATH_ROOM ];
-
-		if ( WideCharToMultiByte ( CP_UTF8, 0, wide, -1, folder, sizeof ( folder ), nullptr, nullptr ) <= 0 )
-			return false;
-
-		base::text path;
-
-		path.add ( folder ).add ( "\\Documents\\Strata" );
-
-		wchar_t directory [ FILE_PATH_ROOM ];
-
-		if ( !base::wide_path ( path.value ( ), directory, FILE_PATH_ROOM ) )
-			return false;
-
-		CreateDirectoryW ( directory, nullptr );
-		path.add ( "\\sample.sdb" );
-		base::copy_text ( out, room, path.value ( ) );
-
-		return true;
-
-	}
-
-	static bool prepare_sample ( studio_state& app, const char* path ) {
-
-		bool fresh = !base::path_exists ( path );
-
-		if ( !open_database_file ( app, path ) )
-			return false;
-
-		if ( fresh || !app.db->schema->table_count ) {
-
-			if ( !build_sample ( *app.db ) ) {
-
-				set_status ( app, app.db->problem.value ( ), true );
-
-				return false;
-
-			}
-
-			refresh_schema ( app );
-			select_table ( app, 0 );
-			set_status ( app, "Made a sample database to explore", false );
-
-		}
-
-		return true;
-
-	}
-
-	int32_t run_studio ( const char* path ) {
-
-		SetProcessDpiAwarenessContext ( DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 );
-
-		studio_state* app = make_state ( );
-
-		if ( !app || !ui::start_renderer ( app->draw ) )
-			return 1;
-
-		HINSTANCE instance = GetModuleHandleW ( nullptr );
-		WNDCLASSEXW kind = { };
-
-		kind.cbSize = sizeof ( kind );
-		kind.style = CS_DBLCLKS;
-		kind.lpfnWndProc = window_proc;
-		kind.hInstance = instance;
-		kind.hCursor = LoadCursorW ( nullptr, IDC_ARROW );
-		kind.hIcon = LoadIconW ( instance, MAKEINTRESOURCEW ( 1 ) );
-		kind.lpszClassName = L"strata_studio";
-		RegisterClassExW ( &kind );
-
-		POINT origin = { 0, 0 };
-		HMONITOR monitor = MonitorFromPoint ( origin, MONITOR_DEFAULTTOPRIMARY );
-		MONITORINFO area = { sizeof ( area ) };
-		UINT dpi = GetDpiForSystem ( );
-		float scale = static_cast < float > ( dpi ) / 96.0f;
-
-		GetMonitorInfoW ( monitor, &area );
-
-		int32_t width = static_cast < int32_t > ( 1440 * scale );
-		int32_t height = static_cast < int32_t > ( 900 * scale );
-		int32_t work_w = area.rcWork.right - area.rcWork.left;
-		int32_t work_h = area.rcWork.bottom - area.rcWork.top;
-
-		if ( width > work_w - 40 )
-			width = work_w - 40;
-
-		if ( height > work_h - 40 )
-			height = work_h - 40;
-
-		HWND window = CreateWindowExW ( WS_EX_ACCEPTFILES, L"strata_studio", L"Strata Studio", WS_OVERLAPPEDWINDOW, area.rcWork.left + ( work_w - width ) / 2, area.rcWork.top + ( work_h - height ) / 2, width, height, nullptr, nullptr, instance, nullptr );
-
-		if ( !window )
-			return 1;
-
-		BOOL dark = TRUE;
-		COLORREF caption = RGB ( 0x0E, 0x0E, 0x11 );
-		COLORREF text = RGB ( 0xE3, 0xE3, 0xE8 );
-
-		DwmSetWindowAttribute ( window, 20, &dark, sizeof ( dark ) );
-		DwmSetWindowAttribute ( window, 35, &caption, sizeof ( caption ) );
-		DwmSetWindowAttribute ( window, 36, &text, sizeof ( text ) );
-
-		app->window = window;
-		ui::attach_window ( app->draw, window, static_cast < float > ( GetDpiForWindow ( window ) ) / 96.0f );
-		SetWindowLongPtrW ( window, GWLP_USERDATA, reinterpret_cast < LONG_PTR > ( app ) );
-
-		if ( path && *path )
-			open_database_file ( *app, path );
-		else {
-
-			char sample [ FILE_PATH_ROOM ];
-
-			if ( sample_path ( sample, sizeof ( sample ) ) )
-				prepare_sample ( *app, sample );
-
-		}
-
-		ShowWindow ( window, SW_SHOWDEFAULT );
-		UpdateWindow ( window );
-
-		MSG message;
-
-		while ( GetMessageW ( &message, nullptr, 0, 0 ) > 0 ) {
-
-			TranslateMessage ( &message );
-			DispatchMessageW ( &message );
-
-		}
-
-		if ( app->db )
-			engine::close_database ( *app->db );
-
-		ui::stop_renderer ( app->draw );
-
-		return 0;
-
-	}
-
-	static void capture_draw ( void* context ) {
-
-		draw_frame ( *static_cast < studio_state* > ( context ) );
-
-	}
-
-	static bool capture_view ( studio_state& app, const char* folder, const char* name ) {
-
-		base::text path;
-
-		path.add ( folder ).add ( '\\' ).add ( name ).add ( ".png" );
-
-		for ( uint32_t pass = 0; pass < 2; pass++ ) {
-
-			bool fine = ui::capture_frame ( app.draw, STUDIO_CAPTURE_WIDTH, STUDIO_CAPTURE_HEIGHT, path.value ( ), capture_draw, &app );
-
-			finish_input ( app );
-
-			if ( !fine )
-				return false;
-
-		}
-
-		return true;
-
-	}
-
-	static void script_frame ( studio_state& app ) {
-
-		ui::capture_frame ( app.draw, STUDIO_CAPTURE_WIDTH, STUDIO_CAPTURE_HEIGHT, nullptr, capture_draw, &app );
-		finish_input ( app );
-
-	}
-
-	static void script_move ( studio_state& app, float x, float y ) {
-
-		app.input.x = x;
-		app.input.y = y;
-		script_frame ( app );
-
-	}
-
-	static void script_press ( studio_state& app, float x, float y ) {
-
-		app.input.x = x;
-		app.input.y = y;
-		app.input.pressed = true;
-		app.input.down = true;
-		script_frame ( app );
-
-	}
-
-	static void script_release ( studio_state& app ) {
-
-		app.input.released = true;
-		app.input.down = false;
-		script_frame ( app );
-
-	}
-
-	static void script_click ( studio_state& app, float x, float y ) {
-
-		script_press ( app, x, y );
-		script_release ( app );
-
-	}
-
-	static void script_key ( studio_state& app, uint32_t code, bool ctrl, bool shift = false ) {
-
-		app.input.ctrl = ctrl;
-		app.input.shift = shift;
-		app.input.keys [ 0 ] = code;
-		app.input.key_count = 1;
-		script_frame ( app );
-		app.input.ctrl = false;
-		app.input.shift = false;
-
-	}
-
-	static void script_type ( studio_state& app, const char* text ) {
-
-		for ( const char* at = text; *at; at++ ) {
-
-			app.input.chars [ app.input.char_count++ ] = static_cast < uint8_t > ( *at );
-
-			if ( app.input.char_count == INPUT_CHARS )
-				script_frame ( app );
-
-		}
-
-		script_frame ( app );
-
-	}
-
-	static void script_wheel ( studio_state& app, float x, float y, float amount ) {
-
-		app.input.x = x;
-		app.input.y = y;
-		app.input.wheel = amount;
-		script_frame ( app );
-
-	}
-
-	static bool script_shot ( studio_state& app, const char* folder, const char* name ) {
-
-		return capture_view ( app, folder, name );
-
-	}
-
-	static bool play_script ( studio_state& app, const char* folder ) {
-
-		bool fine = true;
-		auto step = [ & ] ( bool passed, const char* what ) {
-
-			if ( !passed && fine ) {
-
-				base::write ( what );
-				base::write ( " failed in the scripted session\n" );
-
-			}
-
-			fine = fine && passed;
-
-		};
-
-		app.input.x = -100;
-		app.input.y = -100;
-		script_click ( app, 373, 22 );
-		step ( app.view == VIEW_QUERY, "the Query tab opens" );
-		script_click ( app, 700, 200 );
-		script_key ( app, 'A', true );
-		script_type ( app, "SELECT city, count(*) AS people" );
-		script_key ( app, VK_RETURN, false );
-		script_type ( app, "FROM customers" );
-		script_key ( app, VK_RETURN, false );
-		script_type ( app, "GROUP BY city ORDER BY people DESC" );
-		script_key ( app, VK_RETURN, true );
-		step ( app.result == RESULT_GRID && app.result_grid.rows == 12, "typed SQL runs" );
-		fine = fine && script_shot ( app, folder, "script-query" );
-		script_key ( app, 'Z', true );
-		script_key ( app, 'Y', true );
-		script_key ( app, 'A', true );
-		script_type ( app, "SELEC broken FROM nowhere" );
-		script_key ( app, VK_F5, false );
-		step ( app.result == RESULT_MESSAGE && app.result_failed, "bad SQL reports an error" );
-		fine = fine && script_shot ( app, folder, "script-error" );
-		script_key ( app, 'A', true );
-		script_type ( app, "SELECT * FROM orders" );
-		script_key ( app, VK_RETURN, true );
-		step ( app.result_grid.rows == 4000, "all orders load" );
-		script_click ( app, 640, 420 );
-		script_key ( app, VK_DOWN, false );
-		script_key ( app, VK_DOWN, false );
-		script_wheel ( app, 700, 600, -6 );
-		script_press ( app, 700, 294 );
-		script_move ( app, 700, 220 );
-		script_release ( app );
-		fine = fine && script_shot ( app, folder, "script-grid" );
-		script_click ( app, 451, 22 );
-		script_click ( app, 1288, 22 );
-		script_press ( app, 400, 100 );
-		script_move ( app, 520, 520 );
-		script_move ( app, 640, 600 );
-		script_release ( app );
-		script_press ( app, 1000, 700 );
-		script_move ( app, 1040, 690 );
-		script_release ( app );
-		step ( app.map == MAP_SCHEMA, "the schema map shows" );
-		fine = fine && script_shot ( app, folder, "script-map" );
-		script_click ( app, 1380, 22 );
-		script_wheel ( app, 800, 500, -2 );
-		fine = fine && script_shot ( app, folder, "script-storage" );
-		script_click ( app, 529, 22 );
-		script_click ( app, 300, 100 );
-		script_wheel ( app, 1200, 600, -3 );
-		fine = fine && script_shot ( app, folder, "script-pages" );
-		script_click ( app, 295, 22 );
-		script_click ( app, 100, 124 );
-		script_press ( app, 248, 400 );
-		script_move ( app, 330, 400 );
-		script_release ( app );
-		script_key ( app, '2', true );
-		step ( app.view == VIEW_QUERY, "ctrl+2 switches views" );
-		script_key ( app, '1', true );
-		fine = fine && script_shot ( app, folder, "script-data" );
-
-		return fine;
-
-	}
-
-	int32_t capture_studio ( const char* folder ) {
-
-		studio_state* app = make_state ( );
-
-		if ( !app || !ui::start_renderer ( app->draw ) )
-			return 1;
-
-		app->draw.scale = 1.0f;
-		app->capturing = true;
-
-		char path [ FILE_PATH_ROOM ];
-
-		if ( !base::temp_path ( path, sizeof ( path ), "strata-capture.sdb" ) )
-			return 1;
-
-		base::erase_path ( path );
-
-		base::text log;
-
-		log.add ( path ).add ( "-wal" );
-		base::erase_path ( log.value ( ) );
-
-		if ( !prepare_sample ( *app, path ) )
-			return 1;
-
-		app->input.x = -100;
-		app->input.y = -100;
-
-		bool fine = true;
-
-		app->view = VIEW_DATA;
-		select_table ( *app, 0 );
-		fine = fine && capture_view ( *app, folder, "data" );
-		app->view = VIEW_QUERY;
-		run_editor ( *app, false );
-		fine = fine && capture_view ( *app, folder, "query" );
-		run_editor ( *app, true );
-		fine = fine && capture_view ( *app, folder, "plan" );
-		app->view = VIEW_MAP;
-		app->map = MAP_SCHEMA;
-		fine = fine && capture_view ( *app, folder, "map" );
-
-		for ( uint32_t i = 0; i < app->db->schema->table_count; i++ )
-			if ( base::same ( app->db->schema->tables [ i ].name, "orders" ) )
-				select_table ( *app, static_cast < int32_t > ( i ) );
-
-		app->map = MAP_STORAGE;
-		fine = fine && capture_view ( *app, folder, "storage" );
-		app->view = VIEW_PAGES;
-		ensure_pages ( *app );
-		select_page ( *app, app->db->schema->tables [ app->table ].root );
-		fine = fine && capture_view ( *app, folder, "pages" );
-
-		if ( fine && !play_script ( *app, folder ) ) {
-
-			base::write ( "the scripted session failed\n" );
-			fine = false;
-
-		}
-
-		engine::close_database ( *app->db );
-		ui::stop_renderer ( app->draw );
-		base::erase_path ( path );
-		base::erase_path ( log.value ( ) );
-
-		return fine ? 0 : 1;
-
-	}
-
-	bool make_studio_copy ( ) {
-
-		wchar_t own [ MAX_PATH ];
-		DWORD size = GetModuleFileNameW ( nullptr, own, MAX_PATH );
-
-		if ( !size || size >= MAX_PATH - 16 )
-			return false;
-
-		char path [ FILE_PATH_ROOM ];
-
-		if ( WideCharToMultiByte ( CP_UTF8, 0, own, -1, path, sizeof ( path ), nullptr, nullptr ) <= 0 )
-			return false;
-
-		base::file_handle file;
-
-		if ( !base::open_reading ( file, path ) )
-			return false;
-
-		uint64_t bytes = base::file_size ( file );
-		uint8_t* image = base::make < uint8_t > ( static_cast < size_t > ( bytes ) );
-		bool fine = image && base::read_at ( file, 0, image, static_cast < size_t > ( bytes ) );
-
-		base::close_file ( file );
-
-		if ( fine ) {
-
-			uint32_t header = *reinterpret_cast < uint32_t* > ( image + 0x3C );
-			uint64_t field = static_cast < uint64_t > ( header ) + 4 + 20 + 68;
-
-			fine = field + 2 <= bytes && image [ header ] == 'P' && image [ header + 1 ] == 'E';
-
-			if ( fine ) {
-
-				image [ field ] = IMAGE_SUBSYSTEM_WINDOWS_GUI;
-				image [ field + 1 ] = 0;
-
-				base::text target;
-				size_t cut = base::length ( path );
-
-				while ( cut && path [ cut - 1 ] != '\\' )
-					cut--;
-
-				target.add ( path, cut ).add ( "strata-studio.exe" );
-
-				base::file_handle out;
-
-				fine = base::open_file ( out, target.value ( ), true );
-
-				if ( fine ) {
-
-					fine = base::truncate_file ( out, 0 ) && base::write_at ( out, 0, image, static_cast < size_t > ( bytes ) );
-					base::close_file ( out );
-
-				}
-
-			}
-
-		}
-
-		base::release ( image );
-
-		return fine;
 
 	}
 

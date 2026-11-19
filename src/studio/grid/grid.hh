@@ -39,6 +39,9 @@ namespace studio {
 		float resize_origin;
 		float resize_width;
 		uint64_t id;
+		uint32_t hidden;
+		bool activated;
+		bool erase;
 
 	};
 
@@ -53,5 +56,11 @@ namespace studio {
 	void draw_grid ( ui_context& ui, grid_data& grid, const ui::rect& area, const char* empty );
 
 	const char* grid_cell ( const grid_data& grid, uint32_t row, uint32_t column );
+
+	uint8_t grid_kind ( const grid_data& grid, uint32_t row, uint32_t column );
+
+	bool grid_cell_rect ( const grid_data& grid, ui::renderer& draw, const ui::rect& area, uint32_t row, uint32_t column, ui::rect& out );
+
+	void reveal_row ( grid_data& grid, uint32_t row, float view_h );
 
 }

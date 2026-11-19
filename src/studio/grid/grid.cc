@@ -24,6 +24,8 @@ namespace studio {
 		grid.selected_row = -1;
 		grid.selected_column = -1;
 		grid.resizing = -1;
+		grid.activated = false;
+		grid.erase = false;
 
 	}
 
@@ -111,6 +113,50 @@ namespace studio {
 
 	}
 
+	uint8_t grid_kind ( const grid_data& grid, uint32_t row, uint32_t column ) {
+
+		return grid.kinds [ static_cast < size_t > ( row ) * grid.column_count + column ];
+
+	}
+
+	static float gutter_width ( const grid_data& grid, ui::renderer& draw ) {
+
+		base::text digits;
+
+		digits.number ( grid.rows ? grid.rows : 1 );
+
+		return static_cast < float > ( digits.size ) * draw.code_small_advance + 22;
+
+	}
+
+	bool grid_cell_rect ( const grid_data& grid, ui::renderer& draw, const ui::rect& area, uint32_t row, uint32_t column, ui::rect& out ) {
+
+		if ( row >= grid.rows || column >= grid.column_count || column < grid.hidden )
+			return false;
+
+		float x = area.x + gutter_width ( grid, draw ) - grid.scroll_x;
+
+		for ( uint32_t c = grid.hidden; c < column; c++ )
+			x += grid.columns [ c ].width;
+
+		out = { x, area.y + LAYOUT_HEADER + static_cast < float > ( row ) * LAYOUT_ROW - grid.scroll_y, grid.columns [ column ].width, LAYOUT_ROW };
+
+		return true;
+
+	}
+
+	void reveal_row ( grid_data& grid, uint32_t row, float view_h ) {
+
+		float top = static_cast < float > ( row ) * LAYOUT_ROW;
+
+		if ( top < grid.scroll_y )
+			grid.scroll_y = top;
+
+		if ( top + LAYOUT_ROW > grid.scroll_y + view_h )
+			grid.scroll_y = top + LAYOUT_ROW - view_h;
+
+	}
+
 	void finish_grid ( grid_data& grid, ui::renderer& draw ) {
 
 		for ( uint32_t c = 0; c < grid.column_count; c++ ) {
@@ -137,7 +183,7 @@ namespace studio {
 
 		float total = 0;
 
-		for ( uint32_t c = 0; c < grid.column_count; c++ )
+		for ( uint32_t c = grid.hidden; c < grid.column_count; c++ )
 			total += grid.columns [ c ].width;
 
 		return total;
@@ -151,13 +197,13 @@ namespace studio {
 
 		base::text out;
 
-		if ( grid.selected_column >= 0 && grid.selected_column < static_cast < int32_t > ( grid.column_count ) )
+		if ( grid.selected_column >= static_cast < int32_t > ( grid.hidden ) && grid.selected_column < static_cast < int32_t > ( grid.column_count ) )
 			out.add ( grid_cell ( grid, static_cast < uint32_t > ( grid.selected_row ), static_cast < uint32_t > ( grid.selected_column ) ) );
 		else {
 
-			for ( uint32_t c = 0; c < grid.column_count; c++ ) {
+			for ( uint32_t c = grid.hidden; c < grid.column_count; c++ ) {
 
-				if ( c )
+				if ( c > grid.hidden )
 					out.add ( '\t' );
 
 				out.add ( grid_cell ( grid, static_cast < uint32_t > ( grid.selected_row ), c ) );
@@ -185,11 +231,7 @@ namespace studio {
 
 		}
 
-		base::text digits;
-
-		digits.number ( grid.rows ? grid.rows : 1 );
-
-		float gutter = static_cast < float > ( digits.size ) * draw.code_small_advance + 22;
+		float gutter = gutter_width ( grid, draw );
 		float view_w = area.w - gutter - LAYOUT_SCROLLBAR;
 		float view_h = area.h - LAYOUT_HEADER - LAYOUT_SCROLLBAR;
 		float total_w = content_width ( grid );
@@ -228,11 +270,17 @@ namespace studio {
 			if ( key_hit ( ui, VK_END ) && input.ctrl )
 				row = static_cast < int32_t > ( grid.rows ) - 1;
 
-			if ( key_hit ( ui, VK_LEFT ) && grid.selected_column > 0 )
+			if ( key_hit ( ui, VK_LEFT ) && grid.selected_column > static_cast < int32_t > ( grid.hidden ) )
 				grid.selected_column--;
 
 			if ( key_hit ( ui, VK_RIGHT ) && grid.selected_column + 1 < static_cast < int32_t > ( grid.column_count ) )
-				grid.selected_column++;
+				grid.selected_column = base::max ( grid.selected_column + 1, static_cast < int32_t > ( grid.hidden ) );
+
+			if ( ( key_hit ( ui, VK_F2 ) || key_hit ( ui, VK_RETURN ) ) && grid.selected_row >= 0 && grid.selected_column >= static_cast < int32_t > ( grid.hidden ) )
+				grid.activated = true;
+
+			if ( key_hit ( ui, VK_DELETE ) && grid.selected_row >= 0 )
+				grid.erase = true;
 
 			if ( row != grid.selected_row && grid.rows ) {
 
@@ -291,7 +339,7 @@ namespace studio {
 
 		float x = body.x - grid.scroll_x;
 
-		for ( uint32_t c = 0; c < grid.column_count; c++ ) {
+		for ( uint32_t c = grid.hidden; c < grid.column_count; c++ ) {
 
 			float width = grid.columns [ c ].width;
 
@@ -331,7 +379,7 @@ namespace studio {
 
 			grid.selected_column = -1;
 
-			for ( uint32_t c = 0; c < grid.column_count; c++ ) {
+			for ( uint32_t c = grid.hidden; c < grid.column_count; c++ ) {
 
 				if ( input.x >= column_x && input.x < column_x + grid.columns [ c ].width )
 					grid.selected_column = static_cast < int32_t > ( c );
@@ -340,8 +388,14 @@ namespace studio {
 
 			}
 
-			if ( row >= 0 && row < static_cast < int32_t > ( grid.rows ) )
+			if ( row >= 0 && row < static_cast < int32_t > ( grid.rows ) ) {
+
 				grid.selected_row = row;
+
+				if ( input.double_click && grid.selected_column >= 0 )
+					grid.activated = true;
+
+			}
 
 			ui.focus = grid.id;
 			ui.redraw = true;
@@ -373,7 +427,7 @@ namespace studio {
 
 		x = body.x - grid.scroll_x;
 
-		for ( uint32_t c = 0; c < grid.column_count; c++ ) {
+		for ( uint32_t c = grid.hidden; c < grid.column_count; c++ ) {
 
 			float width = grid.columns [ c ].width;
 			ui::rect edge = { x + width - 4, area.y, 8, LAYOUT_HEADER };
