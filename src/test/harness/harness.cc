@@ -88,6 +88,7 @@ namespace test {
 		counts = { };
 		base::write ( "strata self test\n" );
 		pager_tests ( );
+		btree_tests ( );
 
 		base::text line;
 

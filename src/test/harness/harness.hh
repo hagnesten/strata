@@ -38,4 +38,6 @@ namespace test {
 
 	void pager_tests ( );
 
+	void btree_tests ( );
+
 }
