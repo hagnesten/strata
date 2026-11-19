@@ -4,6 +4,7 @@
 #include "engine/value/value.hh"
 
 #define RUN_DEPTH 48
+#define SORT_BOUND 100000
 #define ENGINE_VERSION "0.5"
 #define RUN_KEY_ROOM ( CATALOG_KEY_COLUMNS + 1 )
 
@@ -464,6 +465,7 @@ namespace engine {
 
 		storage::value* values;
 		storage::value* keys;
+		uint64_t sequence;
 
 	};
 
@@ -482,6 +484,8 @@ namespace engine {
 		uint32_t row_room;
 		int64_t skip;
 		int64_t remaining;
+		int64_t bound;
+		uint64_t arrivals;
 		row_sink* sink;
 		bool stopped;
 
@@ -548,6 +552,8 @@ namespace engine {
 		base::arena* memory;
 		value_set* set;
 		bool failed;
+		sql::affinity_kind left;
+		sql::affinity_kind right;
 
 	};
 

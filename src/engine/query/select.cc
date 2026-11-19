@@ -3,6 +3,120 @@
 
 namespace engine {
 
+	static int32_t compare_sorted ( void* context, const void* a, const void* b ) {
+
+		const output_pipe& pipe = *static_cast < const output_pipe* > ( context );
+		const sorted_row& x = *static_cast < const sorted_row* > ( a );
+		const sorted_row& y = *static_cast < const sorted_row* > ( b );
+
+		for ( uint32_t k = 0; k < pipe.key_count; k++ ) {
+
+			int32_t order = pipe.nocase && pipe.nocase [ k ] ? order_folded ( x.keys [ k ], y.keys [ k ] ) : order_values ( x.keys [ k ], y.keys [ k ] );
+
+			if ( order )
+				return pipe.descending [ k ] ? -order : order;
+
+		}
+
+		return x.sequence == y.sequence ? 0 : x.sequence < y.sequence ? -1 : 1;
+
+	}
+
+	static void heap_up ( output_pipe& pipe, uint32_t at ) {
+
+		while ( at ) {
+
+			uint32_t parent = ( at - 1 ) / 2;
+
+			if ( compare_sorted ( &pipe, pipe.rows [ at ], pipe.rows [ parent ] ) <= 0 )
+				return;
+
+			sorted_row* held = pipe.rows [ at ];
+
+			pipe.rows [ at ] = pipe.rows [ parent ];
+			pipe.rows [ parent ] = held;
+			at = parent;
+
+		}
+
+	}
+
+	static void heap_down ( output_pipe& pipe, uint32_t at ) {
+
+		for ( ;; ) {
+
+			uint32_t worst = at;
+			uint32_t left = at * 2 + 1;
+			uint32_t right = left + 1;
+
+			if ( left < pipe.row_count && compare_sorted ( &pipe, pipe.rows [ left ], pipe.rows [ worst ] ) > 0 )
+				worst = left;
+
+			if ( right < pipe.row_count && compare_sorted ( &pipe, pipe.rows [ right ], pipe.rows [ worst ] ) > 0 )
+				worst = right;
+
+			if ( worst == at )
+				return;
+
+			sorted_row* held = pipe.rows [ at ];
+
+			pipe.rows [ at ] = pipe.rows [ worst ];
+			pipe.rows [ worst ] = held;
+			at = worst;
+
+		}
+
+	}
+
+	static bool keep_sorted ( run_context& ctx, output_pipe& pipe, const storage::value* values, const storage::value* keys ) {
+
+		uint64_t sequence = pipe.arrivals++;
+
+		if ( !pipe.bound )
+			return true;
+
+		bool full = pipe.bound > 0 && pipe.row_count >= static_cast < uint64_t > ( pipe.bound );
+
+		if ( full ) {
+
+			sorted_row probe = { const_cast < storage::value* > ( values ), const_cast < storage::value* > ( keys ), sequence };
+
+			if ( compare_sorted ( &pipe, &probe, pipe.rows [ 0 ] ) >= 0 )
+				return true;
+
+		}
+
+		sorted_row* row = ctx.memory->make < sorted_row > ( 1 );
+
+		if ( !row )
+			return fail_run ( ctx, "out of memory" );
+
+		row->values = copy_row ( *ctx.memory, values, pipe.width );
+		row->keys = copy_row ( *ctx.memory, keys, pipe.key_count );
+		row->sequence = sequence;
+
+		if ( !row->values || !row->keys )
+			return fail_run ( ctx, "out of memory" );
+
+		if ( full ) {
+
+			pipe.rows [ 0 ] = row;
+			heap_down ( pipe, 0 );
+
+			return true;
+
+		}
+
+		if ( !base::push ( *ctx.memory, pipe.rows, pipe.row_count, pipe.row_room, row ) )
+			return fail_run ( ctx, "out of memory" );
+
+		if ( pipe.bound > 0 )
+			heap_up ( pipe, pipe.row_count - 1 );
+
+		return true;
+
+	}
+
 	static bool emit_row ( run_context& ctx, output_pipe& pipe, const storage::value* values, const storage::value* keys ) {
 
 		if ( pipe.distinct ) {
@@ -39,22 +153,8 @@ namespace engine {
 
 		}
 
-		if ( pipe.sorting ) {
-
-			sorted_row* row = ctx.memory->make < sorted_row > ( 1 );
-
-			if ( !row )
-				return fail_run ( ctx, "out of memory" );
-
-			row->values = copy_row ( *ctx.memory, values, pipe.width );
-			row->keys = copy_row ( *ctx.memory, keys, pipe.key_count );
-
-			if ( !row->values || !row->keys || !base::push ( *ctx.memory, pipe.rows, pipe.row_count, pipe.row_room, row ) )
-				return fail_run ( ctx, "out of memory" );
-
-			return true;
-
-		}
+		if ( pipe.sorting )
+			return keep_sorted ( ctx, pipe, values, keys );
 
 		if ( pipe.skip > 0 ) {
 
@@ -87,25 +187,6 @@ namespace engine {
 			pipe.stopped = true;
 
 		return true;
-
-	}
-
-	static int32_t compare_sorted ( void* context, const void* a, const void* b ) {
-
-		const output_pipe& pipe = *static_cast < const output_pipe* > ( context );
-		const sorted_row& x = *static_cast < const sorted_row* > ( a );
-		const sorted_row& y = *static_cast < const sorted_row* > ( b );
-
-		for ( uint32_t k = 0; k < pipe.key_count; k++ ) {
-
-			int32_t order = pipe.nocase && pipe.nocase [ k ] ? order_folded ( x.keys [ k ], y.keys [ k ] ) : order_values ( x.keys [ k ], y.keys [ k ] );
-
-			if ( order )
-				return pipe.descending [ k ] ? -order : order;
-
-		}
-
-		return 0;
 
 	}
 
@@ -796,6 +877,7 @@ namespace engine {
 		pipe.sink = sink;
 		pipe.skip = skip > 0 ? skip : 0;
 		pipe.remaining = remaining < 0 ? -1 : remaining;
+		pipe.bound = pipe.sorting && pipe.remaining >= 0 && pipe.skip + pipe.remaining <= SORT_BOUND ? pipe.skip + pipe.remaining : -1;
 
 	}
 
@@ -1134,6 +1216,17 @@ namespace engine {
 
 		set_sink& sink = *static_cast < set_sink* > ( context );
 		bool added = false;
+		storage::value single;
+
+		if ( count == 1 ) {
+
+			storage::value unused = storage::null_value ( );
+
+			single = values [ 0 ];
+			comparison_affinity ( *sink.memory, sink.left, sink.right, unused, single );
+			values = &single;
+
+		}
 
 		if ( !set_add ( *sink.memory, *sink.set, values, count, added ) ) {
 
@@ -1167,9 +1260,16 @@ namespace engine {
 			result = TRUTH_NULL;
 		else {
 
-			storage::value key = seek_value ( *ctx.scratch, expression_affinity ( item->left ), probe );
+			const prepared_select* child = item->query ? static_cast < const prepared_select* > ( item->query->prepared ) : nullptr;
+			sql::affinity_kind left = expression_affinity ( item->left );
+			sql::affinity_kind right = child && child->output_count ? expression_affinity ( child->outputs [ 0 ] ) : sql::AFFINITY_ANY;
+			storage::value key = seek_value ( *ctx.scratch, left, probe );
+			storage::value turned = probe;
+			storage::value unused = storage::null_value ( );
 
-			if ( set_has ( set, &key, 1 ) || set_has ( set, &probe, 1 ) )
+			comparison_affinity ( *ctx.scratch, left, right, turned, unused );
+
+			if ( set_has ( set, &key, 1 ) || set_has ( set, &probe, 1 ) || set_has ( set, &turned, 1 ) )
 				result = TRUTH_TRUE;
 			else if ( set.has_null )
 				result = TRUTH_NULL;
@@ -1261,7 +1361,7 @@ namespace engine {
 			if ( !entry )
 				return fail_run ( ctx, "out of memory" );
 
-			set_sink sink = { ctx.results, &entry->set, false };
+			set_sink sink = { ctx.results, &entry->set, false, expression_affinity ( item->left ), child->output_count ? expression_affinity ( child->outputs [ 0 ] ) : sql::AFFINITY_ANY };
 			row_sink rows = { &sink, set_emit };
 
 			fine = run_plan ( ctx, child, scope, rows );

@@ -122,6 +122,13 @@ namespace engine {
 
 				}
 
+			} else if ( term->kind == sql::EXPRESSION_IN && !term->negated && term->query && same_column ( term->left ) && !list ) {
+
+				const prepared_select* child = static_cast < const prepared_select* > ( term->query->prepared );
+
+				if ( child && !child->correlated && child->output_count == 1 )
+					list = term;
+
 			} else if ( term->kind == sql::EXPRESSION_IN && !term->negated && !term->query && term->count && same_column ( term->left ) && !list ) {
 
 				bool fine = true;
@@ -318,7 +325,7 @@ namespace engine {
 				break;
 
 			case PATH_ROWID_LIST:
-				out.add ( " USING ROWID (rowid IN list)" );
+				out.add ( path.list->query ? " USING ROWID (rowid IN subquery)" : " USING ROWID (rowid IN list)" );
 				break;
 
 			case PATH_FULLTEXT:
@@ -905,26 +912,50 @@ namespace engine {
 			case PATH_ROWID_LIST: {
 
 				const sql::expression* list = plan.path.list;
+				collected_rows found = { };
+				uint32_t room = list->count;
+				base::arena_mark before = ctx.memory->mark ( );
 
-				source.list = ctx.scratch->make < int64_t > ( list->count );
+				if ( list->query ) {
+
+					found.memory = ctx.memory;
+
+					if ( !collect_plan ( ctx, static_cast < prepared_select* > ( list->query->prepared ), scope, found ) )
+						return false;
+
+					room = found.count;
+
+				}
+
+				source.list = ctx.scratch->make < int64_t > ( room + 1 );
 				source.list_count = 0;
 				source.list_at = 0;
 
-				if ( !source.list )
+				if ( !source.list ) {
+
+					ctx.memory->rewind ( before );
+
 					return fail_run ( ctx, "out of memory" );
 
-				for ( uint32_t i = 0; i < list->count; i++ ) {
+				}
+
+				for ( uint32_t i = 0; i < room; i++ ) {
 
 					storage::value value;
 					int64_t rowid = 0;
 
-					if ( !evaluate ( ctx, scope, list->list [ i ], value ) )
+					if ( list->query )
+						value = found.values [ static_cast < size_t > ( i ) * found.width ];
+					else if ( !evaluate ( ctx, scope, list->list [ i ], value ) )
 						return false;
 
 					if ( exact_rowid ( value, rowid ) )
 						source.list [ source.list_count++ ] = rowid;
 
 				}
+
+				if ( list->query )
+					ctx.memory->rewind ( before );
 
 				sort_rowids ( source.list, source.list_count );
 

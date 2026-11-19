@@ -35,4 +35,6 @@ namespace test {
 
 	void prepared_tests ( engine::database& db );
 
+	void limit_tests ( engine::database& db );
+
 }

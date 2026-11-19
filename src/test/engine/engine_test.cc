@@ -653,6 +653,7 @@ namespace test {
 		search_tests ( *db );
 		check_tests ( *db );
 		prepared_tests ( *db );
+		limit_tests ( *db );
 		fuzz_tests ( *db );
 		engine::close_database ( *db );
 		db->problem.~text ( );

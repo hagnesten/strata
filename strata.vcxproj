@@ -68,6 +68,7 @@
     <ClCompile Include="src\test\engine\search_test.cc" />
     <ClCompile Include="src\test\engine\check_test.cc" />
     <ClCompile Include="src\test\engine\prepared_test.cc" />
+    <ClCompile Include="src\test\engine\limit_test.cc" />
     <ClCompile Include="src\engine\catalog\statistics.cc" />
     <ClCompile Include="src\engine\schema\analyze.cc" />
     <ClCompile Include="src\storage\btree\estimate.cc" />
