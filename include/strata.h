@@ -137,6 +137,8 @@ STRATA_API const strata_value* strata_row ( strata_stmt* stmt );
 
 STRATA_API int strata_fetch ( strata_stmt* stmt, strata_value* out, int room_rows, int* rows );
 
+STRATA_API int strata_fetch16 ( strata_stmt* stmt, strata_value* out, int room_rows, int* rows );
+
 STRATA_API int strata_run_batch ( strata_stmt* stmt, const strata_value* values, int rows, int width, int* done );
 
 #ifdef __cplusplus

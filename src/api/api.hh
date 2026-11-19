@@ -57,6 +57,7 @@ struct strata_stmt {
 	int32_t fetch_count;
 	bool fetching;
 	bool fetch_failed;
+	bool fetch_wide;
 	strata_stmt* next;
 	strata_stmt* previous;
 

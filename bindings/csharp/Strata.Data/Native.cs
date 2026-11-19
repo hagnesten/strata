@@ -96,6 +96,9 @@ namespace Strata.Data {
 		public static extern int strata_fetch ( IntPtr stmt, StrataValue* output, int room, out int rows );
 
 		[DllImport ( Library, CallingConvention = CallingConvention.Cdecl )]
+		public static extern int strata_fetch16 ( IntPtr stmt, StrataValue* output, int room, out int rows );
+
+		[DllImport ( Library, CallingConvention = CallingConvention.Cdecl )]
 		public static extern int strata_run_batch ( IntPtr stmt, StrataValue* values, int rows, int width, out int done );
 
 		public static byte [ ] Bytes ( string text ) {

@@ -243,7 +243,7 @@ namespace base {
 
 	}
 
-	text& text::add ( char value ) {
+	text& text::add_slow ( char value ) {
 
 		if ( reserve ( size + 1 ) ) {
 
@@ -256,7 +256,7 @@ namespace base {
 
 	}
 
-	text& text::add ( const char* value, size_t count ) {
+	text& text::add_slow ( const char* value, size_t count ) {
 
 		if ( count && reserve ( size + count ) ) {
 

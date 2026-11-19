@@ -303,6 +303,65 @@ namespace storage {
 
 	}
 
+	static int32_t compare_fast ( const uint8_t* a, size_t a_size, size_t& left_at, const uint8_t* b, size_t b_size, size_t& right_at, bool& handled ) {
+
+		handled = false;
+
+		if ( left_at >= a_size || right_at >= b_size )
+			return 0;
+
+		uint8_t left_kind = a [ left_at ];
+		uint8_t right_kind = b [ right_at ];
+
+		if ( left_kind == VALUE_INTEGER && right_kind == VALUE_INTEGER ) {
+
+			size_t left_next = left_at + 1;
+			size_t right_next = right_at + 1;
+			uint64_t x = 0;
+			uint64_t y = 0;
+
+			if ( !base::read_varint ( a, a_size, left_next, x ) || !base::read_varint ( b, b_size, right_next, y ) )
+				return 0;
+
+			left_at = left_next;
+			right_at = right_next;
+			handled = true;
+
+			int64_t p = base::unzigzag ( x );
+			int64_t q = base::unzigzag ( y );
+
+			return p == q ? 0 : p < q ? -1 : 1;
+
+		}
+
+		if ( left_kind == right_kind && ( left_kind == VALUE_TEXT || left_kind == VALUE_BLOB ) ) {
+
+			size_t left_next = left_at + 1;
+			size_t right_next = right_at + 1;
+			uint64_t x = 0;
+			uint64_t y = 0;
+
+			if ( !base::read_varint ( a, a_size, left_next, x ) || !base::read_varint ( b, b_size, right_next, y ) || x > a_size - left_next || y > b_size - right_next )
+				return 0;
+
+			size_t shorter = static_cast < size_t > ( x < y ? x : y );
+			int32_t order = shorter ? __builtin_memcmp ( a + left_next, b + right_next, shorter ) : 0;
+
+			left_at = left_next + static_cast < size_t > ( x );
+			right_at = right_next + static_cast < size_t > ( y );
+			handled = true;
+
+			if ( order )
+				return order < 0 ? -1 : 1;
+
+			return x == y ? 0 : x < y ? -1 : 1;
+
+		}
+
+		return 0;
+
+	}
+
 	int32_t compare_records ( const uint8_t* a, size_t a_size, const uint8_t* b, size_t b_size, uint32_t columns ) {
 
 		size_t left_at = 0;
@@ -320,13 +379,25 @@ namespace storage {
 
 		for ( uint64_t i = 0; i < shared; i++ ) {
 
+			bool handled = false;
+			int32_t order = compare_fast ( a, a_size, left_at, b, b_size, right_at, handled );
+
+			if ( handled ) {
+
+				if ( order )
+					return order;
+
+				continue;
+
+			}
+
 			value left;
 			value right;
 
 			if ( !decode_one ( a, a_size, left_at, left ) || !decode_one ( b, b_size, right_at, right ) )
 				return 0;
 
-			int32_t order = compare_values ( left, right );
+			order = compare_values ( left, right );
 
 			if ( order )
 				return order;

@@ -60,4 +60,93 @@ namespace base {
 
 	}
 
+	size_t utf16_from_utf8 ( const uint8_t* bytes, size_t size, uint16_t* out ) {
+
+		uint16_t* at = out;
+		size_t i = 0;
+
+		while ( i < size ) {
+
+			while ( i + 8 <= size ) {
+
+				uint64_t word;
+
+				__builtin_memcpy ( &word, bytes + i, 8 );
+
+				if ( word & 0x8080808080808080ull )
+					break;
+
+				for ( uint32_t k = 0; k < 8; k++ )
+					at [ k ] = bytes [ i + k ];
+
+				at += 8;
+				i += 8;
+
+			}
+
+			if ( i >= size )
+				break;
+
+			uint32_t lead = bytes [ i ];
+			uint32_t code = 0xFFFD;
+			size_t extra = 0;
+
+			if ( lead < 0x80 ) {
+
+				code = lead;
+
+			} else if ( lead >= 0xC2 && lead < 0xE0 ) {
+
+				code = lead & 0x1F;
+				extra = 1;
+
+			} else if ( lead >= 0xE0 && lead < 0xF0 ) {
+
+				code = lead & 0x0F;
+				extra = 2;
+
+			} else if ( lead >= 0xF0 && lead < 0xF5 ) {
+
+				code = lead & 0x07;
+				extra = 3;
+
+			}
+
+			bool fine = i + extra < size || !extra;
+
+			for ( size_t k = 1; fine && k <= extra; k++ ) {
+
+				uint8_t next = bytes [ i + k ];
+
+				if ( ( next & 0xC0 ) != 0x80 )
+					fine = false;
+				else
+					code = code << 6 | ( next & 0x3F );
+
+			}
+
+			if ( !fine || ( lead >= 0x80 && !extra ) ) {
+
+				code = 0xFFFD;
+				extra = 0;
+
+			}
+
+			i += extra + 1;
+
+			if ( code >= 0x10000 ) {
+
+				code -= 0x10000;
+				*at++ = static_cast < uint16_t > ( 0xD800 + ( code >> 10 ) );
+				*at++ = static_cast < uint16_t > ( 0xDC00 + ( code & 0x3FF ) );
+
+			} else
+				*at++ = static_cast < uint16_t > ( code );
+
+		}
+
+		return static_cast < size_t > ( at - out );
+
+	}
+
 }

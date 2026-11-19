@@ -55,10 +55,27 @@ namespace api {
 
 	}
 
-	static bool keep_public ( base::arena& memory, strata_value& item ) {
+	static bool keep_public ( base::arena& memory, strata_value& item, bool wide ) {
 
 		if ( ( item.type != STRATA_TEXT && item.type != STRATA_BLOB ) || !item.data.bytes )
 			return true;
+
+		if ( wide && item.type == STRATA_TEXT ) {
+
+			uint16_t* units = static_cast < uint16_t* > ( memory.take_raw ( static_cast < size_t > ( item.size ) * 2 + 2 ) );
+
+			if ( !units )
+				return false;
+
+			size_t count = base::utf16_from_utf8 ( static_cast < const uint8_t* > ( item.data.bytes ), item.size, units );
+
+			item.type = STRATA_TEXT16;
+			item.size = static_cast < uint32_t > ( count * 2 );
+			item.data.bytes = units;
+
+			return true;
+
+		}
 
 		char* kept = memory.keep ( static_cast < const char* > ( item.data.bytes ), item.size );
 
@@ -79,7 +96,7 @@ namespace api {
 
 			to_public ( values [ c ], at [ c ] );
 
-			if ( !keep_public ( stmt->fetch_memory, at [ c ] ) )
+			if ( !keep_public ( stmt->fetch_memory, at [ c ], stmt->fetch_wide ) )
 				return false;
 
 		}
@@ -92,9 +109,9 @@ namespace api {
 
 }
 
-extern "C" {
+namespace api {
 
-	STRATA_API int strata_fetch ( strata_stmt* stmt, strata_value* out, int room_rows, int* rows ) {
+	static int fetch_rows ( strata_stmt* stmt, strata_value* out, int room_rows, int* rows, bool wide ) {
 
 		if ( rows )
 			*rows = 0;
@@ -102,6 +119,7 @@ extern "C" {
 		if ( !stmt || !out || room_rows <= 0 )
 			return STRATA_MISUSE;
 
+		stmt->fetch_wide = wide;
 		stmt->fetch_memory.recycle ( );
 		stmt->fetch_out = out;
 		stmt->fetch_room = room_rows;
@@ -120,6 +138,22 @@ extern "C" {
 			return STRATA_NOMEM;
 
 		return code;
+
+	}
+
+}
+
+extern "C" {
+
+	STRATA_API int strata_fetch ( strata_stmt* stmt, strata_value* out, int room_rows, int* rows ) {
+
+		return api::fetch_rows ( stmt, out, room_rows, rows, false );
+
+	}
+
+	STRATA_API int strata_fetch16 ( strata_stmt* stmt, strata_value* out, int room_rows, int* rows ) {
+
+		return api::fetch_rows ( stmt, out, room_rows, rows, true );
 
 	}
 

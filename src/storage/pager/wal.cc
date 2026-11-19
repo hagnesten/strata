@@ -104,7 +104,7 @@ namespace storage {
 
 	}
 
-	static bool fresh_log ( pager& item ) {
+	static bool fresh_log ( pager& item, bool flush = true ) {
 
 		wal_state& wal = item.wal;
 		uint8_t header [ WAL_HEADER ];
@@ -116,7 +116,7 @@ namespace storage {
 
 		bool shrink = base::file_size ( wal.file ) > WAL_KEEP_BYTES;
 
-		if ( !base::write_at ( wal.file, 0, header, WAL_HEADER ) || ( shrink && !base::truncate_file ( wal.file, WAL_HEADER ) ) || !base::sync_file ( wal.file ) ) {
+		if ( !base::write_at ( wal.file, 0, header, WAL_HEADER ) || ( shrink && !base::truncate_file ( wal.file, WAL_HEADER ) ) || ( ( flush || shrink ) && !base::sync_file ( wal.file ) ) ) {
 
 			fail ( item, PAGER_IO, "the log could not be reset", 0, nullptr );
 
@@ -463,7 +463,10 @@ namespace storage {
 		}
 
 		base::release ( entries );
-		fine = fine && base::truncate_file ( item.file, static_cast < uint64_t > ( item.committed.page_count ) * PAGE_SIZE ) && base::sync_file ( item.file );
+
+		uint64_t wanted = static_cast < uint64_t > ( item.committed.page_count ) * PAGE_SIZE;
+
+		fine = fine && ( base::file_size ( item.file ) == wanted || base::truncate_file ( item.file, wanted ) ) && base::sync_file ( item.file );
 
 		if ( !fine ) {
 
@@ -473,7 +476,7 @@ namespace storage {
 
 		}
 
-		if ( !fresh_log ( item ) )
+		if ( !fresh_log ( item, false ) )
 			return false;
 
 		item.stats.checkpoints++;

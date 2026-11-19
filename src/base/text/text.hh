@@ -57,11 +57,42 @@ namespace base {
 
 		~text ( );
 
-		text& add ( char value );
+		text& add ( char value ) {
+
+			if ( size + 1 < room ) {
+
+				data [ size++ ] = value;
+				data [ size ] = 0;
+
+				return *this;
+
+			}
+
+			return add_slow ( value );
+
+		}
 
 		text& add ( const char* value );
 
-		text& add ( const char* value, size_t count );
+		text& add ( const char* value, size_t count ) {
+
+			if ( count && size + count < room ) {
+
+				copy ( data + size, value, count );
+				size += count;
+				data [ size ] = 0;
+
+				return *this;
+
+			}
+
+			return add_slow ( value, count );
+
+		}
+
+		text& add_slow ( char value );
+
+		text& add_slow ( const char* value, size_t count );
 
 		text& number ( uint64_t value );
 

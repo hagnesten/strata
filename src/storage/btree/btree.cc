@@ -557,6 +557,23 @@ namespace storage {
 			uint32_t count = high;
 			bool leaf = leaf_kind ( page [ 0 ] );
 
+			if ( count ) {
+
+				int64_t last = 0;
+
+				if ( !cell_rowid ( page, count - 1, count, leaf, last ) )
+					return false;
+
+				if ( last < rowid ) {
+
+					slot = count;
+
+					return true;
+
+				}
+
+			}
+
 			while ( low < high ) {
 
 				uint32_t middle = low + ( high - low ) / 2;
@@ -579,6 +596,29 @@ namespace storage {
 			exact = slot < count && cell_rowid ( page, slot, count, leaf, here ) && here == rowid;
 
 			return true;
+
+		}
+
+		if ( high ) {
+
+			cell_info last;
+			bool fine = true;
+
+			if ( !parse_cell ( page, high - 1, last ) )
+				return false;
+
+			int32_t order = order_key ( owner, last, key, size, columns, fine );
+
+			if ( !fine )
+				return false;
+
+			if ( order < 0 ) {
+
+				slot = high;
+
+				return true;
+
+			}
 
 		}
 
@@ -1813,12 +1853,67 @@ namespace storage {
 
 	}
 
+	static bool hinted_last ( pager& owner, uint32_t root, int64_t& rowid ) {
+
+		for ( uint32_t i = 0; i < PAGER_TAILS; i++ ) {
+
+			const tail_hint& hint = owner.tails [ i ];
+
+			if ( hint.root != root || hint.shape != owner.shape || !hint.leaf )
+				continue;
+
+			page_frame* frame = get_page ( owner, hint.leaf );
+
+			if ( !frame )
+				return false;
+
+			uint32_t count = count_of ( frame->data );
+			bool fine = frame->data [ 0 ] == PAGE_TABLE_LEAF && !link_a ( frame->data ) && count && cell_rowid ( frame->data, count - 1, count, true, rowid );
+
+			release_page ( frame );
+
+			return fine;
+
+		}
+
+		return false;
+
+	}
+
+	static void remember_tail ( pager& owner, uint32_t root, uint32_t leaf ) {
+
+		for ( uint32_t i = 0; i < PAGER_TAILS; i++ ) {
+
+			if ( owner.tails [ i ].root == root ) {
+
+				owner.tails [ i ] = { root, leaf, owner.shape };
+
+				return;
+
+			}
+
+		}
+
+		owner.tails [ owner.next_tail++ % PAGER_TAILS ] = { root, leaf, owner.shape };
+
+	}
+
 	bool table_last ( btree& tree, int64_t& rowid, bool& empty ) {
 
 		pager& owner = *tree.owner;
 		uint32_t number = tree.root;
 
 		empty = true;
+
+		if ( hinted_last ( owner, tree.root, rowid ) ) {
+
+			empty = false;
+
+			return true;
+
+		}
+
+		owner.error = PAGER_FINE;
 
 		for ( uint32_t depth = 0; depth <= BTREE_DEPTH; depth++ ) {
 
@@ -1837,6 +1932,9 @@ namespace storage {
 
 						cell_info info;
 						bool fine = parse_cell ( frame->data, count - 1, info );
+
+						if ( fine && !link_a ( frame->data ) )
+							remember_tail ( owner, tree.root, frame->number );
 
 						release_page ( frame );
 						rowid = info.rowid;

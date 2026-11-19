@@ -217,6 +217,8 @@ namespace storage {
 		if ( depth >= stack.count )
 			return;
 
+		item.shape++;
+
 		for ( uint32_t m = stack.count; m-- > depth; ) {
 
 			pager_mark& mark = stack.marks [ m ];

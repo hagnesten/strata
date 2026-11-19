@@ -60,7 +60,7 @@ namespace Strata.Data {
 		private void Fill ( ) {
 
 			int got;
-			int code = Native.strata_fetch ( statement, block, room, out got );
+			int code = Native.strata_fetch16 ( statement, block, room, out got );
 
 			rows = got;
 			at = -1;
@@ -96,6 +96,9 @@ namespace Strata.Data {
 
 				case Native.TypeText:
 					return Encoding.UTF8.GetString ( ( byte* ) value->Bytes, ( int ) value->Size );
+
+				case Native.TypeText16:
+					return new string ( ( char* ) value->Bytes, 0, ( int ) ( value->Size / 2 ) );
 
 				case Native.TypeBlob: {
 
@@ -359,6 +362,9 @@ namespace Strata.Data {
 
 			switch ( value->Type ) {
 
+				case Native.TypeText16:
+					return new string ( ( char* ) value->Bytes, 0, ( int ) ( value->Size / 2 ) );
+
 				case Native.TypeText:
 				case Native.TypeBlob:
 					return Encoding.UTF8.GetString ( ( byte* ) value->Bytes, ( int ) value->Size );
@@ -467,7 +473,7 @@ namespace Strata.Data {
 
 			StrataValue* value = Cell ( ordinal );
 
-			if ( value->Type != Native.TypeBlob && value->Type != Native.TypeText )
+			if ( value->Type != Native.TypeBlob && value->Type != Native.TypeText && value->Type != Native.TypeText16 )
 				throw new InvalidCastException ( "the value is not a blob" );
 
 			if ( buffer == null )

@@ -108,6 +108,7 @@ namespace storage {
 
 	void discard_frame ( pager& item, page_frame* frame ) {
 
+		item.shape++;
 		unlink_frame ( item, frame );
 		frame->number = 0;
 		frame->dirty = false;
@@ -392,6 +393,8 @@ namespace storage {
 
 		page_frame* frame = nullptr;
 
+		item.shape++;
+
 		if ( item.header.free_head ) {
 
 			uint32_t number = item.header.free_head;
@@ -474,6 +477,8 @@ namespace storage {
 			return false;
 
 		}
+
+		item.shape++;
 
 		page_frame* frame = get_page ( item, number );
 
@@ -578,6 +583,8 @@ namespace storage {
 	}
 
 	void rollback_pager ( pager& item ) {
+
+		item.shape++;
 
 		for ( uint32_t i = 0; i < item.frame_count; i++ ) {
 
