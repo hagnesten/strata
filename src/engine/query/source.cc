@@ -430,16 +430,27 @@ namespace engine {
 
 	}
 
+	static bool decode_bytes ( run_context& ctx, const table_info& table, int64_t rowid, const uint8_t* data, size_t size, storage::value*& values ) {
+
+		values = static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * ( table.column_count + 1 ) ) );
+
+		if ( !values )
+			return fail_run ( ctx, "out of memory" );
+
+		values [ table.column_count ] = storage::null_value ( );
+
+		return decode_row ( ctx, table, data, size, rowid, values );
+
+	}
+
 	static bool decode_kept ( run_context& ctx, const table_info& table, int64_t rowid, storage::value*& values ) {
 
 		char* kept = ctx.scratch->keep ( ctx.row_bytes.value ( ), ctx.row_bytes.size );
 
-		values = ctx.scratch->make < storage::value > ( table.column_count + 1 );
-
-		if ( !kept || !values )
+		if ( !kept )
 			return fail_run ( ctx, "out of memory" );
 
-		return decode_row ( ctx, table, reinterpret_cast < const uint8_t* > ( kept ), ctx.row_bytes.size, rowid, values );
+		return decode_bytes ( ctx, table, rowid, reinterpret_cast < const uint8_t* > ( kept ), ctx.row_bytes.size, values );
 
 	}
 
@@ -1113,8 +1124,10 @@ namespace engine {
 				source.first = false;
 
 				int64_t rowid = 0;
+				const uint8_t* data = nullptr;
+				size_t size = 0;
 
-				if ( !storage::cursor_rowid ( source.at, rowid ) )
+				if ( !storage::cursor_take ( source.at, *ctx.scratch, rowid, data, size ) )
 					return fail_storage ( ctx, "a table could not be read" );
 
 				if ( ( plan.path.kind == PATH_ROWID_RANGE && rowid > source.high ) || ( plan.path.kind == PATH_ROWID_EQUAL && rowid != source.low ) ) {
@@ -1125,13 +1138,10 @@ namespace engine {
 
 				}
 
-				if ( !storage::cursor_payload ( source.at, ctx.row_bytes ) || !storage::cursor_next ( source.at ) )
-					return fail_storage ( ctx, "a table could not be read" );
-
 				source.rowid = rowid;
 				found = true;
 
-				return decode_kept ( ctx, *plan.table, rowid, source.values );
+				return decode_bytes ( ctx, *plan.table, rowid, data, size, source.values );
 
 			}
 

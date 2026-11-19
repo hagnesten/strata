@@ -10,6 +10,17 @@ namespace base {
 
 	void* arena::take ( size_t size ) {
 
+		void* at = take_raw ( size );
+
+		if ( at )
+			fill ( at, 0, ( size + 15 ) & ~static_cast < size_t > ( 15 ) );
+
+		return at;
+
+	}
+
+	void* arena::take_raw ( size_t size ) {
+
 		size = ( size + 15 ) & ~static_cast < size_t > ( 15 );
 
 		if ( !first || first->size - first->used < size ) {
@@ -31,7 +42,6 @@ namespace base {
 		void* at = reinterpret_cast < uint8_t* > ( first ) + first->used;
 
 		first->used += size;
-		fill ( at, 0, size );
 
 		return at;
 
@@ -39,7 +49,7 @@ namespace base {
 
 	char* arena::keep ( const char* data, size_t size ) {
 
-		char* out = static_cast < char* > ( take ( size + 1 ) );
+		char* out = static_cast < char* > ( take_raw ( size + 1 ) );
 
 		if ( !out )
 			return nullptr;

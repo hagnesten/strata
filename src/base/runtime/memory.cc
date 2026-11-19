@@ -6,7 +6,40 @@ extern "C" {
 
 	int _fltused = 0;
 
-	void* memset ( void* target, int value, size_t size ) {
+	typedef uint64_t word_unaligned __attribute__ ( ( aligned ( 1 ), may_alias ) );
+	typedef uint32_t half_unaligned __attribute__ ( ( aligned ( 1 ), may_alias ) );
+	typedef uint16_t pair_unaligned __attribute__ ( ( aligned ( 1 ), may_alias ) );
+
+	__attribute__ ( ( no_builtin ( "memset" ) ) ) void* memset ( void* target, int value, size_t size ) {
+
+		uint8_t* to = static_cast < uint8_t* > ( target );
+
+		if ( size <= 64 ) {
+
+			uint64_t pattern = static_cast < uint8_t > ( value ) * 0x0101010101010101ull;
+
+			if ( size >= 8 ) {
+
+				for ( size_t i = 0; i + 8 < size; i += 8 )
+					*reinterpret_cast < word_unaligned* > ( to + i ) = pattern;
+
+				*reinterpret_cast < word_unaligned* > ( to + size - 8 ) = pattern;
+
+			} else if ( size >= 4 ) {
+
+				*reinterpret_cast < half_unaligned* > ( to ) = static_cast < uint32_t > ( pattern );
+				*reinterpret_cast < half_unaligned* > ( to + size - 4 ) = static_cast < uint32_t > ( pattern );
+
+			} else {
+
+				for ( size_t i = 0; i < size; i++ )
+					to [ i ] = static_cast < uint8_t > ( value );
+
+			}
+
+			return target;
+
+		}
 
 		void* at = target;
 
@@ -16,7 +49,44 @@ extern "C" {
 
 	}
 
-	void* memcpy ( void* target, const void* source, size_t size ) {
+	__attribute__ ( ( no_builtin ( "memcpy" ) ) ) void* memcpy ( void* target, const void* source, size_t size ) {
+
+		uint8_t* to = static_cast < uint8_t* > ( target );
+		const uint8_t* from = static_cast < const uint8_t* > ( source );
+
+		if ( size <= 64 ) {
+
+			if ( size >= 8 ) {
+
+				uint64_t last = *reinterpret_cast < const word_unaligned* > ( from + size - 8 );
+
+				for ( size_t i = 0; i + 8 < size; i += 8 )
+					*reinterpret_cast < word_unaligned* > ( to + i ) = *reinterpret_cast < const word_unaligned* > ( from + i );
+
+				*reinterpret_cast < word_unaligned* > ( to + size - 8 ) = last;
+
+			} else if ( size >= 4 ) {
+
+				uint32_t first = *reinterpret_cast < const half_unaligned* > ( from );
+				uint32_t last = *reinterpret_cast < const half_unaligned* > ( from + size - 4 );
+
+				*reinterpret_cast < half_unaligned* > ( to ) = first;
+				*reinterpret_cast < half_unaligned* > ( to + size - 4 ) = last;
+
+			} else if ( size >= 2 ) {
+
+				uint16_t first = *reinterpret_cast < const pair_unaligned* > ( from );
+				uint16_t last = *reinterpret_cast < const pair_unaligned* > ( from + size - 2 );
+
+				*reinterpret_cast < pair_unaligned* > ( to ) = first;
+				*reinterpret_cast < pair_unaligned* > ( to + size - 2 ) = last;
+
+			} else if ( size )
+				to [ 0 ] = from [ 0 ];
+
+			return target;
+
+		}
 
 		void* at = target;
 

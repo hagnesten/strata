@@ -40,6 +40,8 @@ namespace base {
 
 		void* take ( size_t size );
 
+		void* take_raw ( size_t size );
+
 		char* keep ( const char* data, size_t size );
 
 		void reset ( );

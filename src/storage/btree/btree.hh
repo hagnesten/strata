@@ -2,6 +2,7 @@
 
 #include "storage/pager/pager.hh"
 #include "storage/record/record.hh"
+#include "base/arena/arena.hh"
 
 #define BTREE_HEADER 16
 #define BTREE_SPACE ( PAGE_USABLE - BTREE_HEADER )
@@ -159,6 +160,8 @@ namespace storage {
 	bool cursor_rowid ( cursor& at, int64_t& rowid );
 
 	bool cursor_payload ( cursor& at, base::text& out );
+
+	bool cursor_take ( cursor& at, base::arena& memory, int64_t& rowid, const uint8_t*& data, size_t& size );
 
 	bool check_btree ( pager& owner, uint32_t root, bool index, tree_report& report );
 

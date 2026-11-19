@@ -1678,6 +1678,69 @@ namespace storage {
 
 	}
 
+	bool cursor_take ( cursor& at, base::arena& memory, int64_t& rowid, const uint8_t*& data, size_t& size ) {
+
+		if ( !at.valid )
+			return false;
+
+		pager& owner = *at.tree.owner;
+		page_frame* frame = get_page ( owner, at.page );
+
+		if ( !frame )
+			return false;
+
+		cell_info info;
+		uint32_t count = count_of ( frame->data );
+		bool fine = at.slot < count && parse_cell ( frame->data, at.slot, info );
+
+		if ( fine && info.payload == info.local ) {
+
+			uint8_t* kept = static_cast < uint8_t* > ( memory.take_raw ( info.local + 1 ) );
+
+			fine = kept != nullptr;
+
+			if ( fine ) {
+
+				base::copy ( kept, info.local_data, info.local );
+				data = kept;
+				size = info.local;
+
+			}
+
+		} else if ( fine ) {
+
+			base::text whole;
+
+			fine = read_full ( owner, info, whole );
+
+			char* kept = fine ? memory.keep ( whole.value ( ), whole.size ) : nullptr;
+
+			fine = kept != nullptr;
+			data = reinterpret_cast < const uint8_t* > ( kept );
+			size = whole.size;
+
+		}
+
+		uint32_t next = link_a ( frame->data );
+
+		rowid = info.rowid;
+		release_page ( frame );
+
+		if ( !fine )
+			return false;
+
+		at.slot++;
+
+		if ( at.slot < count )
+			return true;
+
+		at.page = next;
+		at.slot = 0;
+
+		return settle ( at );
+
+	}
+
 	bool table_find ( btree& tree, int64_t rowid, base::text& payload, bool& found ) {
 
 		cursor at;
