@@ -83,14 +83,31 @@ namespace test {
 
 	}
 
-	int32_t run_all ( ) {
+	int32_t run_all ( const char* only ) {
 
 		counts = { };
 		base::write ( "strata self test\n" );
-		pager_tests ( );
-		btree_tests ( );
-		crash_tests ( );
-		parser_tests ( );
+
+		auto chosen = [ & ] ( const char* name ) {
+
+			return !only || base::same ( only, name );
+
+		};
+
+		if ( chosen ( "pager" ) )
+			pager_tests ( );
+
+		if ( chosen ( "btree" ) )
+			btree_tests ( );
+
+		if ( chosen ( "crash" ) )
+			crash_tests ( );
+
+		if ( chosen ( "parser" ) )
+			parser_tests ( );
+
+		if ( chosen ( "engine" ) )
+			engine_tests ( );
 
 		base::text line;
 

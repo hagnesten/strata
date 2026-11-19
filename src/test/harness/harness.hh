@@ -22,6 +22,23 @@ namespace test {
 
 	};
 
+	struct result_capture {
+
+		base::text out;
+		uint32_t rows;
+		uint32_t columns;
+
+	};
+
+	struct fuzz_row {
+
+		bool present;
+		bool a_null;
+		int64_t a;
+		int32_t b;
+
+	};
+
 	extern test_counts counts;
 
 	bool expect ( bool fine, const char* what );
@@ -34,7 +51,7 @@ namespace test {
 
 	void flip_byte ( const char* path, uint64_t offset );
 
-	int32_t run_all ( );
+	int32_t run_all ( const char* only );
 
 	void pager_tests ( );
 
@@ -43,5 +60,7 @@ namespace test {
 	void crash_tests ( );
 
 	void parser_tests ( );
+
+	void engine_tests ( );
 
 }

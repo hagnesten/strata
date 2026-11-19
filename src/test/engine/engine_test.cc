@@ -1,0 +1,671 @@
+#include "test/harness/harness.hh"
+#include "engine/database/database.hh"
+
+namespace test {
+
+	static bool capture_row ( void* context, const storage::value* values, uint32_t count ) {
+
+		result_capture& capture = *static_cast < result_capture* > ( context );
+
+		if ( capture.rows )
+			capture.out.add ( '\n' );
+
+		for ( uint32_t i = 0; i < count; i++ ) {
+
+			if ( i )
+				capture.out.add ( '|' );
+
+			engine::describe_value ( capture.out, values [ i ] );
+
+		}
+
+		capture.rows++;
+
+		return true;
+
+	}
+
+	static bool capture_columns ( void* context, const char* const* names, uint32_t count ) {
+
+		static_cast < result_capture* > ( context )->columns = count;
+
+		return true;
+
+	}
+
+	static bool query ( engine::database& db, const char* sql, result_capture& capture ) {
+
+		engine::query_sink sink = { &capture, capture_columns, capture_row };
+
+		capture.out.clear ( );
+		capture.rows = 0;
+		capture.columns = 0;
+
+		return engine::execute ( db, sql, nullptr, 0, &sink );
+
+	}
+
+	static void rows ( engine::database& db, const char* sql, const char* wanted ) {
+
+		result_capture capture;
+
+		if ( !query ( db, sql, capture ) ) {
+
+			base::text line;
+
+			line.add ( sql ).add ( "\n          error: " ).add ( db.problem.value ( ) );
+			expect ( false, line.value ( ) );
+
+			return;
+
+		}
+
+		if ( base::same ( capture.out.value ( ), wanted ) ) {
+
+			expect ( true, sql );
+
+			return;
+
+		}
+
+		base::text line;
+
+		line.add ( sql ).add ( "\n          got:    " ).add ( capture.out.value ( ) ).add ( "\n          wanted: " ).add ( wanted );
+		expect ( false, line.value ( ) );
+
+	}
+
+	static void run ( engine::database& db, const char* sql ) {
+
+		result_capture capture;
+
+		if ( query ( db, sql, capture ) ) {
+
+			expect ( true, sql );
+
+			return;
+
+		}
+
+		base::text line;
+
+		line.add ( sql ).add ( "\n          error: " ).add ( db.problem.value ( ) );
+		expect ( false, line.value ( ) );
+
+	}
+
+	static bool contains ( const char* text, const char* part ) {
+
+		size_t size = base::length ( part );
+
+		for ( size_t i = 0; text [ i ]; i++ )
+			if ( base::same_bytes ( text + i, part, size ) )
+				return true;
+
+		return !size;
+
+	}
+
+	static void fails ( engine::database& db, const char* sql, const char* fragment ) {
+
+		result_capture capture;
+
+		if ( query ( db, sql, capture ) ) {
+
+			base::text line;
+
+			line.add ( sql ).add ( "\n          ran, but should fail with: " ).add ( fragment );
+			expect ( false, line.value ( ) );
+
+			return;
+
+		}
+
+		if ( contains ( db.problem.value ( ), fragment ) ) {
+
+			expect ( true, sql );
+
+			return;
+
+		}
+
+		base::text line;
+
+		line.add ( sql ).add ( "\n          failed with: " ).add ( db.problem.value ( ) ).add ( "\n          wanted:      " ).add ( fragment );
+		expect ( false, line.value ( ) );
+
+	}
+
+	static void plan_has ( engine::database& db, const char* sql, const char* fragment ) {
+
+		result_capture capture;
+
+		if ( !query ( db, sql, capture ) ) {
+
+			base::text line;
+
+			line.add ( sql ).add ( "\n          error: " ).add ( db.problem.value ( ) );
+			expect ( false, line.value ( ) );
+
+			return;
+
+		}
+
+		base::text line;
+
+		line.add ( sql ).add ( "\n          plan:   " ).add ( capture.out.value ( ) ).add ( "\n          wanted: " ).add ( fragment );
+		expect ( contains ( capture.out.value ( ), fragment ), line.value ( ) );
+
+	}
+
+	static void value_tests ( engine::database& db ) {
+
+		rows ( db, "SELECT 1 + 2, 7 / 2, 7.0 / 2, 1 / 0, 5 % 3, -5 % 3", "3|3|3.5|NULL|2|-2" );
+		rows ( db, "SELECT 'a' || 1 || 2.5, NULL || 'x', 2 * 3 + 4, 2 * ( 3 + 4 )", "a12.5|NULL|10|14" );
+		rows ( db, "SELECT 10 > 9, '10' > 9, 'abc' < 'abd', NULL = NULL, NULL IS NULL, 1 IS 1, 1 IS NOT NULL", "1|1|1|NULL|1|1|1" );
+		rows ( db, "SELECT typeof ( 1 ), typeof ( 1.5 ), typeof ( 'x' ), typeof ( NULL ), typeof ( x'00' )", "integer|real|text|null|blob" );
+		rows ( db, "SELECT CAST ( '12abc' AS INTEGER ), CAST ( 3.9 AS INTEGER ), CAST ( 5 AS TEXT ) || 'x', CAST ( '1e3' AS REAL ), CAST ( '7' AS NUMERIC ) + 1", "12|3|5x|1000.0|8" );
+		rows ( db, "SELECT 9223372036854775807 + 1, -9223372036854775807 - 1, 9223372036854775807 * 2", "9.22337203685478e+18|-9223372036854775808|1.84467440737096e+19" );
+		rows ( db, "SELECT 0.1 + 0.2, 1e100, 1.5e-7, 100.0, -0.5, 123456.789", "0.3|1.0e+100|1.5e-07|100.0|-0.5|123456.789" );
+		rows ( db, "SELECT 1 AND NULL, 0 AND NULL, 1 OR NULL, 0 OR NULL, NOT NULL, NOT 0", "NULL|0|1|NULL|NULL|1" );
+		rows ( db, "SELECT 6 & 3, 6 | 3, ~5, 1 << 4, 256 >> 4, -16 >> 2", "2|7|-6|16|16|-4" );
+		rows ( db, "SELECT round ( 2.5 ), round ( -2.5 ), round ( 3.14159, 2 ), abs ( -7 ), abs ( -7.5 ), sign ( -3 ), sign ( 'x' )", "3.0|-3.0|3.14|7|7.5|-1|NULL" );
+		rows ( db, "SELECT length ( 'h\xC3\xA9llo' ), upper ( 'abc' ), lower ( 'ABC' ), substr ( 'hello', 2, 3 ), substr ( 'hello', -3 ), substr ( 'hello', 0, 2 )", "5|ABC|abc|ell|llo|h" );
+		rows ( db, "SELECT trim ( '  x  ' ), ltrim ( 'xxy', 'x' ), rtrim ( 'yxx', 'x' ), replace ( 'aaa', 'a', 'bb' ), instr ( 'hello', 'll' ), instr ( 'hello', 'z' )", "x|y|y|bbbbbb|3|0" );
+		rows ( db, "SELECT coalesce ( NULL, NULL, 3 ), ifnull ( NULL, 'd' ), nullif ( 1, 1 ), nullif ( 1, 2 ), iif ( 1 > 2, 'a', 'b' )", "3|d|NULL|1|b" );
+		rows ( db, "SELECT hex ( 'AB' ), quote ( 'it''s' ), quote ( NULL ), quote ( x'0aff' ), char ( 72, 105 ), unicode ( 'A' )", "4142|'it''s'|NULL|X'0AFF'|Hi|65" );
+		rows ( db, "SELECT printf ( '%5.2f|%-4d|%04d|%s|%x|%%', 3.14159, 7, 42, 'x', 255 )", " 3.14|7   |0042|x|ff|%" );
+		rows ( db, "SELECT max ( 1, 5, 3 ), min ( 'b', 'a' ), max ( 1, NULL ), concat ( 'a', NULL, 'b' ), concat_ws ( '-', 'a', NULL, 'b' )", "5|a|NULL|ab|a-b" );
+		rows ( db, "SELECT 'Hello' LIKE 'h%', 'Hello' LIKE 'h_llo', 'Hello' GLOB 'h*', 'Hello' GLOB 'H*', 'a%b' LIKE 'a\\%b' ESCAPE '\\', 'abc' NOT LIKE '%b%'", "1|1|0|1|1|0" );
+		rows ( db, "SELECT 5 BETWEEN 1 AND 10, 5 NOT BETWEEN 1 AND 4, 3 IN ( 1, 2, 3 ), 4 IN ( 1, 2, NULL ), NULL IN ( 1 ), 4 NOT IN ( 1, 2 )", "1|1|1|NULL|NULL|1" );
+		rows ( db, "SELECT CASE 2 WHEN 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END, CASE WHEN 0 THEN 'x' END, CASE WHEN 1 > 0 THEN 'yes' ELSE 'no' END", "b|NULL|yes" );
+		rows ( db, "SELECT zeroblob ( 3 ), length ( randomblob ( 8 ) ), typeof ( random ( ) ), strata_version ( )", "X'000000'|8|integer|" ENGINE_VERSION );
+		rows ( db, "VALUES ( 1, 'a' ), ( 2, 'b' )", "1|a\n2|b" );
+		rows ( db, "SELECT * FROM ( VALUES ( 3 ), ( 1 ), ( 2 ) ) AS v ORDER BY column1 DESC", "3\n2\n1" );
+		fails ( db, "SELECT nosuch ( 1 )", "no such function: nosuch" );
+		fails ( db, "SELECT length ( 1, 2 )", "wrong number of arguments" );
+		fails ( db, "SELECT x", "no such column: x" );
+		fails ( db, "SELECT sum ( 1 ) WHERE count ( * ) > 1", "cannot be used here" );
+		fails ( db, "SELECT 1 FROM nowhere", "no such table: nowhere" );
+		fails ( db, "SELECT ( SELECT 1, 2 )", "returns 2 columns" );
+		fails ( db, "SELECT 1 UNION SELECT 1, 2", "same number of columns" );
+		fails ( db, "SELECT 1 ORDER BY 2", "out of range" );
+
+	}
+
+	static void table_tests ( engine::database& db ) {
+
+		run ( db, "CREATE TABLE people ( id INTEGER PRIMARY KEY, name TEXT NOT NULL, age INT, city TEXT )" );
+		run ( db, "INSERT INTO people ( name, age, city ) VALUES ( 'Ada', 36, 'London' ), ( 'Linus', 28, 'Helsinki' ), ( 'Grace', 45, 'New York' ), ( 'Alan', 41, 'London' ), ( 'Barbara', NULL, 'Boston' )" );
+		rows ( db, "SELECT last_insert_rowid ( ), changes ( )", "5|5" );
+		rows ( db, "SELECT id, name FROM people WHERE age > 30 ORDER BY age DESC", "3|Grace\n4|Alan\n1|Ada" );
+		rows ( db, "SELECT count ( * ), sum ( 1 ), total ( NULL ), max ( NULL )", "1|1|0.0|NULL" );
+		rows ( db, "SELECT count ( * ), count ( age ), sum ( age ), avg ( age ), min ( age ), max ( age ) FROM people", "5|4|150|37.5|28|45" );
+		rows ( db, "SELECT city, count ( * ) FROM people GROUP BY city", "Boston|1\nHelsinki|1\nLondon|2\nNew York|1" );
+		rows ( db, "SELECT city, count ( * ) AS n FROM people GROUP BY city HAVING n > 1", "London|2" );
+		rows ( db, "SELECT DISTINCT city FROM people ORDER BY 1 LIMIT 2 OFFSET 1", "Helsinki\nLondon" );
+		rows ( db, "SELECT name FROM people ORDER BY age LIMIT 2", "Barbara\nLinus" );
+		rows ( db, "SELECT name FROM people ORDER BY age DESC, name LIMIT 1", "Grace" );
+		rows ( db, "SELECT group_concat ( name, ', ' ) FROM people WHERE city = 'London'", "Ada, Alan" );
+		rows ( db, "SELECT name, max ( age ) FROM people", "Grace|45" );
+		rows ( db, "SELECT name, min ( age ) FROM people", "Linus|28" );
+		rows ( db, "SELECT upper ( name ) AS shout FROM people WHERE id IN ( 1, 3 ) ORDER BY shout", "ADA\nGRACE" );
+		rows ( db, "SELECT count ( DISTINCT city ), sum ( DISTINCT age > 30 ) FROM people", "4|1" );
+		rows ( db, "SELECT city, group_concat ( name ) FROM people GROUP BY 1 ORDER BY count ( * ) DESC, city LIMIT 2", "London|Ada,Alan\nBoston|Barbara" );
+		rows ( db, "SELECT name FROM people WHERE name LIKE 'a%' ORDER BY name", "Ada\nAlan" );
+		rows ( db, "SELECT name FROM people WHERE age IS NULL", "Barbara" );
+		rows ( db, "SELECT name FROM people WHERE id = '2'", "Linus" );
+		rows ( db, "SELECT name FROM people WHERE age = '45'", "Grace" );
+		rows ( db, "SELECT rowid, oid, _rowid_ FROM people WHERE id = 4", "4|4|4" );
+		rows ( db, "SELECT name FROM people WHERE id > 2 AND id <= 4", "Grace\nAlan" );
+		rows ( db, "SELECT name FROM people WHERE id BETWEEN 2.5 AND 4", "Grace\nAlan" );
+		rows ( db, "SELECT count ( * ) FROM people WHERE id IN ( 5, 1, 1, 99 )", "2" );
+		rows ( db, "SELECT city, avg ( age ) FROM people GROUP BY city HAVING avg ( age ) > 30 ORDER BY 2 DESC", "New York|45.0\nLondon|38.5" );
+		rows ( db, "SELECT count ( * ) FROM people WHERE 1 = 0", "0" );
+		rows ( db, "SELECT city FROM people WHERE 1 = 0 GROUP BY city", "" );
+
+	}
+
+	static void join_tests ( engine::database& db ) {
+
+		run ( db, "CREATE TABLE pets ( id INTEGER PRIMARY KEY, owner INT REFERENCES people ( id ) ON DELETE CASCADE, kind TEXT )" );
+		run ( db, "INSERT INTO pets ( owner, kind ) VALUES ( 1, 'cat' ), ( 1, 'dog' ), ( 3, 'parrot' )" );
+		rows ( db, "SELECT p.name, x.kind FROM people p JOIN pets x ON x.owner = p.id ORDER BY x.id", "Ada|cat\nAda|dog\nGrace|parrot" );
+		rows ( db, "SELECT p.name, x.kind FROM people AS p, pets AS x WHERE x.owner = p.id AND x.kind <> 'dog' ORDER BY 1", "Ada|cat\nGrace|parrot" );
+		rows ( db, "SELECT p.name, count ( x.id ) FROM people p LEFT JOIN pets x ON x.owner = p.id GROUP BY p.id ORDER BY p.id", "Ada|2\nLinus|0\nGrace|1\nAlan|0\nBarbara|0" );
+		rows ( db, "SELECT p.name FROM people p LEFT JOIN pets x ON x.owner = p.id WHERE x.id IS NULL ORDER BY p.name", "Alan\nBarbara\nLinus" );
+		rows ( db, "SELECT count ( * ) FROM people CROSS JOIN pets", "15" );
+		rows ( db, "SELECT name FROM people WHERE id NOT IN ( SELECT owner FROM pets ) ORDER BY id", "Linus\nAlan\nBarbara" );
+		rows ( db, "SELECT name FROM people p WHERE EXISTS ( SELECT 1 FROM pets WHERE owner = p.id ) ORDER BY 1", "Ada\nGrace" );
+		rows ( db, "SELECT name, ( SELECT count ( * ) FROM pets WHERE owner = people.id ) FROM people ORDER BY id LIMIT 3", "Ada|2\nLinus|0\nGrace|1" );
+		rows ( db, "SELECT name FROM people WHERE age > ( SELECT avg ( age ) FROM people ) ORDER BY name", "Alan\nGrace" );
+		rows ( db, "SELECT * FROM ( SELECT city, count ( * ) AS n FROM people GROUP BY city ) AS c WHERE n = 1 ORDER BY city", "Boston|1\nHelsinki|1\nNew York|1" );
+		rows ( db, "SELECT name FROM people WHERE id IN ( SELECT owner FROM pets WHERE kind = 'parrot' )", "Grace" );
+		rows ( db, "SELECT kind, ( SELECT name FROM people WHERE id = pets.owner ) FROM pets ORDER BY kind", "cat|Ada\ndog|Ada\nparrot|Grace" );
+		run ( db, "CREATE TABLE left_side ( k INT, x TEXT )" );
+		run ( db, "CREATE TABLE right_side ( k INT, y TEXT )" );
+		run ( db, "INSERT INTO left_side VALUES ( 1, 'a' ), ( 2, 'b' ), ( 3, 'c' )" );
+		run ( db, "INSERT INTO right_side VALUES ( 2, 'B' ), ( 3, 'C' ), ( 3, 'CC' ), ( 4, 'D' )" );
+		rows ( db, "SELECT * FROM left_side JOIN right_side USING ( k ) ORDER BY k, y", "2|b|B\n3|c|C\n3|c|CC" );
+		rows ( db, "SELECT k, x, y FROM left_side LEFT JOIN right_side USING ( k ) ORDER BY k, y", "1|a|NULL\n2|b|B\n3|c|C\n3|c|CC" );
+		rows ( db, "SELECT l.x, r.y FROM left_side l LEFT JOIN right_side r ON r.k = l.k AND r.y <> 'C' ORDER BY l.x", "a|NULL\nb|B\nc|CC" );
+		fails ( db, "SELECT k FROM left_side, right_side", "ambiguous" );
+		rows ( db, "SELECT 1 UNION SELECT 1 UNION SELECT 2", "1\n2" );
+		rows ( db, "SELECT 1 UNION SELECT 2 ORDER BY 1 DESC", "2\n1" );
+		rows ( db, "SELECT 1 UNION ALL SELECT 1", "1\n1" );
+		rows ( db, "SELECT city FROM people INTERSECT SELECT 'London'", "London" );
+		rows ( db, "SELECT city FROM people EXCEPT SELECT 'London' ORDER BY 1", "Boston\nHelsinki\nNew York" );
+		rows ( db, "SELECT k FROM left_side UNION SELECT k FROM right_side ORDER BY k LIMIT 3 OFFSET 1", "2\n3\n4" );
+
+	}
+
+	static void constraint_tests ( engine::database& db ) {
+
+		fails ( db, "INSERT INTO people ( name ) VALUES ( NULL )", "NOT NULL constraint failed: people.name" );
+		run ( db, "CREATE TABLE keyed ( a INT UNIQUE, b TEXT CHECK ( length ( b ) < 5 ) )" );
+		run ( db, "INSERT INTO keyed VALUES ( 1, 'x' )" );
+		fails ( db, "INSERT INTO keyed VALUES ( 1, 'y' )", "UNIQUE constraint failed: keyed.a" );
+		fails ( db, "INSERT INTO keyed VALUES ( 2, 'toolong' )", "CHECK constraint failed: keyed" );
+		run ( db, "INSERT OR IGNORE INTO keyed VALUES ( 1, 'z' )" );
+		rows ( db, "SELECT count ( * ), changes ( ) FROM keyed", "1|0" );
+		run ( db, "INSERT OR REPLACE INTO keyed VALUES ( 1, 'w' )" );
+		rows ( db, "SELECT a, b FROM keyed", "1|w" );
+		run ( db, "INSERT INTO keyed VALUES ( 1, 'v' ) ON CONFLICT ( a ) DO UPDATE SET b = excluded.b || '!'" );
+		rows ( db, "SELECT a, b FROM keyed", "1|v!" );
+		run ( db, "INSERT INTO keyed VALUES ( 1, 'q' ) ON CONFLICT DO NOTHING" );
+		rows ( db, "SELECT b FROM keyed", "v!" );
+		run ( db, "INSERT INTO keyed VALUES ( NULL, 'n1' ), ( NULL, 'n2' )" );
+		rows ( db, "SELECT count ( * ) FROM keyed", "3" );
+		fails ( db, "UPDATE keyed SET a = 1 WHERE b = 'n1'", "UNIQUE constraint failed" );
+		fails ( db, "INSERT INTO keyed VALUES ( 5, 'a' ), ( 1, 'dup' )", "UNIQUE" );
+		rows ( db, "SELECT count ( * ) FROM keyed WHERE a = 5", "0" );
+		fails ( db, "INSERT INTO people ( id, name ) VALUES ( 1, 'Again' )", "UNIQUE constraint failed: people.id" );
+		fails ( db, "INSERT INTO people ( id, name ) VALUES ( 'abc', 'Bad' )", "whole number" );
+		run ( db, "CREATE TABLE pairs ( a INT, b INT, PRIMARY KEY ( a, b ) )" );
+		run ( db, "INSERT INTO pairs VALUES ( 1, 1 ), ( 1, 2 )" );
+		fails ( db, "INSERT INTO pairs VALUES ( 1, 2 )", "UNIQUE constraint failed: pairs.a, pairs.b" );
+		fails ( db, "INSERT INTO pairs VALUES ( NULL, 2 )", "NOT NULL" );
+		run ( db, "CREATE TABLE defaults ( id INTEGER PRIMARY KEY, a TEXT DEFAULT 'none', b INT DEFAULT ( 2 + 3 ), c REAL DEFAULT -1 )" );
+		run ( db, "INSERT INTO defaults DEFAULT VALUES" );
+		run ( db, "INSERT INTO defaults ( a ) VALUES ( 'set' )" );
+		rows ( db, "SELECT * FROM defaults", "1|none|5|-1.0\n2|set|5|-1.0" );
+		run ( db, "CREATE TABLE typed ( i INTEGER, r REAL, t TEXT, n NUMERIC, b BLOB )" );
+		run ( db, "INSERT INTO typed VALUES ( '42', '1.5', 7, '3.0', 'raw' )" );
+		rows ( db, "SELECT typeof ( i ), typeof ( r ), typeof ( t ), typeof ( n ), typeof ( b ), i, r, t, n FROM typed", "integer|real|text|integer|text|42|1.5|7|3" );
+		fails ( db, "CREATE TABLE people ( x INT )", "already used" );
+		run ( db, "CREATE TABLE IF NOT EXISTS people ( x INT )" );
+		fails ( db, "CREATE TABLE strata_mine ( x INT )", "kept for Strata" );
+
+	}
+
+	static void foreign_tests ( engine::database& db ) {
+
+		fails ( db, "INSERT INTO pets ( owner, kind ) VALUES ( 99, 'ghost' )", "FOREIGN KEY constraint failed" );
+		run ( db, "INSERT INTO pets ( owner, kind ) VALUES ( NULL, 'stray' )" );
+		run ( db, "CREATE TABLE claims ( person INT REFERENCES people ( id ) )" );
+		run ( db, "INSERT INTO claims VALUES ( 3 )" );
+		fails ( db, "DELETE FROM people WHERE id = 3", "FOREIGN KEY constraint failed" );
+		fails ( db, "UPDATE people SET id = 30 WHERE id = 3", "FOREIGN KEY constraint failed" );
+		run ( db, "CREATE TABLE notes ( person INT REFERENCES people ( id ) ON DELETE SET NULL, body TEXT )" );
+		run ( db, "INSERT INTO notes VALUES ( 4, 'hello' )" );
+		run ( db, "DELETE FROM people WHERE id = 4" );
+		rows ( db, "SELECT person, body FROM notes", "NULL|hello" );
+		run ( db, "DELETE FROM people WHERE id = 1" );
+		rows ( db, "SELECT kind FROM pets ORDER BY id", "parrot\nstray" );
+		rows ( db, "SELECT changes ( )", "1" );
+		fails ( db, "DROP TABLE people", "foreign key" );
+
+	}
+
+	static void index_tests ( engine::database& db ) {
+
+		run ( db, "CREATE INDEX people_city ON people ( city )" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT name FROM people WHERE city = 'London'", "USING INDEX people_city (city=?)" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT name FROM people WHERE id = 2", "USING ROWID (rowid=?)" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT name FROM people WHERE id > 2", "USING ROWID (rowid>?)" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT name FROM people WHERE +city = 'London'", "SCAN people" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT p.name FROM pets x JOIN people p ON p.id = x.owner", "SEARCH people AS p USING ROWID" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT * FROM keyed WHERE a = 1", "USING UNIQUE INDEX strata_auto_keyed_1 (a=?)" );
+		plan_has ( db, "EXPLAIN QUERY PLAN DELETE FROM people WHERE city = 'Boston'", "USING INDEX people_city" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT ( SELECT 1 FROM pets WHERE owner = people.id ) FROM people", "CORRELATED SCALAR SUBQUERY" );
+		rows ( db, "SELECT name FROM people WHERE city = 'London'", "" );
+		rows ( db, "SELECT name FROM people WHERE city = 'Boston'", "Barbara" );
+		rows ( db, "SELECT name FROM people WHERE city > 'C' ORDER BY name", "Grace\nLinus" );
+		run ( db, "UPDATE people SET city = 'Paris' WHERE name = 'Grace'" );
+		rows ( db, "SELECT name FROM people WHERE city = 'Paris'", "Grace" );
+		rows ( db, "SELECT count ( * ) FROM people WHERE city = 'New York'", "0" );
+		run ( db, "CREATE UNIQUE INDEX people_name ON people ( name )" );
+		fails ( db, "INSERT INTO people ( name ) VALUES ( 'Grace' )", "UNIQUE constraint failed: people.name" );
+		run ( db, "INSERT INTO pairs VALUES ( 2, 2 )" );
+		fails ( db, "CREATE UNIQUE INDEX pairs_b ON pairs ( b )", "duplicates" );
+		fails ( db, "DROP INDEX strata_auto_keyed_1", "cannot be dropped" );
+		run ( db, "DROP INDEX people_name" );
+		run ( db, "INSERT INTO people ( name ) VALUES ( 'Grace' )" );
+		rows ( db, "SELECT count ( * ) FROM people WHERE name = 'Grace'", "2" );
+
+	}
+
+	static void transaction_tests ( engine::database& db ) {
+
+		run ( db, "CREATE TABLE steps ( a INT UNIQUE )" );
+		run ( db, "INSERT INTO steps VALUES ( 1 ), ( 3 ), ( 4 )" );
+		run ( db, "BEGIN" );
+		run ( db, "INSERT INTO steps VALUES ( 10 )" );
+		fails ( db, "UPDATE steps SET a = a + 1", "UNIQUE" );
+		rows ( db, "SELECT a FROM steps ORDER BY rowid", "1\n3\n4\n10" );
+		fails ( db, "BEGIN", "already open" );
+		run ( db, "ROLLBACK" );
+		rows ( db, "SELECT count ( * ) FROM steps", "3" );
+		run ( db, "BEGIN; INSERT INTO steps VALUES ( 11 ); CREATE TABLE inside ( x ); INSERT INTO inside VALUES ( 1 ); COMMIT" );
+		rows ( db, "SELECT count ( * ) FROM steps; SELECT x FROM inside", "4\n1" );
+		run ( db, "BEGIN; CREATE TABLE gone ( x ); ROLLBACK" );
+		fails ( db, "SELECT * FROM gone", "no such table" );
+		fails ( db, "COMMIT", "no open transaction" );
+
+	}
+
+	static void alter_tests ( engine::database& db ) {
+
+		run ( db, "ALTER TABLE people ADD COLUMN email TEXT DEFAULT 'none'" );
+		rows ( db, "SELECT email FROM people WHERE id = 2", "none" );
+		run ( db, "UPDATE people SET email = 'linus@example.org' WHERE id = 2" );
+		rows ( db, "SELECT name, email FROM people WHERE id IN ( 2, 3 ) ORDER BY id", "Linus|linus@example.org\nGrace|none" );
+		run ( db, "ALTER TABLE people RENAME COLUMN city TO town" );
+		rows ( db, "SELECT town FROM people WHERE id = 2", "Helsinki" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT name FROM people WHERE town = 'Paris'", "USING INDEX people_city (town=?)" );
+		run ( db, "ALTER TABLE keyed RENAME TO uniq" );
+		rows ( db, "SELECT count ( * ) FROM uniq", "3" );
+		fails ( db, "INSERT INTO uniq VALUES ( 1, 'x' )", "UNIQUE" );
+		fails ( db, "ALTER TABLE people ADD COLUMN bad INT NOT NULL", "NOT NULL" );
+		run ( db, "CREATE TABLE londoners AS SELECT name, age FROM people WHERE town = 'Helsinki'" );
+		rows ( db, "SELECT * FROM londoners", "Linus|28" );
+		run ( db, "DROP TABLE londoners" );
+		fails ( db, "SELECT * FROM londoners", "no such table" );
+
+	}
+
+	static void persistence_tests ( engine::database& db, const char* path ) {
+
+		rows ( db, "SELECT count ( * ), sum ( age ) FROM people", "4|73" );
+		engine::close_database ( db );
+		expect ( engine::open_database ( db, path ), "the database opens again" );
+		rows ( db, "SELECT count ( * ), sum ( age ) FROM people", "4|73" );
+		rows ( db, "SELECT name, town, email FROM people WHERE id = 2", "Linus|Helsinki|linus@example.org" );
+		rows ( db, "SELECT count ( * ) FROM uniq", "3" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT * FROM people WHERE town = 'x'", "people_city" );
+
+	}
+
+	static void model_where ( base::text& sql, base::text& forced, const fuzz_row* model, uint32_t size, test_random& random, base::text& wanted ) {
+
+		static const char* const letters [ 3 ] = { "p", "q", "r" };
+		uint32_t shape = random.below ( 9 );
+		int64_t k = random.below ( 32 );
+		int64_t m = k + random.below ( 10 );
+		int32_t letter = static_cast < int32_t > ( random.below ( 3 ) );
+		base::text where;
+		base::text plain;
+
+		switch ( shape ) {
+
+			case 0: where.add ( "a = " ).signed_number ( k ); plain.add ( "+a = " ).signed_number ( k ); break;
+			case 1: where.add ( "a > " ).signed_number ( k ); plain.add ( "+a > " ).signed_number ( k ); break;
+			case 2: where.add ( "a >= " ).signed_number ( k ).add ( " AND a < " ).signed_number ( m ); plain.add ( "+a >= " ).signed_number ( k ).add ( " AND +a < " ).signed_number ( m ); break;
+			case 3: where.add ( "a BETWEEN " ).signed_number ( k ).add ( " AND " ).signed_number ( m ); plain.add ( "+a BETWEEN " ).signed_number ( k ).add ( " AND " ).signed_number ( m ); break;
+			case 4: where.add ( "a = " ).signed_number ( k ).add ( " AND b = '" ).add ( letters [ letter ] ).add ( '\'' ); plain.add ( "+a = " ).signed_number ( k ).add ( " AND +b = '" ).add ( letters [ letter ] ).add ( '\'' ); break;
+			case 5: where.add ( "a IN ( " ).signed_number ( k ).add ( ", " ).signed_number ( m ).add ( " )" ); plain.add ( "+a IN ( " ).signed_number ( k ).add ( ", " ).signed_number ( m ).add ( " )" ); break;
+			case 6: where.add ( "id > " ).signed_number ( k * 15 ); plain.add ( "+id > " ).signed_number ( k * 15 ); break;
+			case 7: where.add ( "id BETWEEN " ).signed_number ( k * 10 ).add ( " AND " ).signed_number ( m * 20 ); plain.add ( "+id BETWEEN " ).signed_number ( k * 10 ).add ( " AND " ).signed_number ( m * 20 ); break;
+			default: where.add ( "a IS NULL AND id < " ).signed_number ( m * 30 ); plain.add ( "+a IS NULL AND +id < " ).signed_number ( m * 30 ); break;
+
+		}
+
+		sql.clear ( );
+		sql.add ( "SELECT id FROM fuzz WHERE " ).add ( where.value ( ) ).add ( " ORDER BY id" );
+		forced.clear ( );
+		forced.add ( "SELECT id FROM fuzz WHERE " ).add ( plain.value ( ) ).add ( " ORDER BY id" );
+		wanted.clear ( );
+
+		bool first = true;
+
+		for ( uint32_t id = 1; id < size; id++ ) {
+
+			const fuzz_row& row = model [ id ];
+			bool hit = false;
+
+			if ( !row.present )
+				continue;
+
+			switch ( shape ) {
+
+				case 0: hit = !row.a_null && row.a == k; break;
+				case 1: hit = !row.a_null && row.a > k; break;
+				case 2: hit = !row.a_null && row.a >= k && row.a < m; break;
+				case 3: hit = !row.a_null && row.a >= k && row.a <= m; break;
+				case 4: hit = !row.a_null && row.a == k && row.b == letter; break;
+				case 5: hit = !row.a_null && ( row.a == k || row.a == m ); break;
+				case 6: hit = id > k * 15; break;
+				case 7: hit = id >= k * 10 && id <= m * 20; break;
+				default: hit = row.a_null && id < m * 30; break;
+
+			}
+
+			if ( !hit )
+				continue;
+
+			if ( !first )
+				wanted.add ( '\n' );
+
+			wanted.number ( id );
+			first = false;
+
+		}
+
+	}
+
+	static void fuzz_tests ( engine::database& db ) {
+
+		static const uint32_t size = 400;
+		static const char* const letters [ 3 ] = { "p", "q", "r" };
+		fuzz_row* model = base::make < fuzz_row > ( size * 2 );
+		fuzz_row* saved = model + size;
+		test_random random = { 0xD1B54A32D192ED03ull };
+		base::text sql;
+		bool fine = model != nullptr;
+
+		run ( db, "CREATE TABLE fuzz ( id INTEGER PRIMARY KEY, a INT, b TEXT, c REAL )" );
+		run ( db, "CREATE INDEX fuzz_a ON fuzz ( a )" );
+		run ( db, "CREATE INDEX fuzz_ab ON fuzz ( a, b )" );
+
+		uint32_t mismatches = 0;
+		uint32_t queries = 0;
+
+		for ( uint32_t round = 0; round < 60 && fine; round++ ) {
+
+			bool rollback = random.below ( 5 ) == 0;
+
+			base::copy ( saved, model, sizeof ( fuzz_row ) * size );
+			fine = engine::execute ( db, "BEGIN", nullptr, 0, nullptr );
+
+			for ( uint32_t step = 0; step < 60 && fine; step++ ) {
+
+				uint32_t id = 1 + random.below ( size - 1 );
+				uint32_t action = random.below ( 10 );
+				fuzz_row& row = model [ id ];
+
+				sql.clear ( );
+
+				if ( action < 6 ) {
+
+					bool a_null = random.below ( 10 ) == 0;
+					int64_t a = random.below ( 32 );
+					int32_t b = random.below ( 4 ) == 3 ? -1 : static_cast < int32_t > ( random.below ( 3 ) );
+
+					sql.add ( "INSERT OR REPLACE INTO fuzz ( id, a, b, c ) VALUES ( " ).number ( id ).add ( ", " );
+
+					if ( a_null )
+						sql.add ( "NULL" );
+					else
+						sql.signed_number ( a );
+
+					sql.add ( ", " );
+
+					if ( b < 0 )
+						sql.add ( "NULL" );
+					else
+						sql.add ( '\'' ).add ( letters [ b ] ).add ( '\'' );
+
+					sql.add ( ", " ).number ( id ).add ( " * 0.5 )" );
+					row = { true, a_null, a, b };
+
+				} else if ( action < 8 ) {
+
+					sql.add ( "DELETE FROM fuzz WHERE id = " ).number ( id );
+					row.present = false;
+
+				} else if ( action < 9 ) {
+
+					int64_t a = random.below ( 32 );
+
+					sql.add ( "UPDATE fuzz SET a = " ).signed_number ( a ).add ( " WHERE id = " ).number ( id );
+
+					if ( row.present ) {
+
+						row.a = a;
+						row.a_null = false;
+
+					}
+
+				} else {
+
+					int64_t a = random.below ( 32 );
+
+					sql.add ( "DELETE FROM fuzz WHERE a = " ).signed_number ( a );
+
+					for ( uint32_t k = 1; k < size; k++ )
+						if ( model [ k ].present && !model [ k ].a_null && model [ k ].a == a )
+							model [ k ].present = false;
+
+				}
+
+				fine = engine::execute ( db, sql.value ( ), nullptr, 0, nullptr );
+
+				if ( !fine ) {
+
+					base::text line;
+
+					line.add ( sql.value ( ) ).add ( ": " ).add ( db.problem.value ( ) );
+					expect ( false, line.value ( ) );
+
+				}
+
+			}
+
+			if ( fine && rollback ) {
+
+				fine = engine::execute ( db, "ROLLBACK", nullptr, 0, nullptr );
+				base::copy ( model, saved, sizeof ( fuzz_row ) * size );
+
+			} else if ( fine )
+				fine = engine::execute ( db, "COMMIT", nullptr, 0, nullptr );
+
+			for ( uint32_t q = 0; q < 12 && fine; q++ ) {
+
+				base::text indexed;
+				base::text forced;
+				base::text wanted;
+				result_capture fast;
+				result_capture slow;
+
+				model_where ( indexed, forced, model, size, random, wanted );
+				queries++;
+
+				if ( !query ( db, indexed.value ( ), fast ) || !query ( db, forced.value ( ), slow ) ) {
+
+					expect ( false, db.problem.value ( ) );
+					fine = false;
+
+					break;
+
+				}
+
+				if ( !base::same ( fast.out.value ( ), wanted.value ( ) ) || !base::same ( slow.out.value ( ), wanted.value ( ) ) ) {
+
+					if ( mismatches++ < 5 ) {
+
+						base::text line;
+
+						line.add ( indexed.value ( ) ).add ( "\n          indexed: " ).add ( fast.out.value ( ) ).add ( "\n          scanned: " ).add ( slow.out.value ( ) ).add ( "\n          model:   " ).add ( wanted.value ( ) );
+						expect ( false, line.value ( ) );
+
+					}
+
+				}
+
+			}
+
+		}
+
+		expect ( fine && !mismatches, "random changes and lookups agree with the model through indexes and scans" );
+
+		uint64_t live = 0;
+
+		for ( uint32_t k = 1; k < size; k++ )
+			live += model [ k ].present;
+
+		for ( uint32_t i = 0; i < db.schema->index_count; i++ ) {
+
+			engine::index_info& index = db.schema->indexes [ i ];
+
+			if ( !base::same ( index.table, "fuzz" ) )
+				continue;
+
+			storage::tree_report report;
+			bool intact = storage::check_btree ( db.pages, index.root, true, report );
+
+			expect ( intact && report.entries == live, "every fuzz index holds exactly one entry per row" );
+
+		}
+
+		base::text summary;
+
+		summary.number ( queries ).add ( " fuzz queries checked against the model" );
+		expect ( queries > 500, summary.value ( ) );
+		base::release ( model );
+
+	}
+
+	void engine_tests ( ) {
+
+		section ( "sql engine" );
+
+		char path [ FILE_PATH_ROOM ];
+
+		if ( !expect ( scratch_path ( path, sizeof ( path ), "strata-test-engine.sdb" ), "a scratch path exists" ) )
+			return;
+
+		forget_database ( path );
+
+		engine::database* db = base::make < engine::database > ( 1 );
+
+		if ( !expect ( db && engine::open_database ( *db, path ), "a fresh database opens" ) )
+			return;
+
+		value_tests ( *db );
+		table_tests ( *db );
+		join_tests ( *db );
+		constraint_tests ( *db );
+		foreign_tests ( *db );
+		index_tests ( *db );
+		transaction_tests ( *db );
+		alter_tests ( *db );
+		persistence_tests ( *db, path );
+		fuzz_tests ( *db );
+		engine::close_database ( *db );
+		db->problem.~text ( );
+		base::release ( db );
+		forget_database ( path );
+
+	}
+
+}
