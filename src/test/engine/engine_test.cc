@@ -106,6 +106,20 @@ namespace test {
 		rows ( db, "SELECT k, x, y FROM left_side LEFT JOIN right_side USING ( k ) ORDER BY k, y", "1|a|NULL\n2|b|B\n3|c|C\n3|c|CC" );
 		rows ( db, "SELECT l.x, r.y FROM left_side l LEFT JOIN right_side r ON r.k = l.k AND r.y <> 'C' ORDER BY l.x", "a|NULL\nb|B\nc|CC" );
 		fails ( db, "SELECT k FROM left_side, right_side", "ambiguous" );
+		rows ( db, "SELECT l.x, r.y FROM left_side l RIGHT JOIN right_side r ON r.k = l.k ORDER BY r.y", "b|B\nc|C\nc|CC\nNULL|D" );
+		rows ( db, "SELECT l.x, r.y FROM left_side l FULL OUTER JOIN right_side r ON r.k = l.k ORDER BY l.x, r.y", "NULL|D\na|NULL\nb|B\nc|C\nc|CC" );
+		rows ( db, "SELECT k, x, y FROM left_side RIGHT JOIN right_side USING ( k ) ORDER BY k, y", "2|b|B\n3|c|C\n3|c|CC\n4|NULL|D" );
+		rows ( db, "SELECT k, x, y FROM left_side FULL JOIN right_side USING ( k ) ORDER BY k, y", "1|a|NULL\n2|b|B\n3|c|C\n3|c|CC\n4|NULL|D" );
+		rows ( db, "SELECT * FROM left_side NATURAL JOIN right_side ORDER BY y", "2|b|B\n3|c|C\n3|c|CC" );
+		rows ( db, "SELECT * FROM left_side NATURAL FULL JOIN right_side ORDER BY k, y", "1|a|NULL\n2|b|B\n3|c|C\n3|c|CC\n4|NULL|D" );
+		rows ( db, "SELECT l.x, r.y FROM left_side l RIGHT JOIN right_side r ON r.k = l.k WHERE l.x IS NULL", "NULL|D" );
+		rows ( db, "SELECT r.y FROM left_side l RIGHT JOIN right_side r ON r.k = l.k WHERE l.x IS NOT 'c' ORDER BY 1", "B\nD" );
+		rows ( db, "SELECT count ( * ), count ( l.k ), count ( r.k ) FROM left_side l FULL JOIN right_side r ON r.k = l.k AND r.y <> 'CC'", "5|3|4" );
+		rows ( db, "SELECT p.name, x.kind FROM pets x RIGHT JOIN people p ON p.id = x.owner WHERE p.id <= 3 ORDER BY p.id, x.kind", "Ada|cat\nAda|dog\nLinus|NULL\nGrace|parrot" );
+		rows ( db, "SELECT a.k, b.k, c.k FROM left_side a RIGHT JOIN right_side b ON b.k = a.k RIGHT JOIN ( SELECT 4 AS k UNION ALL SELECT 5 ) AS c ON c.k = b.k ORDER BY c.k", "NULL|4|4\nNULL|NULL|5" );
+		rows ( db, "SELECT y FROM left_side l RIGHT JOIN right_side r ON r.k = l.k ORDER BY y LIMIT 1 OFFSET 3", "D" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT * FROM left_side l FULL JOIN right_side r ON r.k = l.k", "(FULL JOIN)" );
+		fails ( db, "SELECT * FROM left_side NATURAL JOIN right_side USING ( k )", "cannot also have ON or USING" );
 		rows ( db, "SELECT 1 UNION SELECT 1 UNION SELECT 2", "1\n2" );
 		rows ( db, "SELECT 1 UNION SELECT 2 ORDER BY 1 DESC", "2\n1" );
 		rows ( db, "SELECT 1 UNION ALL SELECT 1", "1\n1" );
@@ -577,6 +591,7 @@ namespace test {
 		collation_tests ( *db );
 		persistence_tests ( *db, path );
 		savepoint_tests ( *db, path );
+		join_fuzz ( *db );
 		fuzz_tests ( *db );
 		engine::close_database ( *db );
 		db->problem.~text ( );

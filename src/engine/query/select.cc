@@ -374,6 +374,80 @@ namespace engine {
 
 	}
 
+	static storage::value row_identity ( const source_state& source ) {
+
+		if ( source.plan->query || source.plan->working )
+			return storage::integer_value ( static_cast < int64_t > ( source.row_at ) - 1 );
+
+		return storage::integer_value ( source.rowid );
+
+	}
+
+	static bool note_match ( run_context& ctx, source_state& source ) {
+
+		storage::value identity = row_identity ( source );
+		bool added = false;
+
+		if ( !set_add ( *ctx.memory, source.matched, &identity, 1, added ) )
+			return fail_run ( ctx, "out of memory" );
+
+		return true;
+
+	}
+
+	static bool run_level ( run_context& ctx, query_state& scope, uint32_t level, output_pipe& pipe, group_table& groups );
+
+	static bool run_unmatched ( run_context& ctx, query_state& scope, uint32_t level, output_pipe& pipe, group_table& groups ) {
+
+		source_state& source = scope.sources [ level ];
+		prepared_source* real = source.plan;
+		prepared_source scan = *real;
+
+		scan.path = { };
+		scan.path.kind = PATH_SCAN;
+		source.plan = &scan;
+
+		for ( uint32_t s = 0; s < level; s++ ) {
+
+			scope.sources [ s ].null_row = true;
+			scope.sources [ s ].values = nullptr;
+
+		}
+
+		bool fine = open_source ( ctx, &scope, source );
+		base::arena_mark mark = ctx.scratch->mark ( );
+
+		while ( fine && !pipe.stopped ) {
+
+			bool found = false;
+
+			fine = next_source ( ctx, &scope, source, found );
+
+			if ( !fine || !found )
+				break;
+
+			storage::value identity = row_identity ( source );
+			bool keep = !set_has ( source.matched, &identity, 1 );
+
+			if ( keep )
+				fine = passes ( ctx, &scope, real->filters, real->filter_count, keep );
+
+			if ( fine && keep )
+				fine = run_level ( ctx, scope, level + 1, pipe, groups );
+
+			ctx.scratch->rewind ( mark );
+
+		}
+
+		source.plan = real;
+
+		for ( uint32_t s = 0; s < level; s++ )
+			scope.sources [ s ].null_row = false;
+
+		return fine;
+
+	}
+
 	static bool run_level ( run_context& ctx, query_state& scope, uint32_t level, output_pipe& pipe, group_table& groups ) {
 
 		prepared_select* plan = scope.plan;
@@ -411,7 +485,10 @@ namespace engine {
 
 			bool fine = true;
 
-			if ( definition.left && !passes ( ctx, &scope, definition.on_terms, definition.on_count, fine ) )
+			if ( ( definition.left || definition.right ) && !passes ( ctx, &scope, definition.on_terms, definition.on_count, fine ) )
+				return false;
+
+			if ( fine && definition.right && !note_match ( ctx, source ) )
 				return false;
 
 			if ( fine ) {
@@ -606,6 +683,10 @@ namespace engine {
 
 		if ( fine && !run_level ( ctx, scope, 0, pipe, groups ) )
 			return false;
+
+		for ( uint32_t s = 0; fine && s < plan->source_count && !pipe.stopped; s++ )
+			if ( plan->sources [ s ].right && !run_unmatched ( ctx, scope, s, pipe, groups ) )
+				return false;
 
 		if ( plan->grouping && !output_groups ( ctx, scope, pipe, groups ) )
 			return false;

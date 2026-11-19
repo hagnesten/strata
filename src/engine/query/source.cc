@@ -148,8 +148,9 @@ namespace engine {
 		if ( !source.table )
 			return;
 
-		sql::expression* const* terms = source.left ? source.on_terms : source.filters;
-		uint32_t count = source.left ? source.on_count : source.filter_count;
+		bool outer = source.left || source.right;
+		sql::expression* const* terms = outer ? source.on_terms : source.filters;
+		uint32_t count = outer ? source.on_count : source.filter_count;
 
 		if ( !count )
 			return;

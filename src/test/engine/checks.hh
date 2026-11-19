@@ -21,4 +21,6 @@ namespace test {
 
 	void savepoint_tests ( engine::database& db, const char* path );
 
+	void join_fuzz ( engine::database& db );
+
 }

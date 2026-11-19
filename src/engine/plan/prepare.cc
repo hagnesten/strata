@@ -675,14 +675,60 @@ namespace engine {
 
 	}
 
-	static bool join_using ( run_context& ctx, prepared_select* plan, uint32_t right, uint32_t& on_room ) {
+	static bool pair_columns ( run_context& ctx, prepared_source& left, uint32_t left_column, uint32_t right, uint32_t right_column ) {
+
+		if ( !left.paired_source ) {
+
+			left.paired_source = ctx.lasting->make < int32_t > ( left.width + 1 );
+			left.paired_column = ctx.lasting->make < int32_t > ( left.width + 1 );
+
+			if ( !left.paired_source || !left.paired_column )
+				return fail_run ( ctx, "out of memory" );
+
+			for ( uint32_t c = 0; c < left.width; c++ )
+				left.paired_source [ c ] = left.paired_column [ c ] = -1;
+
+		}
+
+		left.paired_source [ left_column ] = static_cast < int32_t > ( right );
+		left.paired_column [ left_column ] = static_cast < int32_t > ( right_column );
+
+		return true;
+
+	}
+
+	static bool natural_names ( run_context& ctx, prepared_select* plan, uint32_t right, const char**& names, uint32_t& count ) {
 
 		prepared_source& source = plan->sources [ right ];
-		const sql::table_source& syntax = *source.syntax;
+		uint32_t room = 0;
 
-		for ( uint32_t u = 0; u < syntax.using_count; u++ ) {
+		names = nullptr;
+		count = 0;
 
-			const char* name = syntax.using_names [ u ];
+		for ( uint32_t c = 0; c < source.width; c++ ) {
+
+			bool shared = false;
+
+			for ( uint32_t s = 0; s < right && !shared; s++ )
+				for ( uint32_t o = 0; o < plan->sources [ s ].width && !shared; o++ )
+					shared = !plan->sources [ s ].hidden [ o ] && base::same_folded ( plan->sources [ s ].names [ o ], source.names [ c ] );
+
+			if ( shared && !base::push ( *ctx.lasting, names, count, room, source.names [ c ] ) )
+				return fail_run ( ctx, "out of memory" );
+
+		}
+
+		return true;
+
+	}
+
+	static bool join_using ( run_context& ctx, prepared_select* plan, uint32_t right, const char* const* names, uint32_t count, uint32_t& on_room ) {
+
+		prepared_source& source = plan->sources [ right ];
+
+		for ( uint32_t u = 0; u < count; u++ ) {
+
+			const char* name = names [ u ];
 			int32_t right_column = -1;
 			int32_t left_source = -1;
 			int32_t left_column = -1;
@@ -728,6 +774,9 @@ namespace engine {
 
 			if ( !equal->left || !equal->right || !base::push ( *ctx.lasting, source.on_terms, source.on_count, on_room, equal ) )
 				return fail_run ( ctx, "out of memory" );
+
+			if ( source.right && !pair_columns ( ctx, left, static_cast < uint32_t > ( left_column ), right, static_cast < uint32_t > ( right_column ) ) )
+				return false;
 
 		}
 
@@ -850,7 +899,8 @@ namespace engine {
 			prepared_source& source = plan->sources [ i ];
 
 			source.syntax = &syntax;
-			source.left = syntax.join == sql::JOIN_LEFT;
+			source.left = syntax.join == sql::JOIN_LEFT || syntax.join == sql::JOIN_FULL;
+			source.right = syntax.join == sql::JOIN_RIGHT || syntax.join == sql::JOIN_FULL;
 
 			if ( syntax.query ) {
 
@@ -908,7 +958,25 @@ namespace engine {
 			prepared_source& source = plan->sources [ i ];
 			uint32_t on_room = 0;
 
-			if ( source.syntax->using_count && !join_using ( ctx, plan, i, on_room ) )
+			if ( source.syntax->natural ) {
+
+				const char** names = nullptr;
+				uint32_t count = 0;
+
+				if ( source.syntax->using_count || source.syntax->on ) {
+
+					fail_run ( ctx, "a NATURAL join cannot also have ON or USING" );
+
+					return nullptr;
+
+				}
+
+				if ( !natural_names ( ctx, plan, i, names, count ) || !join_using ( ctx, plan, i, names, count, on_room ) )
+					return nullptr;
+
+			}
+
+			if ( source.syntax->using_count && !join_using ( ctx, plan, i, source.syntax->using_names, source.syntax->using_count, on_room ) )
 				return nullptr;
 
 			if ( source.syntax->on ) {
@@ -952,6 +1020,12 @@ namespace engine {
 
 		}
 
+		int32_t outer_floor = -1;
+
+		for ( uint32_t i = 0; i < plan->source_count; i++ )
+			if ( plan->sources [ i ].right )
+				outer_floor = static_cast < int32_t > ( i );
+
 		if ( item->where ) {
 
 			sql::expression** terms = nullptr;
@@ -961,9 +1035,17 @@ namespace engine {
 			if ( !bind_expression ( ctx, plan, item->where, BIND_PLAIN ) || !split_terms ( ctx, item->where, terms, count, room ) )
 				return nullptr;
 
-			for ( uint32_t t = 0; t < count; t++ )
-				if ( !push_filter ( ctx, plan, terms [ t ], highest_source ( terms [ t ], 0 ) ) )
+			for ( uint32_t t = 0; t < count; t++ ) {
+
+				int32_t level = highest_source ( terms [ t ], 0 );
+
+				if ( level >= 0 && level < outer_floor )
+					level = outer_floor;
+
+				if ( !push_filter ( ctx, plan, terms [ t ], level ) )
 					return nullptr;
+
+			}
 
 		}
 
@@ -971,7 +1053,7 @@ namespace engine {
 
 			prepared_source& source = plan->sources [ i ];
 
-			if ( source.left )
+			if ( source.left || source.right )
 				continue;
 
 			for ( uint32_t t = 0; t < source.on_count; t++ )
@@ -1187,6 +1269,10 @@ namespace engine {
 
 		for ( uint32_t t = 0; t < plan->order_count; t++ )
 			if ( plan->order_desc [ t ] || plan->order_nocase [ t ] || order_column ( plan, t ) == -3 )
+				return;
+
+		for ( uint32_t s = 0; s < plan->source_count; s++ )
+			if ( plan->sources [ s ].right )
 				return;
 
 		prepared_source& source = plan->sources [ 0 ];

@@ -202,6 +202,7 @@
     <ClCompile Include="src\test\engine\engine_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\test\engine\checks.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\test\engine\savepoint_test.cc"><Filter>src\test\engine</Filter></ClCompile>
+    <ClCompile Include="src\test\engine\join_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\app\shell\shell.cc"><Filter>src\app\shell</Filter></ClCompile>
     <ClCompile Include="src\base\png\png.cc"><Filter>src\base\png</Filter></ClCompile>
     <ClCompile Include="src\ui\render\render.cc"><Filter>src\ui\render</Filter></ClCompile>

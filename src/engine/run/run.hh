@@ -208,6 +208,8 @@ namespace engine {
 		uint32_t width;
 		bool left;
 		bool right;
+		int32_t* paired_source;
+		int32_t* paired_column;
 		sql::expression** on_terms;
 		uint32_t on_count;
 		sql::expression** filters;
@@ -300,6 +302,7 @@ namespace engine {
 		uint32_t row_count;
 		uint32_t row_at;
 		bool materialized;
+		value_set matched;
 
 	};
 

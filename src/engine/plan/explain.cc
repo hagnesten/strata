@@ -70,7 +70,11 @@ namespace engine {
 
 			describe_path ( core->sources [ i ], detail );
 
-			if ( core->sources [ i ].left )
+			if ( core->sources [ i ].left && core->sources [ i ].right )
+				detail.add ( " (FULL JOIN)" );
+			else if ( core->sources [ i ].right )
+				detail.add ( " (RIGHT JOIN)" );
+			else if ( core->sources [ i ].left )
 				detail.add ( " (LEFT JOIN)" );
 
 			if ( !explain_row ( ctx, sink, ++next, parent, detail ) )

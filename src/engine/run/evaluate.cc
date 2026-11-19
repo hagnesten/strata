@@ -527,9 +527,18 @@ namespace engine {
 
 				source_state& source = owner->sources [ item->source ];
 
-				if ( source.null_row || !source.values )
-					out = storage::null_value ( );
-				else if ( item->column < 0 )
+				if ( source.null_row || !source.values ) {
+
+					const prepared_source* definition = source.plan;
+					int32_t paired = item->column >= 0 && definition && definition->paired_source ? definition->paired_source [ item->column ] : -1;
+					source_state* other = paired >= 0 ? &owner->sources [ paired ] : nullptr;
+
+					if ( other && !other->null_row && other->values )
+						out = other->values [ definition->paired_column [ item->column ] ];
+					else
+						out = storage::null_value ( );
+
+				} else if ( item->column < 0 )
 					out = storage::integer_value ( source.rowid );
 				else
 					out = source.values [ item->column ];
