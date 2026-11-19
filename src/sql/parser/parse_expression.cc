@@ -282,7 +282,7 @@ namespace sql {
 
 	static bool starts_select ( const token& here ) {
 
-		return token_is ( here, "select" ) || token_is ( here, "values" );
+		return token_is ( here, "select" ) || token_is ( here, "values" ) || token_is ( here, "with" );
 
 	}
 

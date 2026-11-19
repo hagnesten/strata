@@ -132,6 +132,15 @@ namespace sql {
 
 	struct select_statement;
 
+	struct common_table {
+
+		const char* name;
+		const char** columns;
+		uint32_t column_count;
+		select_statement* query;
+
+	};
+
 	struct expression {
 
 		expression_kind kind;
@@ -207,6 +216,9 @@ namespace sql {
 		expression** values;
 		uint32_t value_rows;
 		uint32_t value_columns;
+		common_table* with;
+		uint32_t with_count;
+		bool recursive;
 		void* prepared;
 
 	};

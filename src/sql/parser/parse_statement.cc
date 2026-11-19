@@ -368,8 +368,61 @@ namespace sql {
 
 		}
 
+		grow_list < common_table > tables;
+		bool recursive = false;
+
+		if ( accept_word ( item, "with" ) ) {
+
+			recursive = accept_word ( item, "recursive" );
+
+			do {
+
+				common_table table = { };
+
+				table.name = take_name ( item, "a name for the WITH query" );
+
+				if ( !table.name || ( symbol_is ( item.current, "(" ) && !parse_names ( item, table.columns, table.column_count ) ) || !expect_word ( item, "as" ) ) {
+
+					item.depth--;
+
+					return nullptr;
+
+				}
+
+				accept_word ( item, "materialized" );
+
+				if ( !expect_symbol ( item, "(" ) ) {
+
+					item.depth--;
+
+					return nullptr;
+
+				}
+
+				table.query = parse_select ( item );
+
+				if ( !table.query || !expect_symbol ( item, ")" ) || !tables.push ( item, table ) ) {
+
+					item.depth--;
+
+					return nullptr;
+
+				}
+
+			} while ( accept_symbol ( item, "," ) );
+
+		}
+
 		select_statement* first = parse_core ( item );
 		select_statement* last = first;
+
+		if ( first ) {
+
+			first->with = tables.items;
+			first->with_count = tables.count;
+			first->recursive = recursive;
+
+		}
 
 		while ( last ) {
 
@@ -997,7 +1050,7 @@ namespace sql {
 
 	static bool parse_body ( parser& item, statement& out ) {
 
-		if ( token_is ( item.current, "select" ) || token_is ( item.current, "values" ) ) {
+		if ( token_is ( item.current, "select" ) || token_is ( item.current, "values" ) || token_is ( item.current, "with" ) ) {
 
 			out.kind = STATEMENT_SELECT;
 			out.select = parse_select ( item );
@@ -1005,9 +1058,6 @@ namespace sql {
 			return out.select != nullptr;
 
 		}
-
-		if ( token_is ( item.current, "with" ) )
-			return fail_here ( item, "WITH is not supported yet" );
 
 		if ( accept_word ( item, "insert" ) )
 			return parse_insert ( item, out, false );
