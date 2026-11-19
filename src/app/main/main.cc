@@ -1,6 +1,7 @@
 #include "app/main/main.hh"
 #include "base/console/console.hh"
 #include "test/harness/harness.hh"
+#include "app/shell/shell.hh"
 
 #include <windows.h>
 #include <shellapi.h>
@@ -31,10 +32,18 @@ namespace app {
 		read_arguments ( );
 
 		if ( argument_count > 1 && base::same ( arguments [ 1 ], "--test" ) )
-			return test::run_all ( );
+			return test::run_all ( argument_count > 2 ? arguments [ 2 ] : nullptr );
+
+		if ( argument_count == 2 && arguments [ 1 ] [ 0 ] != '-' )
+			return run_shell ( arguments [ 1 ] );
+
+		if ( argument_count == 3 && arguments [ 1 ] [ 0 ] != '-' )
+			return run_sql ( arguments [ 1 ], arguments [ 2 ] );
 
 		base::write ( "strata " STRATA_VERSION "\n" );
-		base::write ( "  strata --test    run the self test\n" );
+		base::write ( "  strata <file>            open a database in the SQL shell\n" );
+		base::write ( "  strata <file> \"<sql>\"    run SQL against a database and print the rows\n" );
+		base::write ( "  strata --test [part]     run the self test (pager, btree, crash, parser, engine)\n" );
 
 		return 0;
 

@@ -54,6 +54,19 @@
     <ClCompile Include="src\test\sql\parser_test.cc" />
     <ClCompile Include="src\engine\value\value.cc" />
     <ClCompile Include="src\engine\catalog\catalog.cc" />
+    <ClCompile Include="src\base\sort\sort.cc" />
+    <ClCompile Include="src\engine\run\prepare.cc" />
+    <ClCompile Include="src\engine\run\evaluate.cc" />
+    <ClCompile Include="src\engine\run\functions.cc" />
+    <ClCompile Include="src\engine\run\aggregate.cc" />
+    <ClCompile Include="src\engine\run\source.cc" />
+    <ClCompile Include="src\engine\run\select.cc" />
+    <ClCompile Include="src\engine\run\changes.cc" />
+    <ClCompile Include="src\engine\run\schema.cc" />
+    <ClCompile Include="src\engine\run\explain.cc" />
+    <ClCompile Include="src\engine\database\database.cc" />
+    <ClCompile Include="src\test\engine\engine_test.cc" />
+    <ClCompile Include="src\app\shell\shell.cc" />
     <ClCompile Include="src\app\main\main.cc" />
   </ItemGroup>
   <ItemGroup>
@@ -74,6 +87,10 @@
     <ClInclude Include="src\sql\print\print.hh" />
     <ClInclude Include="src\engine\value\value.hh" />
     <ClInclude Include="src\engine\catalog\catalog.hh" />
+    <ClInclude Include="src\base\sort\sort.hh" />
+    <ClInclude Include="src\engine\run\run.hh" />
+    <ClInclude Include="src\engine\database\database.hh" />
+    <ClInclude Include="src\app\shell\shell.hh" />
     <ClInclude Include="src\app\main\main.hh" />
   </ItemGroup>
   <ItemGroup>
