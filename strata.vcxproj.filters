@@ -88,6 +88,21 @@
     <Filter Include="src\engine\database">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D20}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\engine\plan">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D30}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\query">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D31}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\functions">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D32}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\write">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D33}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\schema">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D34}</UniqueIdentifier>
+    </Filter>
     <Filter Include="src\app\shell">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D22}</UniqueIdentifier>
     </Filter>
@@ -168,18 +183,18 @@
     <ClCompile Include="src\engine\value\value.cc"><Filter>src\engine\value</Filter></ClCompile>
     <ClCompile Include="src\engine\catalog\catalog.cc"><Filter>src\engine\catalog</Filter></ClCompile>
     <ClCompile Include="src\base\sort\sort.cc"><Filter>src\base\sort</Filter></ClCompile>
-    <ClCompile Include="src\engine\run\prepare.cc"><Filter>src\engine\run</Filter></ClCompile>
     <ClCompile Include="src\engine\run\evaluate.cc"><Filter>src\engine\run</Filter></ClCompile>
-    <ClCompile Include="src\engine\run\functions.cc"><Filter>src\engine\run</Filter></ClCompile>
-    <ClCompile Include="src\engine\run\aggregate.cc"><Filter>src\engine\run</Filter></ClCompile>
-    <ClCompile Include="src\engine\run\source.cc"><Filter>src\engine\run</Filter></ClCompile>
-    <ClCompile Include="src\engine\run\select.cc"><Filter>src\engine\run</Filter></ClCompile>
-    <ClCompile Include="src\engine\run\changes.cc"><Filter>src\engine\run</Filter></ClCompile>
-    <ClCompile Include="src\engine\run\schema.cc"><Filter>src\engine\run</Filter></ClCompile>
-    <ClCompile Include="src\engine\run\explain.cc"><Filter>src\engine\run</Filter></ClCompile>
-    <ClCompile Include="src\engine\run\window.cc"><Filter>src\engine\run</Filter></ClCompile>
-    <ClCompile Include="src\engine\run\dates.cc"><Filter>src\engine\run</Filter></ClCompile>
-    <ClCompile Include="src\engine\run\json.cc"><Filter>src\engine\run</Filter></ClCompile>
+    <ClCompile Include="src\engine\plan\prepare.cc"><Filter>src\engine\plan</Filter></ClCompile>
+    <ClCompile Include="src\engine\plan\explain.cc"><Filter>src\engine\plan</Filter></ClCompile>
+    <ClCompile Include="src\engine\query\select.cc"><Filter>src\engine\query</Filter></ClCompile>
+    <ClCompile Include="src\engine\query\source.cc"><Filter>src\engine\query</Filter></ClCompile>
+    <ClCompile Include="src\engine\query\aggregate.cc"><Filter>src\engine\query</Filter></ClCompile>
+    <ClCompile Include="src\engine\query\window.cc"><Filter>src\engine\query</Filter></ClCompile>
+    <ClCompile Include="src\engine\functions\functions.cc"><Filter>src\engine\functions</Filter></ClCompile>
+    <ClCompile Include="src\engine\functions\dates.cc"><Filter>src\engine\functions</Filter></ClCompile>
+    <ClCompile Include="src\engine\functions\json.cc"><Filter>src\engine\functions</Filter></ClCompile>
+    <ClCompile Include="src\engine\write\changes.cc"><Filter>src\engine\write</Filter></ClCompile>
+    <ClCompile Include="src\engine\schema\schema.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\base\clock\clock.cc"><Filter>src\base\clock</Filter></ClCompile>
     <ClCompile Include="src\engine\database\database.cc"><Filter>src\engine\database</Filter></ClCompile>
     <ClCompile Include="src\test\engine\engine_test.cc"><Filter>src\test\engine</Filter></ClCompile>
