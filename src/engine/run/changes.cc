@@ -376,6 +376,72 @@ namespace engine {
 				if ( !usable || !differs )
 					continue;
 
+				index_info* lookup = nullptr;
+
+				for ( uint32_t i = 0; i < ctx.schema->index_count && !lookup; i++ ) {
+
+					index_info& index = ctx.schema->indexes [ i ];
+					bool leading = base::same_folded ( index.table, child.name ) && index.column_count >= key.column_count;
+
+					for ( uint32_t k = 0; k < key.column_count && leading; k++ )
+						leading = index.columns [ k ] == key.columns [ k ];
+
+					if ( leading )
+						lookup = &index;
+
+				}
+
+				if ( lookup ) {
+
+					storage::value probe [ RUN_KEY_ROOM ];
+					base::text prefix;
+					storage::btree index_tree = { ctx.pages, lookup->root, true };
+					storage::cursor at;
+
+					for ( uint32_t k = 0; k < key.column_count; k++ )
+						probe [ k ] = apply_affinity ( *ctx.scratch, wanted [ k ], child.columns [ key.columns [ k ] ].affinity );
+
+					storage::encode_record ( probe, key.column_count, prefix );
+
+					if ( !storage::cursor_seek_key ( at, index_tree, reinterpret_cast < const uint8_t* > ( prefix.value ( ) ), prefix.size, key.column_count ) )
+						return fail_storage ( ctx, "a child index could not be searched" );
+
+					while ( at.valid ) {
+
+						if ( !storage::cursor_payload ( at, ctx.row_bytes ) )
+							return fail_storage ( ctx, "a child index could not be read" );
+
+						const uint8_t* entry = reinterpret_cast < const uint8_t* > ( ctx.row_bytes.value ( ) );
+
+						if ( storage::compare_records ( entry, ctx.row_bytes.size, reinterpret_cast < const uint8_t* > ( prefix.value ( ) ), prefix.size, key.column_count ) != 0 )
+							break;
+
+						storage::value fields [ RUN_KEY_ROOM ];
+						uint32_t count_fields = 0;
+
+						if ( !storage::decode_record ( entry, ctx.row_bytes.size, fields, RUN_KEY_ROOM, count_fields ) || !count_fields || fields [ count_fields - 1 ].kind != storage::VALUE_INTEGER )
+							return fail_named ( ctx, "an entry of index ", lookup->name, " is damaged" );
+
+						int64_t child_rowid = fields [ count_fields - 1 ].integer;
+
+						if ( !( &child == &parent && child_rowid == rowid ) ) {
+
+							child_hit found = { &child, &key, child_rowid };
+
+							if ( !base::push ( *ctx.scratch, hits, count, room, found ) )
+								return fail_run ( ctx, "out of memory" );
+
+						}
+
+						if ( !storage::cursor_next ( at ) )
+							return fail_storage ( ctx, "a child index could not be read" );
+
+					}
+
+					continue;
+
+				}
+
 				storage::btree tree = { ctx.pages, child.root, false };
 				storage::cursor at;
 

@@ -158,6 +158,28 @@ namespace test {
 
 	}
 
+	static void plan_lacks ( engine::database& db, const char* sql, const char* fragment ) {
+
+		result_capture capture;
+
+		if ( !query ( db, sql, capture ) ) {
+
+			base::text line;
+
+			line.add ( sql ).add ( "\n          error: " ).add ( db.problem.value ( ) );
+			expect ( false, line.value ( ) );
+
+			return;
+
+		}
+
+		base::text line;
+
+		line.add ( sql ).add ( "\n          plan:     " ).add ( capture.out.value ( ) ).add ( "\n          unwanted: " ).add ( fragment );
+		expect ( !contains ( capture.out.value ( ), fragment ), line.value ( ) );
+
+	}
+
 	static void value_tests ( engine::database& db ) {
 
 		rows ( db, "SELECT 1 + 2, 7 / 2, 7.0 / 2, 1 / 0, 5 % 3, -5 % 3", "3|3|3.5|NULL|2|-2" );
@@ -340,6 +362,7 @@ namespace test {
 
 	static void foreign_tests ( engine::database& db ) {
 
+		run ( db, "CREATE INDEX pets_owner ON pets ( owner )" );
 		fails ( db, "INSERT INTO pets ( owner, kind ) VALUES ( 99, 'ghost' )", "FOREIGN KEY constraint failed" );
 		run ( db, "INSERT INTO pets ( owner, kind ) VALUES ( NULL, 'stray' )" );
 		run ( db, "CREATE TABLE claims ( person INT REFERENCES people ( id ) )" );
@@ -433,6 +456,13 @@ namespace test {
 		rows ( db, "SELECT name, town, email FROM people WHERE id = 2", "Linus|Helsinki|linus@example.org" );
 		rows ( db, "SELECT count ( * ) FROM uniq", "3" );
 		plan_has ( db, "EXPLAIN QUERY PLAN SELECT * FROM people WHERE town = 'x'", "people_city" );
+		rows ( db, "SELECT name FROM people ORDER BY town LIMIT 2", "Grace\nBarbara" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT name FROM people ORDER BY town LIMIT 2", "USING INDEX people_city" );
+		plan_lacks ( db, "EXPLAIN QUERY PLAN SELECT name FROM people ORDER BY town LIMIT 2", "SORT" );
+		plan_lacks ( db, "EXPLAIN QUERY PLAN SELECT id FROM people ORDER BY id", "SORT" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT id FROM people ORDER BY name", "SORT" );
+		rows ( db, "SELECT id FROM people ORDER BY id LIMIT 2", "2\n3" );
+		rows ( db, "SELECT id FROM people WHERE town = 'Helsinki' ORDER BY id", "2" );
 
 	}
 
