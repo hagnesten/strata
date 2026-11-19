@@ -42,6 +42,8 @@ namespace storage {
 
 	bool decode_record ( const uint8_t* data, size_t size, value* out, uint32_t room, uint32_t& count );
 
+	bool decode_wanted ( const uint8_t* data, size_t size, value* out, uint32_t room, const bool* wanted, uint32_t limit, uint32_t& count );
+
 	int32_t compare_values ( const value& a, const value& b );
 
 	int32_t compare_records ( const uint8_t* a, size_t a_size, const uint8_t* b, size_t b_size, uint32_t columns );

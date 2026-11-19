@@ -450,6 +450,78 @@ namespace engine {
 
 	}
 
+	static bool has_fulltext ( run_context& ctx, const table_info& table ) {
+
+		for ( uint32_t i = 0; i < ctx.schema->index_count; i++ )
+			if ( ctx.schema->indexes [ i ].fulltext && base::same_folded ( ctx.schema->indexes [ i ].table, table.name ) )
+				return true;
+
+		return false;
+
+	}
+
+	static uint32_t decode_limit ( run_context& ctx, source_state& source ) {
+
+		if ( source.decode_ready )
+			return source.decode_limit;
+
+		const prepared_source& plan = *source.plan;
+		const table_info& table = *plan.table;
+		uint32_t limit = table.column_count;
+
+		if ( plan.used && !table.generated_count && plan.width == table.column_count && !has_fulltext ( ctx, table ) ) {
+
+			limit = 0;
+
+			for ( uint32_t c = 0; c < table.column_count; c++ )
+				if ( plan.used [ c ] && static_cast < int32_t > ( c ) != table.rowid_column )
+					limit = c + 1;
+
+		}
+
+		source.decode_limit = limit;
+		source.decode_ready = true;
+
+		return limit;
+
+	}
+
+	static bool decode_scanned ( run_context& ctx, source_state& source, int64_t rowid, const uint8_t* data, size_t size ) {
+
+		const table_info& table = *source.plan->table;
+		uint32_t limit = decode_limit ( ctx, source );
+
+		if ( limit == table.column_count )
+			return decode_bytes ( ctx, table, rowid, data, size, source.values );
+
+		storage::value* values = static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * ( table.column_count + 1 ) ) );
+		uint32_t count = 0;
+
+		if ( !values )
+			return fail_run ( ctx, "out of memory" );
+
+		values [ table.column_count ] = storage::null_value ( );
+		source.values = values;
+
+		if ( !storage::decode_wanted ( data, size, values, table.column_count, source.plan->used, limit, count ) )
+			return fail_named ( ctx, "a row of table ", table.name, " is damaged" );
+
+		for ( uint32_t i = count; i < table.column_count; i++ ) {
+
+			if ( i >= limit )
+				values [ i ] = storage::null_value ( );
+			else if ( !fallback_value ( ctx, table.columns [ i ], values [ i ] ) )
+				return false;
+
+		}
+
+		if ( table.rowid_column >= 0 )
+			values [ table.rowid_column ] = storage::integer_value ( rowid );
+
+		return true;
+
+	}
+
 	static bool decode_kept ( run_context& ctx, const table_info& table, int64_t rowid, storage::value*& values ) {
 
 		char* kept = ctx.scratch->keep ( ctx.row_bytes.value ( ), ctx.row_bytes.size );
@@ -1172,7 +1244,7 @@ namespace engine {
 				source.rowid = rowid;
 				found = true;
 
-				return decode_bytes ( ctx, *plan.table, rowid, data, size, source.values );
+				return decode_scanned ( ctx, source, rowid, data, size );
 
 			}
 

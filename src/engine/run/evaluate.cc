@@ -10,14 +10,27 @@ namespace engine {
 
 	void comparison_affinity ( base::arena& memory, sql::affinity_kind left, sql::affinity_kind right, storage::value& a, storage::value& b ) {
 
-		if ( numeric_affinity ( left ) && !numeric_affinity ( right ) )
-			b = apply_affinity ( memory, b, sql::AFFINITY_NUMERIC );
-		else if ( numeric_affinity ( right ) && !numeric_affinity ( left ) )
-			a = apply_affinity ( memory, a, sql::AFFINITY_NUMERIC );
-		else if ( left == sql::AFFINITY_TEXT && right == sql::AFFINITY_ANY )
-			b = apply_affinity ( memory, b, sql::AFFINITY_TEXT );
-		else if ( right == sql::AFFINITY_TEXT && left == sql::AFFINITY_ANY )
-			a = apply_affinity ( memory, a, sql::AFFINITY_TEXT );
+		if ( numeric_affinity ( left ) && !numeric_affinity ( right ) ) {
+
+			if ( b.kind == storage::VALUE_TEXT || b.kind == storage::VALUE_REAL )
+				b = apply_affinity ( memory, b, sql::AFFINITY_NUMERIC );
+
+		} else if ( numeric_affinity ( right ) && !numeric_affinity ( left ) ) {
+
+			if ( a.kind == storage::VALUE_TEXT || a.kind == storage::VALUE_REAL )
+				a = apply_affinity ( memory, a, sql::AFFINITY_NUMERIC );
+
+		} else if ( left == sql::AFFINITY_TEXT && right == sql::AFFINITY_ANY ) {
+
+			if ( b.kind == storage::VALUE_INTEGER || b.kind == storage::VALUE_REAL )
+				b = apply_affinity ( memory, b, sql::AFFINITY_TEXT );
+
+		} else if ( right == sql::AFFINITY_TEXT && left == sql::AFFINITY_ANY ) {
+
+			if ( a.kind == storage::VALUE_INTEGER || a.kind == storage::VALUE_REAL )
+				a = apply_affinity ( memory, a, sql::AFFINITY_TEXT );
+
+		}
 
 	}
 

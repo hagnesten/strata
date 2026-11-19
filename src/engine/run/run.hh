@@ -311,6 +311,8 @@ namespace engine {
 		uint32_t row_at;
 		bool materialized;
 		value_set matched;
+		uint32_t decode_limit;
+		bool decode_ready;
 
 	};
 

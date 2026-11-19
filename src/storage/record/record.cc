@@ -155,17 +155,106 @@ namespace storage {
 
 		for ( uint64_t i = 0; i < columns; i++ ) {
 
+			if ( count < room ) {
+
+				if ( !decode_one ( data, size, at, out [ count ] ) )
+					return false;
+
+				count++;
+
+				continue;
+
+			}
+
 			value item;
 
 			if ( !decode_one ( data, size, at, item ) )
 				return false;
 
-			if ( count < room )
-				out [ count++ ] = item;
-
 		}
 
 		return at == size;
+
+	}
+
+	static bool skip_one ( const uint8_t* data, size_t size, size_t& at ) {
+
+		if ( at >= size )
+			return false;
+
+		uint8_t kind = data [ at++ ];
+
+		if ( kind == VALUE_NULL )
+			return true;
+
+		if ( kind == VALUE_INTEGER ) {
+
+			while ( at < size && data [ at ] & 0x80 )
+				at++;
+
+			return at++ < size;
+
+		}
+
+		if ( kind == VALUE_REAL ) {
+
+			if ( size - at < 8 )
+				return false;
+
+			at += 8;
+
+			return true;
+
+		}
+
+		uint64_t length = 0;
+
+		if ( ( kind != VALUE_TEXT && kind != VALUE_BLOB ) || !base::read_varint ( data, size, at, length ) || length > size - at )
+			return false;
+
+		at += static_cast < size_t > ( length );
+
+		return true;
+
+	}
+
+	bool decode_wanted ( const uint8_t* data, size_t size, value* out, uint32_t room, const bool* wanted, uint32_t limit, uint32_t& count ) {
+
+		size_t at = 0;
+		uint64_t columns = 0;
+
+		count = 0;
+
+		if ( !base::read_varint ( data, size, at, columns ) || columns > RECORD_COLUMNS )
+			return false;
+
+		uint32_t total = columns < room ? static_cast < uint32_t > ( columns ) : room;
+		uint32_t stop = total < limit ? total : limit;
+
+		for ( uint32_t i = 0; i < stop; i++ ) {
+
+			if ( wanted [ i ] ) {
+
+				if ( !decode_one ( data, size, at, out [ i ] ) )
+					return false;
+
+			} else {
+
+				if ( !skip_one ( data, size, at ) )
+					return false;
+
+				out [ i ] = null_value ( );
+
+			}
+
+		}
+
+		for ( uint32_t i = stop; i < total; i++ )
+			out [ i ] = null_value ( );
+
+		count = total;
+
+		return true;
 
 	}
 

@@ -76,6 +76,14 @@ namespace base {
 
 	inline bool read_varint ( const uint8_t* data, size_t size, size_t& at, uint64_t& out ) {
 
+		if ( at < size && data [ at ] < 0x80 ) {
+
+			out = data [ at++ ];
+
+			return true;
+
+		}
+
 		uint64_t value = 0;
 
 		for ( uint32_t shift = 0; shift < 70; shift += 7 ) {
