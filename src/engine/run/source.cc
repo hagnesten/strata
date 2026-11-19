@@ -1,0 +1,1068 @@
+#include "engine/run/run.hh"
+#include "sql/print/print.hh"
+
+namespace engine {
+
+	static bool numeric_affinity ( sql::affinity_kind affinity ) {
+
+		return affinity == sql::AFFINITY_INTEGER || affinity == sql::AFFINITY_REAL || affinity == sql::AFFINITY_NUMERIC;
+
+	}
+
+	static bool seek_allowed ( sql::affinity_kind column, sql::affinity_kind other ) {
+
+		if ( numeric_affinity ( column ) )
+			return true;
+
+		if ( column == sql::AFFINITY_TEXT )
+			return !numeric_affinity ( other );
+
+		return !numeric_affinity ( other ) && other != sql::AFFINITY_TEXT;
+
+	}
+
+	static bool usable_other ( const sql::expression* other, uint32_t level ) {
+
+		int32_t highest = highest_source ( other, 0 );
+
+		return highest < static_cast < int32_t > ( level );
+
+	}
+
+	static bool column_at ( const sql::expression* item, uint32_t level ) {
+
+		return item && item->kind == sql::EXPRESSION_COLUMN && item->depth == 0 && item->source == static_cast < int32_t > ( level );
+
+	}
+
+	static sql::operator_kind flipped ( sql::operator_kind op ) {
+
+		switch ( op ) {
+
+			case sql::OPERATOR_LESS: return sql::OPERATOR_GREATER;
+			case sql::OPERATOR_LESS_EQUAL: return sql::OPERATOR_GREATER_EQUAL;
+			case sql::OPERATOR_GREATER: return sql::OPERATOR_LESS;
+			case sql::OPERATOR_GREATER_EQUAL: return sql::OPERATOR_LESS_EQUAL;
+			default: return op;
+
+		}
+
+	}
+
+	static void collect_bounds ( sql::expression* const* terms, uint32_t count, uint32_t level, int32_t column, int32_t rowid_column, sql::affinity_kind affinity, sql::expression*& equal, sql::expression*& low, bool& low_inclusive, sql::expression*& high, bool& high_inclusive, sql::expression*& list ) {
+
+		auto same_column = [ & ] ( const sql::expression* item ) {
+
+			if ( !column_at ( item, level ) )
+				return false;
+
+			if ( column < 0 )
+				return item->column < 0 || item->column == rowid_column;
+
+			return item->column == column;
+
+		};
+
+		for ( uint32_t t = 0; t < count; t++ ) {
+
+			sql::expression* term = terms [ t ];
+
+			if ( term->kind == sql::EXPRESSION_BINARY ) {
+
+				sql::operator_kind op = term->op;
+				sql::expression* other = nullptr;
+
+				if ( op != sql::OPERATOR_EQUAL && op != sql::OPERATOR_LESS && op != sql::OPERATOR_LESS_EQUAL && op != sql::OPERATOR_GREATER && op != sql::OPERATOR_GREATER_EQUAL )
+					continue;
+
+				if ( same_column ( term->left ) && usable_other ( term->right, level ) )
+					other = term->right;
+				else if ( same_column ( term->right ) && usable_other ( term->left, level ) ) {
+
+					other = term->left;
+					op = flipped ( op );
+
+				}
+
+				if ( !other || !seek_allowed ( affinity, expression_affinity ( other ) ) )
+					continue;
+
+				if ( op == sql::OPERATOR_EQUAL ) {
+
+					if ( !equal )
+						equal = other;
+
+				} else if ( op == sql::OPERATOR_GREATER || op == sql::OPERATOR_GREATER_EQUAL ) {
+
+					if ( !low ) {
+
+						low = other;
+						low_inclusive = op == sql::OPERATOR_GREATER_EQUAL;
+
+					}
+
+				} else if ( !high ) {
+
+					high = other;
+					high_inclusive = op == sql::OPERATOR_LESS_EQUAL;
+
+				}
+
+			} else if ( term->kind == sql::EXPRESSION_BETWEEN && !term->negated && same_column ( term->left ) && usable_other ( term->right, level ) && usable_other ( term->third, level ) && seek_allowed ( affinity, expression_affinity ( term->right ) ) && seek_allowed ( affinity, expression_affinity ( term->third ) ) ) {
+
+				if ( !low && !high ) {
+
+					low = term->right;
+					low_inclusive = true;
+					high = term->third;
+					high_inclusive = true;
+
+				}
+
+			} else if ( term->kind == sql::EXPRESSION_IN && !term->negated && !term->query && term->count && same_column ( term->left ) && !list ) {
+
+				bool fine = true;
+
+				for ( uint32_t i = 0; i < term->count && fine; i++ )
+					fine = usable_other ( term->list [ i ], level ) && seek_allowed ( affinity, expression_affinity ( term->list [ i ] ) );
+
+				if ( fine )
+					list = term;
+
+			}
+
+		}
+
+	}
+
+	void choose_path ( run_context& ctx, prepared_select* plan, uint32_t level ) {
+
+		prepared_source& source = plan->sources [ level ];
+
+		source.path = { };
+		source.path.kind = PATH_SCAN;
+
+		if ( !source.table )
+			return;
+
+		sql::expression* const* terms = source.left ? source.on_terms : source.filters;
+		uint32_t count = source.left ? source.on_count : source.filter_count;
+
+		if ( !count )
+			return;
+
+		table_info& table = *source.table;
+		sql::expression* equal = nullptr;
+		sql::expression* low = nullptr;
+		sql::expression* high = nullptr;
+		sql::expression* list = nullptr;
+		bool low_inclusive = false;
+		bool high_inclusive = false;
+
+		collect_bounds ( terms, count, level, -1, table.rowid_column, sql::AFFINITY_INTEGER, equal, low, low_inclusive, high, high_inclusive, list );
+
+		if ( equal ) {
+
+			source.path.kind = PATH_ROWID_EQUAL;
+			source.path.equal [ 0 ] = equal;
+			source.path.equal_count = 1;
+
+			return;
+
+		}
+
+		access_path best_index = { };
+		int32_t best_score = 0;
+
+		for ( uint32_t i = 0; i < ctx.schema->index_count; i++ ) {
+
+			index_info& index = ctx.schema->indexes [ i ];
+
+			if ( !base::same_folded ( index.table, table.name ) || !index.column_count )
+				continue;
+
+			access_path path = { };
+
+			path.kind = PATH_INDEX;
+			path.index = &index;
+
+			for ( uint32_t k = 0; k < index.column_count; k++ ) {
+
+				sql::expression* column_equal = nullptr;
+				sql::expression* column_low = nullptr;
+				sql::expression* column_high = nullptr;
+				sql::expression* column_list = nullptr;
+				bool column_low_inclusive = false;
+				bool column_high_inclusive = false;
+				uint32_t column = index.columns [ k ];
+
+				collect_bounds ( terms, count, level, static_cast < int32_t > ( column ), -2, table.columns [ column ].affinity, column_equal, column_low, column_low_inclusive, column_high, column_high_inclusive, column_list );
+
+				if ( column_equal ) {
+
+					path.equal [ path.equal_count++ ] = column_equal;
+
+					continue;
+
+				}
+
+				path.low = column_low;
+				path.low_inclusive = column_low_inclusive;
+				path.high = column_high;
+				path.high_inclusive = column_high_inclusive;
+
+				break;
+
+			}
+
+			int32_t score = static_cast < int32_t > ( path.equal_count ) * 8 + ( path.low ? 2 : 0 ) + ( path.high ? 2 : 0 );
+
+			if ( index.unique && path.equal_count == index.column_count )
+				score += 1000;
+
+			if ( score > best_score ) {
+
+				best_score = score;
+				best_index = path;
+
+			}
+
+		}
+
+		if ( best_score >= 8 ) {
+
+			source.path = best_index;
+
+			return;
+
+		}
+
+		if ( list ) {
+
+			source.path.kind = PATH_ROWID_LIST;
+			source.path.list = list;
+
+			return;
+
+		}
+
+		if ( low || high ) {
+
+			source.path.kind = PATH_ROWID_RANGE;
+			source.path.low = low;
+			source.path.low_inclusive = low_inclusive;
+			source.path.high = high;
+			source.path.high_inclusive = high_inclusive;
+
+			return;
+
+		}
+
+		if ( best_score > 0 )
+			source.path = best_index;
+
+	}
+
+	void describe_path ( const prepared_source& source, base::text& out ) {
+
+		if ( source.query ) {
+
+			out.add ( "SCAN " ).add ( source.alias ).add ( " (subquery " ).number ( source.query->id ).add ( ')' );
+
+			return;
+
+		}
+
+		const access_path& path = source.path;
+
+		out.add ( path.kind == PATH_SCAN ? "SCAN " : "SEARCH " ).add ( source.table->name );
+
+		if ( !base::same_folded ( source.alias, source.table->name ) )
+			out.add ( " AS " ).add ( source.alias );
+
+		switch ( path.kind ) {
+
+			case PATH_SCAN:
+				break;
+
+			case PATH_ROWID_EQUAL:
+				out.add ( " USING ROWID (rowid=?)" );
+				break;
+
+			case PATH_ROWID_LIST:
+				out.add ( " USING ROWID (rowid IN list)" );
+				break;
+
+			case PATH_ROWID_RANGE:
+				out.add ( " USING ROWID (" );
+
+				if ( path.low )
+					out.add ( path.low_inclusive ? "rowid>=?" : "rowid>?" );
+
+				if ( path.low && path.high )
+					out.add ( " AND " );
+
+				if ( path.high )
+					out.add ( path.high_inclusive ? "rowid<=?" : "rowid<?" );
+
+				out.add ( ')' );
+				break;
+
+			case PATH_INDEX: {
+
+				const index_info& index = *path.index;
+
+				out.add ( index.unique && path.equal_count == index.column_count ? " USING UNIQUE INDEX " : " USING INDEX " ).add ( index.name );
+
+				if ( !path.equal_count && !path.low && !path.high )
+					break;
+
+				out.add ( " (" );
+
+				for ( uint32_t k = 0; k < path.equal_count; k++ ) {
+
+					if ( k )
+						out.add ( " AND " );
+
+					out.add ( source.table->columns [ index.columns [ k ] ].name ).add ( "=?" );
+
+				}
+
+				if ( path.low || path.high ) {
+
+					const char* name = source.table->columns [ index.columns [ path.equal_count ] ].name;
+
+					if ( path.equal_count )
+						out.add ( " AND " );
+
+					if ( path.low )
+						out.add ( name ).add ( path.low_inclusive ? ">=?" : ">?" );
+
+					if ( path.low && path.high )
+						out.add ( " AND " );
+
+					if ( path.high )
+						out.add ( name ).add ( path.high_inclusive ? "<=?" : "<?" );
+
+				}
+
+				out.add ( ')' );
+				break;
+
+			}
+
+		}
+
+	}
+
+	bool fallback_value ( run_context& ctx, const column_info& column, storage::value& out ) {
+
+		if ( !column.fallback ) {
+
+			out = storage::null_value ( );
+
+			return true;
+
+		}
+
+		if ( !bind_expression ( ctx, nullptr, column.fallback, BIND_CONSTANT ) || !evaluate ( ctx, nullptr, column.fallback, out ) )
+			return false;
+
+		out = apply_affinity ( *ctx.scratch, out, column.affinity );
+
+		return true;
+
+	}
+
+	bool decode_row ( run_context& ctx, const table_info& table, const uint8_t* payload, size_t size, int64_t rowid, storage::value* values ) {
+
+		uint32_t count = 0;
+
+		if ( !storage::decode_record ( payload, size, values, table.column_count, count ) )
+			return fail_named ( ctx, "a row of table ", table.name, " is damaged" );
+
+		for ( uint32_t i = count; i < table.column_count; i++ )
+			if ( !fallback_value ( ctx, table.columns [ i ], values [ i ] ) )
+				return false;
+
+		if ( table.rowid_column >= 0 )
+			values [ table.rowid_column ] = storage::integer_value ( rowid );
+
+		return true;
+
+	}
+
+	static bool decode_kept ( run_context& ctx, const table_info& table, int64_t rowid, storage::value*& values ) {
+
+		char* kept = ctx.scratch->keep ( ctx.row_bytes.value ( ), ctx.row_bytes.size );
+
+		values = ctx.scratch->make < storage::value > ( table.column_count + 1 );
+
+		if ( !kept || !values )
+			return fail_run ( ctx, "out of memory" );
+
+		return decode_row ( ctx, table, reinterpret_cast < const uint8_t* > ( kept ), ctx.row_bytes.size, rowid, values );
+
+	}
+
+	bool read_row ( run_context& ctx, const table_info& table, int64_t rowid, storage::value*& values, bool& found ) {
+
+		storage::btree tree = { ctx.pages, table.root, false };
+
+		if ( !storage::table_find ( tree, rowid, ctx.row_bytes, found ) )
+			return fail_storage ( ctx, "a row could not be read" );
+
+		if ( !found )
+			return true;
+
+		return decode_kept ( ctx, table, rowid, values );
+
+	}
+
+	bool make_index_key ( run_context& ctx, const index_info& index, const storage::value* values, int64_t rowid, bool with_rowid, base::text& out ) {
+
+		storage::value key [ RUN_KEY_ROOM ];
+
+		for ( uint32_t k = 0; k < index.column_count; k++ )
+			key [ k ] = values [ index.columns [ k ] ];
+
+		key [ index.column_count ] = storage::integer_value ( rowid );
+		out.clear ( );
+		storage::encode_record ( key, index.column_count + ( with_rowid ? 1 : 0 ), out );
+
+		return true;
+
+	}
+
+	static storage::value number_from ( const storage::value& item ) {
+
+		if ( item.kind != storage::VALUE_TEXT )
+			return item;
+
+		storage::value parsed;
+
+		return read_number_text ( item.bytes, item.size, parsed, true ) ? parsed : item;
+
+	}
+
+	static bool exact_rowid ( const storage::value& item, int64_t& out ) {
+
+		storage::value number = number_from ( item );
+
+		if ( number.kind == storage::VALUE_INTEGER ) {
+
+			out = number.integer;
+
+			return true;
+
+		}
+
+		if ( number.kind == storage::VALUE_REAL && number.real >= -9.2e18 && number.real <= 9.2e18 && number.real == static_cast < double > ( static_cast < int64_t > ( number.real ) ) ) {
+
+			out = static_cast < int64_t > ( number.real );
+
+			return true;
+
+		}
+
+		return false;
+
+	}
+
+	static bool bound_rowid ( const storage::value& item, bool lower, bool inclusive, int64_t& out, bool& empty, bool& open ) {
+
+		storage::value number = number_from ( item );
+
+		open = false;
+
+		if ( number.kind == storage::VALUE_NULL ) {
+
+			empty = true;
+
+			return true;
+
+		}
+
+		if ( number.kind == storage::VALUE_TEXT || number.kind == storage::VALUE_BLOB ) {
+
+			if ( lower )
+				empty = true;
+			else
+				open = true;
+
+			return true;
+
+		}
+
+		static const int64_t highest = 0x7FFFFFFFFFFFFFFFll;
+		static const int64_t lowest = static_cast < int64_t > ( 0x8000000000000000ull );
+
+		if ( number.kind == storage::VALUE_REAL ) {
+
+			double real = number.real;
+
+			if ( real >= 9.2e18 ) {
+
+				if ( lower )
+					empty = true;
+				else
+					open = true;
+
+				return true;
+
+			}
+
+			if ( real <= -9.2e18 ) {
+
+				if ( lower )
+					open = true;
+				else
+					empty = true;
+
+				return true;
+
+			}
+
+			int64_t whole = static_cast < int64_t > ( real );
+
+			if ( static_cast < double > ( whole ) == real ) {
+
+				number = storage::integer_value ( whole );
+
+			} else if ( lower ) {
+
+				out = real > 0 ? whole + 1 : whole;
+
+				return true;
+
+			} else {
+
+				out = real > 0 ? whole : whole - 1;
+
+				return true;
+
+			}
+
+		}
+
+		int64_t value = number.integer;
+
+		if ( lower ) {
+
+			if ( !inclusive ) {
+
+				if ( value == highest ) {
+
+					empty = true;
+
+					return true;
+
+				}
+
+				value++;
+
+			}
+
+		} else if ( !inclusive ) {
+
+			if ( value == lowest ) {
+
+				empty = true;
+
+				return true;
+
+			}
+
+			value--;
+
+		}
+
+		out = value;
+
+		return true;
+
+	}
+
+	static void sort_rowids ( int64_t* items, uint32_t count ) {
+
+		for ( uint32_t gap = count / 2; gap; gap /= 2 ) {
+
+			for ( uint32_t i = gap; i < count; i++ ) {
+
+				int64_t here = items [ i ];
+				uint32_t k = i;
+
+				while ( k >= gap && items [ k - gap ] > here ) {
+
+					items [ k ] = items [ k - gap ];
+					k -= gap;
+
+				}
+
+				items [ k ] = here;
+
+			}
+
+		}
+
+	}
+
+	static bool keep_key ( run_context& ctx, const storage::value* values, uint32_t count, const uint8_t*& out, size_t& size ) {
+
+		base::text record;
+
+		storage::encode_record ( values, count, record );
+
+		char* kept = ctx.scratch->keep ( record.value ( ), record.size );
+
+		if ( !kept )
+			return fail_run ( ctx, "out of memory" );
+
+		out = reinterpret_cast < const uint8_t* > ( kept );
+		size = record.size;
+
+		return true;
+
+	}
+
+	static bool open_index ( run_context& ctx, query_state* scope, source_state& source ) {
+
+		const access_path& path = source.plan->path;
+		const index_info& index = *path.index;
+		const table_info& table = *source.plan->table;
+		storage::value key [ RUN_KEY_ROOM ];
+		uint32_t equal = path.equal_count;
+
+		source.index_tree = { ctx.pages, index.root, true };
+
+		for ( uint32_t k = 0; k < equal; k++ ) {
+
+			storage::value value;
+
+			if ( !evaluate ( ctx, scope, path.equal [ k ], value ) )
+				return false;
+
+			key [ k ] = seek_value ( *ctx.scratch, table.columns [ index.columns [ k ] ].affinity, value );
+
+			if ( key [ k ].kind == storage::VALUE_NULL ) {
+
+				source.done = true;
+
+				return true;
+
+			}
+
+		}
+
+		if ( !keep_key ( ctx, key, equal, source.equal_key, source.equal_size ) )
+			return false;
+
+		sql::affinity_kind range_affinity = equal < index.column_count ? table.columns [ index.columns [ equal ] ].affinity : sql::AFFINITY_ANY;
+
+		source.high_key = nullptr;
+		source.low_key = nullptr;
+
+		if ( path.high ) {
+
+			storage::value value;
+
+			if ( !evaluate ( ctx, scope, path.high, value ) )
+				return false;
+
+			key [ equal ] = seek_value ( *ctx.scratch, range_affinity, value );
+
+			if ( key [ equal ].kind == storage::VALUE_NULL ) {
+
+				source.done = true;
+
+				return true;
+
+			}
+
+			if ( !keep_key ( ctx, key, equal + 1, source.high_key, source.high_size ) )
+				return false;
+
+			source.high_columns = equal + 1;
+			source.high_inclusive = path.high_inclusive;
+
+		}
+
+		if ( path.low ) {
+
+			storage::value value;
+
+			if ( !evaluate ( ctx, scope, path.low, value ) )
+				return false;
+
+			key [ equal ] = seek_value ( *ctx.scratch, range_affinity, value );
+
+			if ( key [ equal ].kind == storage::VALUE_NULL ) {
+
+				source.done = true;
+
+				return true;
+
+			}
+
+			if ( !keep_key ( ctx, key, equal + 1, source.low_key, source.low_size ) )
+				return false;
+
+			source.low_exclusive = !path.low_inclusive;
+
+			if ( !storage::cursor_seek_key ( source.index_at, source.index_tree, source.low_key, source.low_size, equal + 1 ) )
+				return fail_storage ( ctx, "an index could not be searched" );
+
+			return true;
+
+		}
+
+		if ( !equal ) {
+
+			if ( !storage::cursor_first ( source.index_at, source.index_tree ) )
+				return fail_storage ( ctx, "an index could not be read" );
+
+			return true;
+
+		}
+
+		if ( !storage::cursor_seek_key ( source.index_at, source.index_tree, source.equal_key, source.equal_size, equal ) )
+			return fail_storage ( ctx, "an index could not be searched" );
+
+		return true;
+
+	}
+
+	bool open_source ( run_context& ctx, query_state* scope, source_state& source ) {
+
+		prepared_source& plan = *source.plan;
+
+		source.null_row = false;
+		source.done = false;
+		source.first = true;
+		source.values = nullptr;
+
+		if ( plan.query ) {
+
+			if ( !source.materialized ) {
+
+				collected_rows rows = { };
+
+				rows.memory = ctx.memory;
+
+				if ( !collect_plan ( ctx, plan.query, scope->parent, rows ) )
+					return false;
+
+				source.rows = rows.values;
+				source.row_count = rows.count;
+				source.materialized = true;
+
+			}
+
+			source.row_at = 0;
+
+			return true;
+
+		}
+
+		source.tree = { ctx.pages, plan.table->root, false };
+
+		switch ( plan.path.kind ) {
+
+			case PATH_SCAN:
+				if ( !storage::cursor_first ( source.at, source.tree ) )
+					return fail_storage ( ctx, "a table could not be read" );
+
+				return true;
+
+			case PATH_ROWID_EQUAL: {
+
+				storage::value value;
+
+				if ( !evaluate ( ctx, scope, plan.path.equal [ 0 ], value ) )
+					return false;
+
+				if ( !exact_rowid ( value, source.low ) ) {
+
+					source.done = true;
+
+					return true;
+
+				}
+
+				if ( !storage::cursor_seek_rowid ( source.at, source.tree, source.low ) )
+					return fail_storage ( ctx, "a table could not be searched" );
+
+				return true;
+
+			}
+
+			case PATH_ROWID_RANGE: {
+
+				bool empty = false;
+				bool open = false;
+
+				source.low = static_cast < int64_t > ( 0x8000000000000000ull );
+				source.high = 0x7FFFFFFFFFFFFFFFll;
+
+				if ( plan.path.low ) {
+
+					storage::value value;
+
+					if ( !evaluate ( ctx, scope, plan.path.low, value ) || !bound_rowid ( value, true, plan.path.low_inclusive, source.low, empty, open ) )
+						return false;
+
+					if ( open )
+						source.low = static_cast < int64_t > ( 0x8000000000000000ull );
+
+				}
+
+				if ( !empty && plan.path.high ) {
+
+					storage::value value;
+
+					if ( !evaluate ( ctx, scope, plan.path.high, value ) || !bound_rowid ( value, false, plan.path.high_inclusive, source.high, empty, open ) )
+						return false;
+
+					if ( open )
+						source.high = 0x7FFFFFFFFFFFFFFFll;
+
+				}
+
+				if ( empty || source.low > source.high ) {
+
+					source.done = true;
+
+					return true;
+
+				}
+
+				if ( !storage::cursor_seek_rowid ( source.at, source.tree, source.low ) )
+					return fail_storage ( ctx, "a table could not be searched" );
+
+				return true;
+
+			}
+
+			case PATH_ROWID_LIST: {
+
+				const sql::expression* list = plan.path.list;
+
+				source.list = ctx.scratch->make < int64_t > ( list->count );
+				source.list_count = 0;
+				source.list_at = 0;
+
+				if ( !source.list )
+					return fail_run ( ctx, "out of memory" );
+
+				for ( uint32_t i = 0; i < list->count; i++ ) {
+
+					storage::value value;
+					int64_t rowid = 0;
+
+					if ( !evaluate ( ctx, scope, list->list [ i ], value ) )
+						return false;
+
+					if ( exact_rowid ( value, rowid ) )
+						source.list [ source.list_count++ ] = rowid;
+
+				}
+
+				sort_rowids ( source.list, source.list_count );
+
+				uint32_t unique = 0;
+
+				for ( uint32_t i = 0; i < source.list_count; i++ )
+					if ( !unique || source.list [ unique - 1 ] != source.list [ i ] )
+						source.list [ unique++ ] = source.list [ i ];
+
+				source.list_count = unique;
+
+				return true;
+
+			}
+
+			case PATH_INDEX:
+				return open_index ( ctx, scope, source );
+
+		}
+
+		return true;
+
+	}
+
+	static bool next_index ( run_context& ctx, source_state& source, bool& found ) {
+
+		const access_path& path = source.plan->path;
+		const table_info& table = *source.plan->table;
+		uint32_t equal = path.equal_count;
+
+		while ( source.index_at.valid ) {
+
+			if ( !storage::cursor_payload ( source.index_at, ctx.row_bytes ) )
+				return fail_storage ( ctx, "an index could not be read" );
+
+			const uint8_t* entry = reinterpret_cast < const uint8_t* > ( ctx.row_bytes.value ( ) );
+			size_t size = ctx.row_bytes.size;
+
+			if ( equal && storage::compare_records ( entry, size, source.equal_key, source.equal_size, equal ) != 0 ) {
+
+				source.done = true;
+
+				return true;
+
+			}
+
+			if ( source.high_key ) {
+
+				int32_t order = storage::compare_records ( entry, size, source.high_key, source.high_size, source.high_columns );
+
+				if ( order > 0 || ( order == 0 && !source.high_inclusive ) ) {
+
+					source.done = true;
+
+					return true;
+
+				}
+
+			}
+
+			bool skip = source.low_key && source.low_exclusive && storage::compare_records ( entry, size, source.low_key, source.low_size, equal + 1 ) == 0;
+			storage::value key [ RUN_KEY_ROOM ];
+			uint32_t count = 0;
+
+			if ( !skip && ( !storage::decode_record ( entry, size, key, RUN_KEY_ROOM, count ) || !count || key [ count - 1 ].kind != storage::VALUE_INTEGER ) )
+				return fail_named ( ctx, "an entry of index ", path.index->name, " is damaged" );
+
+			int64_t rowid = skip ? 0 : key [ count - 1 ].integer;
+
+			if ( !storage::cursor_next ( source.index_at ) )
+				return fail_storage ( ctx, "an index could not be read" );
+
+			if ( skip )
+				continue;
+
+			bool present = false;
+
+			if ( !read_row ( ctx, table, rowid, source.values, present ) )
+				return false;
+
+			if ( !present )
+				return fail_named ( ctx, "index ", path.index->name, " points at a row that is gone" );
+
+			source.rowid = rowid;
+			found = true;
+
+			return true;
+
+		}
+
+		source.done = true;
+
+		return true;
+
+	}
+
+	bool next_source ( run_context& ctx, query_state* scope, source_state& source, bool& found ) {
+
+		found = false;
+
+		if ( source.done )
+			return true;
+
+		prepared_source& plan = *source.plan;
+
+		if ( plan.query ) {
+
+			if ( source.row_at >= source.row_count ) {
+
+				source.done = true;
+
+				return true;
+
+			}
+
+			source.values = source.rows + static_cast < size_t > ( source.row_at ) * plan.width;
+			source.row_at++;
+			found = true;
+
+			return true;
+
+		}
+
+		ctx.rows_examined++;
+
+		switch ( plan.path.kind ) {
+
+			case PATH_SCAN:
+			case PATH_ROWID_RANGE:
+			case PATH_ROWID_EQUAL: {
+
+				if ( !source.at.valid || ( plan.path.kind == PATH_ROWID_EQUAL && !source.first ) ) {
+
+					source.done = true;
+
+					return true;
+
+				}
+
+				source.first = false;
+
+				int64_t rowid = 0;
+
+				if ( !storage::cursor_rowid ( source.at, rowid ) )
+					return fail_storage ( ctx, "a table could not be read" );
+
+				if ( ( plan.path.kind == PATH_ROWID_RANGE && rowid > source.high ) || ( plan.path.kind == PATH_ROWID_EQUAL && rowid != source.low ) ) {
+
+					source.done = true;
+
+					return true;
+
+				}
+
+				if ( !storage::cursor_payload ( source.at, ctx.row_bytes ) || !storage::cursor_next ( source.at ) )
+					return fail_storage ( ctx, "a table could not be read" );
+
+				source.rowid = rowid;
+				found = true;
+
+				return decode_kept ( ctx, *plan.table, rowid, source.values );
+
+			}
+
+			case PATH_ROWID_LIST:
+				while ( source.list_at < source.list_count ) {
+
+					int64_t rowid = source.list [ source.list_at++ ];
+					bool present = false;
+
+					if ( !read_row ( ctx, *plan.table, rowid, source.values, present ) )
+						return false;
+
+					if ( present ) {
+
+						source.rowid = rowid;
+						found = true;
+
+						return true;
+
+					}
+
+				}
+
+				source.done = true;
+
+				return true;
+
+			case PATH_INDEX:
+				return next_index ( ctx, source, found );
+
+		}
+
+		source.done = true;
+
+		return true;
+
+	}
+
+}
