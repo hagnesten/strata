@@ -70,6 +70,15 @@
     <Filter Include="src\test\sql">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D1A}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\engine">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D1B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\value">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D1C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\catalog">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D1D}</UniqueIdentifier>
+    </Filter>
     <Filter Include="docs">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D11}</UniqueIdentifier>
     </Filter>
@@ -102,6 +111,8 @@
     <ClCompile Include="src\sql\parser\parse_statement.cc"><Filter>src\sql\parser</Filter></ClCompile>
     <ClCompile Include="src\sql\print\print.cc"><Filter>src\sql\print</Filter></ClCompile>
     <ClCompile Include="src\test\sql\parser_test.cc"><Filter>src\test\sql</Filter></ClCompile>
+    <ClCompile Include="src\engine\value\value.cc"><Filter>src\engine\value</Filter></ClCompile>
+    <ClCompile Include="src\engine\catalog\catalog.cc"><Filter>src\engine\catalog</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base\runtime\memory.hh"><Filter>src\base\runtime</Filter></ClInclude>
@@ -120,6 +131,8 @@
     <ClInclude Include="src\sql\parser\parser.hh"><Filter>src\sql\parser</Filter></ClInclude>
     <ClInclude Include="src\sql\print\print.hh"><Filter>src\sql\print</Filter></ClInclude>
     <ClInclude Include="src\app\main\main.hh"><Filter>src\app\main</Filter></ClInclude>
+    <ClInclude Include="src\engine\value\value.hh"><Filter>src\engine\value</Filter></ClInclude>
+    <ClInclude Include="src\engine\catalog\catalog.hh"><Filter>src\engine\catalog</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="props\strata.props"><Filter>props</Filter></None>

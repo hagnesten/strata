@@ -52,6 +52,8 @@
     <ClCompile Include="src\sql\parser\parse_statement.cc" />
     <ClCompile Include="src\sql\print\print.cc" />
     <ClCompile Include="src\test\sql\parser_test.cc" />
+    <ClCompile Include="src\engine\value\value.cc" />
+    <ClCompile Include="src\engine\catalog\catalog.cc" />
     <ClCompile Include="src\app\main\main.cc" />
   </ItemGroup>
   <ItemGroup>
@@ -70,6 +72,8 @@
     <ClInclude Include="src\sql\syntax\syntax.hh" />
     <ClInclude Include="src\sql\parser\parser.hh" />
     <ClInclude Include="src\sql\print\print.hh" />
+    <ClInclude Include="src\engine\value\value.hh" />
+    <ClInclude Include="src\engine\catalog\catalog.hh" />
     <ClInclude Include="src\app\main\main.hh" />
   </ItemGroup>
   <ItemGroup>
