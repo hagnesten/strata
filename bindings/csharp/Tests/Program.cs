@@ -160,7 +160,93 @@ namespace Strata.Data.Tests {
 
 			}
 
+			Threads ( path );
 			Console.WriteLine ( "  " + ( checks - failures ).ToString ( CultureInfo.InvariantCulture ) + " of " + checks.ToString ( CultureInfo.InvariantCulture ) + " checks passed" );
+
+		}
+
+		private static void Threads ( string path ) {
+
+			bool backwards = false;
+			bool failed = false;
+			long last = 0;
+			bool writing = true;
+
+			System.Threading.Thread reader = new System.Threading.Thread ( delegate ( ) {
+
+				try {
+
+					using ( StrataConnection connection = new StrataConnection ( "Data Source=" + path ) ) {
+
+						connection.Open ( );
+
+						using ( StrataCommand count = new StrataCommand ( "SELECT count ( * ) FROM trades", connection ) ) {
+
+							while ( System.Threading.Volatile.Read ( ref writing ) ) {
+
+								long seen = ( long ) count.ExecuteScalar ( );
+
+								if ( seen < last )
+									backwards = true;
+
+								last = seen;
+
+							}
+
+						}
+
+					}
+
+				} catch ( Exception ) {
+
+					failed = true;
+
+				}
+
+			} );
+
+			reader.Start ( );
+
+			using ( StrataConnection writer = new StrataConnection ( "Data Source=" + path + ";Busy Timeout=10000" ) ) {
+
+				writer.Open ( );
+
+				for ( int batch = 0; batch < 50; batch++ ) {
+
+					using ( StrataTransaction transaction = writer.BeginTransaction ( ) ) {
+
+						using ( StrataBulkInserter bulk = writer.CreateBulkInserter ( "INSERT INTO trades ( symbol, price, size, at ) VALUES ( ?, ?, ?, ? )", 4, 500 ) ) {
+
+							for ( int i = 0; i < 400; i++ ) {
+
+								bulk.Add ( "THREAD" ).Add ( i * 0.5 ).Add ( i ).Add ( "b" + batch.ToString ( CultureInfo.InvariantCulture ) + "r" + i.ToString ( CultureInfo.InvariantCulture ) );
+								bulk.EndRow ( );
+
+							}
+
+						}
+
+						transaction.Commit ( );
+
+					}
+
+				}
+
+			}
+
+			System.Threading.Volatile.Write ( ref writing, false );
+			reader.Join ( );
+			Expect ( !failed, "a reader thread runs beside a writer thread" );
+			Expect ( !backwards, "a reader never sees the row count go backwards" );
+
+			using ( StrataConnection check = new StrataConnection ( "Data Source=" + path ) ) {
+
+				check.Open ( );
+
+				using ( StrataCommand count = new StrataCommand ( "SELECT count ( * ) FROM trades WHERE symbol = 'THREAD'", check ) )
+					Expect ( ( long ) count.ExecuteScalar ( ) == 20000, "every row from the writer thread is there" );
+
+			}
 
 		}
 

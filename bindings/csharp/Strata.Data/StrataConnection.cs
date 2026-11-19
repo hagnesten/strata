@@ -10,6 +10,7 @@ namespace Strata.Data {
 		private string connection_string = "";
 		private string path = "";
 		private long epoch;
+		private int busy_timeout = 5000;
 
 		public StrataConnection ( ) {
 
@@ -37,7 +38,28 @@ namespace Strata.Data {
 					throw new InvalidOperationException ( "close the connection before changing its connection string" );
 
 				connection_string = value ?? "";
-				path = ParsePath ( connection_string );
+				path = Setting ( connection_string, "data source", "datasource", "filename", "path" ) ?? ( connection_string.IndexOf ( '=' ) < 0 ? connection_string.Trim ( ) : "" );
+
+				string timeout = Setting ( connection_string, "busy timeout", "default timeout", "timeout", null );
+				int parsed;
+
+				if ( timeout != null && int.TryParse ( timeout, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out parsed ) )
+					busy_timeout = parsed;
+
+			}
+
+		}
+
+		public int BusyTimeout {
+
+			get { return busy_timeout; }
+
+			set {
+
+				busy_timeout = value;
+
+				if ( handle != IntPtr.Zero )
+					Native.strata_busy_timeout ( handle, value );
 
 			}
 
@@ -104,14 +126,9 @@ namespace Strata.Data {
 
 		}
 
-		private static string ParsePath ( string text ) {
+		private static string Setting ( string text, string first, string second, string third, string fourth ) {
 
-			string trimmed = text.Trim ( );
-
-			if ( trimmed.IndexOf ( '=' ) < 0 )
-				return trimmed;
-
-			foreach ( string part in trimmed.Split ( ';' ) ) {
+			foreach ( string part in text.Split ( ';' ) ) {
 
 				int equals = part.IndexOf ( '=' );
 
@@ -120,12 +137,12 @@ namespace Strata.Data {
 
 				string key = part.Substring ( 0, equals ).Trim ( ).ToLowerInvariant ( );
 
-				if ( key == "data source" || key == "datasource" || key == "filename" || key == "path" )
+				if ( key == first || key == second || key == third || key == fourth )
 					return part.Substring ( equals + 1 ).Trim ( );
 
 			}
 
-			return "";
+			return null;
 
 		}
 
@@ -156,6 +173,7 @@ namespace Strata.Data {
 
 			handle = made;
 			epoch++;
+			Native.strata_busy_timeout ( handle, busy_timeout );
 			OnStateChange ( new StateChangeEventArgs ( ConnectionState.Closed, ConnectionState.Open ) );
 
 		}
@@ -201,7 +219,7 @@ namespace Strata.Data {
 
 		protected override DbTransaction BeginDbTransaction ( IsolationLevel isolationLevel ) {
 
-			Execute ( "BEGIN" );
+			Execute ( isolationLevel == IsolationLevel.Snapshot ? "BEGIN" : "BEGIN IMMEDIATE" );
 
 			return new StrataTransaction ( this, isolationLevel );
 

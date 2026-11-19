@@ -120,6 +120,17 @@ extern "C" {
 
 	}
 
+	STRATA_API int strata_busy_timeout ( strata_db* db, int milliseconds ) {
+
+		if ( !db )
+			return STRATA_MISUSE;
+
+		db->database.pages.wal.busy_milliseconds = milliseconds > 0 ? static_cast < uint32_t > ( milliseconds ) : 0;
+
+		return STRATA_OK;
+
+	}
+
 	STRATA_API const char* strata_error ( strata_db* db ) {
 
 		return db ? db->database.problem.value ( ) : "no database";

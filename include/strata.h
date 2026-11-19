@@ -73,6 +73,8 @@ STRATA_API int strata_close ( strata_db* db );
 
 STRATA_API int strata_exec ( strata_db* db, const char* sql );
 
+STRATA_API int strata_busy_timeout ( strata_db* db, int milliseconds );
+
 STRATA_API const char* strata_error ( strata_db* db );
 
 STRATA_API int strata_error_line ( strata_db* db );

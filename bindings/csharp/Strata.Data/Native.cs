@@ -36,6 +36,9 @@ namespace Strata.Data {
 		public static extern int strata_exec ( IntPtr db, byte* sql );
 
 		[DllImport ( Library, CallingConvention = CallingConvention.Cdecl )]
+		public static extern int strata_busy_timeout ( IntPtr db, int milliseconds );
+
+		[DllImport ( Library, CallingConvention = CallingConvention.Cdecl )]
 		public static extern IntPtr strata_error ( IntPtr db );
 
 		[DllImport ( Library, CallingConvention = CallingConvention.Cdecl )]
