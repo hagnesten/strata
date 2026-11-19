@@ -317,7 +317,7 @@ namespace studio {
 			}
 
 			x += width;
-			ui::line ( draw, x - 0.5f, body.y, x - 0.5f, body.y + body.h, ui::rgb ( THEME_DIVIDER, 0.6f ) );
+			ui::line ( draw, x - 0.5f, body.y, x - 0.5f, base::min ( body.y + body.h, body.y + total_h - grid.scroll_y ), ui::rgb ( THEME_DIVIDER, 0.6f ) );
 
 		}
 
@@ -368,7 +368,7 @@ namespace studio {
 
 		ui::fill ( draw, header, ui::rgb ( THEME_PANEL ) );
 		ui::line ( draw, area.x, area.y + LAYOUT_HEADER - 0.5f, area.x + area.w, area.y + LAYOUT_HEADER - 0.5f, ui::rgb ( THEME_DIVIDER ) );
-		ui::line ( draw, area.x + gutter - 0.5f, area.y, area.x + gutter - 0.5f, area.y + area.h - LAYOUT_SCROLLBAR, ui::rgb ( THEME_DIVIDER ) );
+		ui::line ( draw, area.x + gutter - 0.5f, area.y, area.x + gutter - 0.5f, base::min ( area.y + area.h - LAYOUT_SCROLLBAR, body.y + total_h - grid.scroll_y ), ui::rgb ( THEME_DIVIDER ) );
 		ui::push_clip ( draw, { body.x, area.y, view_w, LAYOUT_HEADER } );
 
 		x = body.x - grid.scroll_x;

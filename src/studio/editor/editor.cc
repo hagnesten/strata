@@ -299,8 +299,6 @@ namespace studio {
 
 		if ( editor.undo_count == EDITOR_UNDO ) {
 
-			base::text spare;
-
 			for ( uint32_t i = 1; i < EDITOR_UNDO; i++ ) {
 
 				editor.undo [ i - 1 ].clear ( );

@@ -263,19 +263,37 @@ namespace studio {
 			float hex_x = x + advance * 6;
 			float text_x = hex_x + advance * 50;
 
-			for ( uint32_t b = 0; b < 16; b++ ) {
+			base::text shown;
+			uint32_t b = 0;
 
-				uint32_t at = row * 16 + b;
-				uint8_t value_byte = app.page_bytes [ at ];
-				base::text pair_text;
-				char shown = value_byte >= 32 && value_byte < 127 ? static_cast < char > ( value_byte ) : '.';
-				float bx = hex_x + static_cast < float > ( b ) * advance * 3 + ( b >= 8 ? advance : 0 );
+			while ( b < 16 ) {
 
-				pair_text.hex ( value_byte, 2, true );
-				ui::text ( draw, ui::FONT_CODE_SMALL, pair_text.value ( ), 2, { bx, line_y, advance * 3, STUDIO_HEX_ROW }, ui::rgb ( byte_shade ( app, at, value_byte ) ) );
-				ui::text ( draw, ui::FONT_CODE_SMALL, &shown, 1, { text_x + static_cast < float > ( b ) * advance, line_y, advance * 2, STUDIO_HEX_ROW }, ui::rgb ( value_byte >= 32 && value_byte < 127 ? THEME_DIM : 0x30373D ) );
+				uint32_t start = b;
+				uint32_t shade = byte_shade ( app, row * 16 + b, app.page_bytes [ row * 16 + b ] );
+				base::text run;
+
+				while ( b < 16 && ( b == start || b != 8 ) && byte_shade ( app, row * 16 + b, app.page_bytes [ row * 16 + b ] ) == shade ) {
+
+					run.hex ( app.page_bytes [ row * 16 + b ], 2, true ).add ( ' ' );
+					b++;
+
+				}
+
+				float bx = hex_x + static_cast < float > ( start ) * advance * 3 + ( start >= 8 ? advance : 0 );
+
+				ui::text ( draw, ui::FONT_CODE_SMALL, run.value ( ), run.size, { bx, line_y, advance * static_cast < float > ( run.size + 1 ), STUDIO_HEX_ROW }, ui::rgb ( shade ) );
 
 			}
+
+			for ( uint32_t k = 0; k < 16; k++ ) {
+
+				uint8_t value_byte = app.page_bytes [ row * 16 + k ];
+
+				shown.add ( value_byte >= 32 && value_byte < 127 ? static_cast < char > ( value_byte ) : '.' );
+
+			}
+
+			ui::text ( draw, ui::FONT_CODE_SMALL, shown.value ( ), shown.size, { text_x, line_y, advance * 18, STUDIO_HEX_ROW }, ui::rgb ( THEME_FAINT ) );
 
 		}
 
