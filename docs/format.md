@@ -82,6 +82,39 @@ A payload of up to 995 bytes stays local. Anything larger keeps its first 240 by
 
 An index key is the record of the indexed columns followed by the row id, so every index entry is unique.
 
+## The write-ahead log
+
+Commits go to a second file next to the database, named after it with `-wal` on the end. The main file only changes during a checkpoint.
+
+The log starts with a 32-byte header:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 8 | magic, `StrataWL` |
+| 8 | 4 | version, 1 |
+| 12 | 4 | page size |
+| 16 | 4 | first salt |
+| 20 | 4 | second salt |
+| 24 | 4 | checkpoint sequence |
+| 28 | 4 | CRC-32C of bytes 0 to 27 |
+
+After the header come frames. Each is a 24-byte frame header followed by a full page:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 4 | page number |
+| 4 | 4 | page count after this commit, or 0 if this frame is not the last of a commit |
+| 8 | 4 | first salt, copied from the log header |
+| 12 | 4 | second salt |
+| 16 | 4 | chained CRC-32C |
+| 20 | 4 | zero |
+
+The chained CRC covers frame header bytes 0 to 15 and the page, and starts from the previous frame's CRC (the header's CRC for the first frame). A commit writes its changed pages and then page 1 as the commit frame, and is durable once the log is flushed.
+
+**Recovery** reads frames in order. It stops at the first frame whose salts or chained CRC don't match, and keeps everything up to the last commit frame before that point. A torn or half-written commit is therefore never seen.
+
+**A checkpoint** copies the newest version of every logged page into the main file, flushes it, and only then starts a fresh log with new salts. A crash in the middle simply replays the same log again on the next open.
+
 ## Free pages
 
 A free page has kind 2. The next free page number is at offset 4 (0 ends the list). Freed pages go to the front of the list, and new pages come from the front before the file grows.
