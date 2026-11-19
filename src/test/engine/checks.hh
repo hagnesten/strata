@@ -33,4 +33,6 @@ namespace test {
 
 	void check_tests ( engine::database& db );
 
+	void prepared_tests ( engine::database& db );
+
 }

@@ -76,6 +76,23 @@ namespace base {
 
 	}
 
+	void arena::recycle ( ) {
+
+		while ( first && first->next ) {
+
+			arena_block* next = first->next;
+
+			total -= first->size;
+			release ( first );
+			first = next;
+
+		}
+
+		if ( first )
+			first->used = ( sizeof ( arena_block ) + 15 ) & ~static_cast < size_t > ( 15 );
+
+	}
+
 	void arena::reset ( ) {
 
 		while ( first ) {

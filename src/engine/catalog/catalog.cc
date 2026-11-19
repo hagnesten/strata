@@ -8,6 +8,7 @@ namespace engine {
 		item.memory.reset ( );
 		item.table_count = 0;
 		item.index_count = 0;
+		item.loads++;
 
 	}
 

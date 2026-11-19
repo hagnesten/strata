@@ -67,6 +67,7 @@
     <ClCompile Include="src\base\math\math.cc" />
     <ClCompile Include="src\test\engine\search_test.cc" />
     <ClCompile Include="src\test\engine\check_test.cc" />
+    <ClCompile Include="src\test\engine\prepared_test.cc" />
     <ClCompile Include="src\engine\catalog\statistics.cc" />
     <ClCompile Include="src\engine\schema\analyze.cc" />
     <ClCompile Include="src\storage\btree\estimate.cc" />
@@ -83,6 +84,7 @@
     <ClCompile Include="src\engine\schema\alter.cc" />
     <ClCompile Include="src\base\clock\clock.cc" />
     <ClCompile Include="src\engine\database\database.cc" />
+    <ClCompile Include="src\engine\database\prepared.cc" />
     <ClCompile Include="src\engine\database\transaction.cc" />
     <ClCompile Include="src\engine\database\vacuum.cc" />
     <ClCompile Include="src\storage\btree\copy.cc" />
@@ -154,6 +156,7 @@
     <ClInclude Include="src\engine\search\search.hh" />
     <ClInclude Include="src\base\math\math.hh" />
     <ClInclude Include="src\engine\database\database.hh" />
+    <ClInclude Include="src\engine\database\prepared.hh" />
     <ClInclude Include="src\app\shell\shell.hh" />
     <ClInclude Include="src\base\png\png.hh" />
     <ClInclude Include="src\ui\render\render.hh" />

@@ -87,6 +87,7 @@ namespace engine {
 		index_info indexes [ CATALOG_INDEXES ];
 		uint32_t index_count;
 		uint32_t version;
+		uint64_t loads;
 
 	};
 

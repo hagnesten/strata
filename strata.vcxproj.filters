@@ -222,6 +222,7 @@
     <ClCompile Include="src\base\math\math.cc"><Filter>src\base\math</Filter></ClCompile>
     <ClCompile Include="src\test\engine\search_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\test\engine\check_test.cc"><Filter>src\test\engine</Filter></ClCompile>
+    <ClCompile Include="src\test\engine\prepared_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\engine\catalog\statistics.cc"><Filter>src\engine\catalog</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\analyze.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\storage\btree\estimate.cc"><Filter>src\storage\btree</Filter></ClCompile>
@@ -238,6 +239,7 @@
     <ClCompile Include="src\engine\schema\alter.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\base\clock\clock.cc"><Filter>src\base\clock</Filter></ClCompile>
     <ClCompile Include="src\engine\database\database.cc"><Filter>src\engine\database</Filter></ClCompile>
+    <ClCompile Include="src\engine\database\prepared.cc"><Filter>src\engine\database</Filter></ClCompile>
     <ClCompile Include="src\engine\database\transaction.cc"><Filter>src\engine\database</Filter></ClCompile>
     <ClCompile Include="src\engine\database\vacuum.cc"><Filter>src\engine\database</Filter></ClCompile>
     <ClCompile Include="src\storage\btree\copy.cc"><Filter>src\storage\btree</Filter></ClCompile>
@@ -309,6 +311,7 @@
     <ClInclude Include="src\engine\search\search.hh"><Filter>src\engine\search</Filter></ClInclude>
     <ClInclude Include="src\base\math\math.hh"><Filter>src\base\math</Filter></ClInclude>
     <ClInclude Include="src\engine\database\database.hh"><Filter>src\engine\database</Filter></ClInclude>
+    <ClInclude Include="src\engine\database\prepared.hh"><Filter>src\engine\database</Filter></ClInclude>
     <ClInclude Include="src\app\shell\shell.hh"><Filter>src\app\shell</Filter></ClInclude>
     <ClInclude Include="src\base\png\png.hh"><Filter>src\base\png</Filter></ClInclude>
     <ClInclude Include="src\ui\render\render.hh"><Filter>src\ui\render</Filter></ClInclude>

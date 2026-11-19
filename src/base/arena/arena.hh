@@ -44,6 +44,8 @@ namespace base {
 
 		void reset ( );
 
+		void recycle ( );
+
 		template < typename type > type* make ( size_t count ) {
 
 			return static_cast < type* > ( take ( sizeof ( type ) * count ) );
