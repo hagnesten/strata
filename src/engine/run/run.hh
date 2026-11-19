@@ -435,6 +435,8 @@ namespace engine {
 		const storage::value* parameters;
 		uint32_t parameter_count;
 		base::text* problem;
+		base::text* record_bytes;
+		base::text* key_bytes;
 		base::text row_bytes;
 		uint64_t rows_examined;
 		int64_t changes;

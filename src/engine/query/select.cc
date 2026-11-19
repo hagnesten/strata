@@ -811,8 +811,8 @@ namespace engine {
 
 		if ( rows.count == rows.room ) {
 
-			uint32_t grown = rows.room ? rows.room * 2 : 16;
-			storage::value* made = rows.memory->make < storage::value > ( static_cast < size_t > ( grown ) * ( rows.width ? rows.width : 1 ) );
+			uint32_t grown = rows.room ? rows.room * 2 : 4;
+			storage::value* made = static_cast < storage::value* > ( rows.memory->take_raw ( sizeof ( storage::value ) * grown * ( rows.width ? rows.width : 1 ) ) );
 
 			if ( !made )
 				return false;

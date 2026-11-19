@@ -465,7 +465,7 @@ namespace engine {
 
 	static bool store_row ( run_context& ctx, table_info& table, int64_t rowid, const storage::value* values, bool replace ) {
 
-		storage::value* stored = ctx.scratch->make < storage::value > ( table.column_count + 1 );
+		storage::value* stored = static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * ( table.column_count + 1 ) ) );
 
 		if ( !stored )
 			return fail_run ( ctx, "out of memory" );
@@ -480,10 +480,11 @@ namespace engine {
 		while ( width && stored [ width - 1 ].kind == storage::VALUE_NULL && !table.columns [ width - 1 ].fallback )
 			width--;
 
-		base::text record;
+		base::text& record = *ctx.record_bytes;
 		storage::btree tree = { ctx.pages, table.root, false };
 		bool existed = false;
 
+		record.clear ( );
 		storage::encode_record ( stored, width, record );
 
 		if ( record.size > 1000000000 )
@@ -531,7 +532,7 @@ namespace engine {
 
 	static bool change_indexes ( run_context& ctx, table_info& table, const storage::value* values, int64_t rowid, bool adding, const storage::value* other = nullptr, int64_t other_rowid = 0 ) {
 
-		base::text key;
+		base::text& key = *ctx.key_bytes;
 
 		for ( uint32_t i = 0; i < ctx.schema->index_count; i++ ) {
 
@@ -1319,9 +1320,30 @@ namespace engine {
 
 		rows.memory = ctx.memory;
 
-		if ( plan->query ) {
+		prepared_select* query = plan->query;
+		const sql::select_statement* syntax = query ? query->syntax : nullptr;
 
-			if ( !collect_plan ( ctx, plan->query, nullptr, rows ) )
+		if ( query && query->values_only && !query->next && !query->limit && !query->order_count && syntax->value_rows == 1 ) {
+
+			query_state scope = { };
+			storage::value* single = static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * ( query->output_count + 1 ) ) );
+
+			if ( !single )
+				return fail_run ( ctx, "out of memory" );
+
+			scope.plan = query;
+
+			for ( uint32_t c = 0; c < query->output_count; c++ )
+				if ( !evaluate ( ctx, &scope, syntax->values [ c ], single [ c ] ) )
+					return false;
+
+			rows.values = single;
+			rows.count = 1;
+			rows.width = query->output_count;
+
+		} else if ( query ) {
+
+			if ( !collect_plan ( ctx, query, nullptr, rows ) )
 				return false;
 
 			row_count = rows.count;

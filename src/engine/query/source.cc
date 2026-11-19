@@ -469,20 +469,29 @@ namespace engine {
 		const table_info& table = *plan.table;
 		uint32_t limit = table.column_count;
 
+		bool partial = false;
+
 		if ( plan.used && !table.generated_count && plan.width == table.column_count && !has_fulltext ( ctx, table ) ) {
 
 			limit = 0;
 
-			for ( uint32_t c = 0; c < table.column_count; c++ )
+			for ( uint32_t c = 0; c < table.column_count; c++ ) {
+
 				if ( plan.used [ c ] && static_cast < int32_t > ( c ) != table.rowid_column )
 					limit = c + 1;
+				else
+					partial = true;
+
+			}
+
+			partial = partial || limit < table.column_count;
 
 		}
 
-		source.decode_limit = limit;
+		source.decode_limit = partial ? limit : RECORD_COLUMNS + 1;
 		source.decode_ready = true;
 
-		return limit;
+		return source.decode_limit;
 
 	}
 
@@ -491,7 +500,7 @@ namespace engine {
 		const table_info& table = *source.plan->table;
 		uint32_t limit = decode_limit ( ctx, source );
 
-		if ( limit == table.column_count )
+		if ( limit > RECORD_COLUMNS )
 			return decode_bytes ( ctx, table, rowid, data, size, source.values );
 
 		storage::value* values = static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * ( table.column_count + 1 ) ) );

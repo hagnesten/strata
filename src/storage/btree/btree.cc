@@ -1100,8 +1100,9 @@ namespace storage {
 
 	bool table_insert ( btree& tree, int64_t rowid, const uint8_t* payload, size_t size, bool replace, bool& existed ) {
 
-		base::text cell;
+		base::text& cell = tree.owner->cell_bytes;
 
+		cell.clear ( );
 		add_varint ( cell, base::zigzag ( rowid ) );
 
 		if ( !payload_body ( *tree.owner, payload, size, cell ) )
@@ -1128,7 +1129,9 @@ namespace storage {
 
 	bool index_insert ( btree& tree, const uint8_t* key, size_t size, bool& existed ) {
 
-		base::text cell;
+		base::text& cell = tree.owner->cell_bytes;
+
+		cell.clear ( );
 
 		if ( !payload_body ( *tree.owner, key, size, cell ) )
 			return false;

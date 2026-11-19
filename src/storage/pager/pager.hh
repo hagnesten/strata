@@ -146,6 +146,7 @@ namespace storage {
 		wal_state wal;
 		bool broken;
 		mark_stack marks;
+		base::text cell_bytes;
 
 	};
 

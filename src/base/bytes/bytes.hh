@@ -74,15 +74,7 @@ namespace base {
 
 	}
 
-	inline bool read_varint ( const uint8_t* data, size_t size, size_t& at, uint64_t& out ) {
-
-		if ( at < size && data [ at ] < 0x80 ) {
-
-			out = data [ at++ ];
-
-			return true;
-
-		}
+	__attribute__ ( ( noinline ) ) inline bool read_long_varint ( const uint8_t* data, size_t size, size_t& at, uint64_t& out ) {
 
 		uint64_t value = 0;
 
@@ -109,6 +101,20 @@ namespace base {
 		}
 
 		return false;
+
+	}
+
+	__attribute__ ( ( always_inline ) ) inline bool read_varint ( const uint8_t* data, size_t size, size_t& at, uint64_t& out ) {
+
+		if ( at < size && data [ at ] < 0x80 ) {
+
+			out = data [ at++ ];
+
+			return true;
+
+		}
+
+		return read_long_varint ( data, size, at, out );
 
 	}
 

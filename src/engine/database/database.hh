@@ -41,6 +41,8 @@ namespace engine {
 		uint64_t rows_examined;
 		uint32_t statements;
 		base::text problem;
+		base::text record_bytes;
+		base::text key_bytes;
 		bool parse_failed;
 		uint32_t error_line;
 		uint32_t error_column;

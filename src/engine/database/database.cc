@@ -271,6 +271,8 @@ namespace engine {
 		ctx.parameters = parameters;
 		ctx.parameter_count = parameter_count;
 		ctx.problem = &item.problem;
+		ctx.record_bytes = &item.record_bytes;
+		ctx.key_bytes = &item.key_bytes;
 		ctx.last_rowid = item.last_rowid;
 		ctx.previous_changes = item.changes;
 		ctx.total_changes = item.total_changes;

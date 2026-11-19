@@ -304,10 +304,14 @@ namespace storage {
 		}
 
 		base::release ( item.frames );
+		base::release ( item.cell_bytes.data );
 		base::close_file ( item.file );
 		item.frames = nullptr;
 		item.frame_count = 0;
 		item.frame_room = 0;
+		item.cell_bytes.data = nullptr;
+		item.cell_bytes.size = 0;
+		item.cell_bytes.room = 0;
 
 	}
 
