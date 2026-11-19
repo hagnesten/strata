@@ -71,6 +71,25 @@ namespace api {
 
 	}
 
+	bool keep_row ( strata_stmt* stmt, const storage::value* values, uint32_t count ) {
+
+		strata_value* at = stmt->fetch_out + static_cast < size_t > ( stmt->fetch_count ) * count;
+
+		for ( uint32_t c = 0; c < count; c++ ) {
+
+			to_public ( values [ c ], at [ c ] );
+
+			if ( !keep_public ( stmt->fetch_memory, at [ c ] ) )
+				return false;
+
+		}
+
+		stmt->fetch_count++;
+
+		return true;
+
+	}
+
 }
 
 extern "C" {
@@ -84,47 +103,23 @@ extern "C" {
 			return STRATA_MISUSE;
 
 		stmt->fetch_memory.recycle ( );
+		stmt->fetch_out = out;
+		stmt->fetch_room = room_rows;
+		stmt->fetch_count = 0;
+		stmt->fetch_failed = false;
+		stmt->fetching = true;
 
-		int count = 0;
+		int code = api::step_once ( stmt );
 
-		while ( count < room_rows ) {
-
-			int code = api::step_once ( stmt );
-
-			if ( code != STRATA_ROW ) {
-
-				if ( rows )
-					*rows = count;
-
-				return code;
-
-			}
-
-			strata_value* at = out + static_cast < size_t > ( count ) * stmt->width;
-
-			for ( uint32_t c = 0; c < stmt->width; c++ ) {
-
-				api::to_public ( stmt->row [ c ], at [ c ] );
-
-				if ( !api::keep_public ( stmt->fetch_memory, at [ c ] ) ) {
-
-					if ( rows )
-						*rows = count;
-
-					return STRATA_NOMEM;
-
-				}
-
-			}
-
-			count++;
-
-		}
+		stmt->fetching = false;
 
 		if ( rows )
-			*rows = count;
+			*rows = stmt->fetch_count;
 
-		return STRATA_ROW;
+		if ( stmt->fetch_failed )
+			return STRATA_NOMEM;
+
+		return code;
 
 	}
 

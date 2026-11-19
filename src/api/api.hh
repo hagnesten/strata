@@ -52,6 +52,11 @@ struct strata_stmt {
 	uint32_t row_room;
 	base::arena fetch_memory;
 	base::arena scratch;
+	strata_value* fetch_out;
+	int32_t fetch_room;
+	int32_t fetch_count;
+	bool fetching;
+	bool fetch_failed;
 	strata_stmt* next;
 	strata_stmt* previous;
 
@@ -76,5 +81,7 @@ namespace api {
 	void to_public ( const storage::value& item, strata_value& out );
 
 	bool from_public ( base::arena& memory, const strata_value& item, storage::value& out );
+
+	bool keep_row ( strata_stmt* stmt, const storage::value* values, uint32_t count );
 
 }

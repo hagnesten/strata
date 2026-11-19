@@ -249,6 +249,15 @@ extern "C" {
 
 	}
 
+	STRATA_API const char* strata_parameter_name ( strata_stmt* stmt, int index ) {
+
+		if ( !stmt || index < 1 || static_cast < uint32_t > ( index ) > stmt->bound_count || !stmt->prepared->statement || !stmt->prepared->statement->parameter_names )
+			return nullptr;
+
+		return stmt->prepared->statement->parameter_names [ index - 1 ];
+
+	}
+
 	STRATA_API int strata_bind_null ( strata_stmt* stmt, int index ) {
 
 		storage::value* slot = nullptr;

@@ -99,6 +99,8 @@ STRATA_API int strata_parameter_count ( strata_stmt* stmt );
 
 STRATA_API int strata_parameter_index ( strata_stmt* stmt, const char* name );
 
+STRATA_API const char* strata_parameter_name ( strata_stmt* stmt, int index );
+
 STRATA_API int strata_bind_null ( strata_stmt* stmt, int index );
 
 STRATA_API int strata_bind_int64 ( strata_stmt* stmt, int index, int64_t value );

@@ -18,8 +18,29 @@ namespace api {
 
 		strata_stmt* stmt = static_cast < strata_stmt* > ( context );
 
-		stmt->row = values;
 		stmt->width = count;
+
+		if ( stmt->fetching ) {
+
+			if ( !keep_row ( stmt, values, count ) ) {
+
+				stmt->fetch_failed = true;
+				base::leave_coroutine ( stmt->runner );
+
+				return false;
+
+			}
+
+			if ( stmt->fetch_count < stmt->fetch_room )
+				return !stmt->stopping;
+
+			base::leave_coroutine ( stmt->runner );
+
+			return !stmt->stopping;
+
+		}
+
+		stmt->row = values;
 		base::leave_coroutine ( stmt->runner );
 		stmt->row = nullptr;
 
