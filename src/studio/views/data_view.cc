@@ -116,10 +116,10 @@ namespace studio {
 				flags.add ( column.type );
 
 			if ( column.rowid )
-				flags.add ( flags.size ? " Â· key" : "key" );
+				flags.add ( flags.size ? " \xC2\xB7 key" : "key" );
 
 			if ( column.not_null && !column.rowid )
-				flags.add ( flags.size ? " Â· not null" : "not null" );
+				flags.add ( flags.size ? " \xC2\xB7 not null" : "not null" );
 
 			ui::text ( draw, ui::FONT_UI, column.name, { x + 16, y, w * 0.5f - 16, 24 }, ui::rgb ( THEME_TEXT ) );
 			ui::text ( draw, ui::FONT_SMALL, flags.value ( ), flags.size, { x + w * 0.5f, y, w * 0.5f - 16, 24 }, ui::rgb ( THEME_DIM ) );
@@ -168,9 +168,9 @@ namespace studio {
 				right.add ( key.parent );
 
 				if ( key.on_delete == sql::FOREIGN_CASCADE )
-					right.add ( " Â· cascade" );
+					right.add ( " \xC2\xB7 cascade" );
 				else if ( key.on_delete == sql::FOREIGN_SET_NULL )
-					right.add ( " Â· set null" );
+					right.add ( " \xC2\xB7 set null" );
 
 				ui::text ( draw, ui::FONT_UI, left.value ( ), left.size, { x + 16, y, w * 0.5f - 28, 24 }, ui::rgb ( THEME_TEXT ) );
 				ui::text ( draw, ui::FONT_SMALL, "\xE2\x86\x92", { x + w * 0.5f - 16, y, 16, 24 }, ui::rgb ( THEME_FUNCTION ) );
