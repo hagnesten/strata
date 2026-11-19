@@ -91,6 +91,42 @@
     <Filter Include="src\app\shell">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D22}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\base\png">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D23}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\clipboard">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D24}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\ui">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D25}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\ui\render">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D26}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\studio">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D27}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\studio\theme">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D28}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\studio\widgets">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D29}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\studio\grid">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D2A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\studio\editor">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D2B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\studio\app">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D2C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\studio\views">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D2D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\studio\sample">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D2E}</UniqueIdentifier>
+    </Filter>
     <Filter Include="src\test\engine">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D21}</UniqueIdentifier>
     </Filter>
@@ -141,6 +177,19 @@
     <ClCompile Include="src\engine\database\database.cc"><Filter>src\engine\database</Filter></ClCompile>
     <ClCompile Include="src\test\engine\engine_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\app\shell\shell.cc"><Filter>src\app\shell</Filter></ClCompile>
+    <ClCompile Include="src\base\png\png.cc"><Filter>src\base\png</Filter></ClCompile>
+    <ClCompile Include="src\ui\render\render.cc"><Filter>src\ui\render</Filter></ClCompile>
+    <ClCompile Include="src\base\clipboard\clipboard.cc"><Filter>src\base\clipboard</Filter></ClCompile>
+    <ClCompile Include="src\studio\widgets\widgets.cc"><Filter>src\studio\widgets</Filter></ClCompile>
+    <ClCompile Include="src\studio\grid\grid.cc"><Filter>src\studio\grid</Filter></ClCompile>
+    <ClCompile Include="src\studio\editor\editor.cc"><Filter>src\studio\editor</Filter></ClCompile>
+    <ClCompile Include="src\studio\app\studio.cc"><Filter>src\studio\app</Filter></ClCompile>
+    <ClCompile Include="src\studio\views\chrome.cc"><Filter>src\studio\views</Filter></ClCompile>
+    <ClCompile Include="src\studio\views\data_view.cc"><Filter>src\studio\views</Filter></ClCompile>
+    <ClCompile Include="src\studio\views\query_view.cc"><Filter>src\studio\views</Filter></ClCompile>
+    <ClCompile Include="src\studio\views\map_view.cc"><Filter>src\studio\views</Filter></ClCompile>
+    <ClCompile Include="src\studio\views\pages_view.cc"><Filter>src\studio\views</Filter></ClCompile>
+    <ClCompile Include="src\studio\sample\sample.cc"><Filter>src\studio\sample</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base\runtime\memory.hh"><Filter>src\base\runtime</Filter></ClInclude>
@@ -165,6 +214,14 @@
     <ClInclude Include="src\engine\run\run.hh"><Filter>src\engine\run</Filter></ClInclude>
     <ClInclude Include="src\engine\database\database.hh"><Filter>src\engine\database</Filter></ClInclude>
     <ClInclude Include="src\app\shell\shell.hh"><Filter>src\app\shell</Filter></ClInclude>
+    <ClInclude Include="src\base\png\png.hh"><Filter>src\base\png</Filter></ClInclude>
+    <ClInclude Include="src\ui\render\render.hh"><Filter>src\ui\render</Filter></ClInclude>
+    <ClInclude Include="src\base\clipboard\clipboard.hh"><Filter>src\base\clipboard</Filter></ClInclude>
+    <ClInclude Include="src\studio\theme\theme.hh"><Filter>src\studio\theme</Filter></ClInclude>
+    <ClInclude Include="src\studio\widgets\widgets.hh"><Filter>src\studio\widgets</Filter></ClInclude>
+    <ClInclude Include="src\studio\grid\grid.hh"><Filter>src\studio\grid</Filter></ClInclude>
+    <ClInclude Include="src\studio\editor\editor.hh"><Filter>src\studio\editor</Filter></ClInclude>
+    <ClInclude Include="src\studio\app\studio.hh"><Filter>src\studio\app</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="props\strata.props"><Filter>props</Filter></None>

@@ -35,7 +35,7 @@
     </ClCompile>
     <Link>
       <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
-      <AdditionalDependencies>kernel32.lib;user32.lib;shell32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>kernel32.lib;user32.lib;shell32.lib;gdi32.lib;d2d1.lib;dwrite.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <TargetMachine>MachineX64</TargetMachine>
       <RandomizedBaseAddress>true</RandomizedBaseAddress>
       <SubSystem>Console</SubSystem>
@@ -45,6 +45,10 @@
       <StackCommitSize>1048576</StackCommitSize>
     </Link>
   </ItemDefinitionGroup>
+
+  <Target Name="strata_studio" AfterTargets="Build">
+    <Exec Command="&quot;$(OutDir)strata.exe&quot; --make-studio" ContinueOnError="true" />
+  </Target>
 
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
     <ClCompile>

@@ -2,6 +2,7 @@
 #include "base/console/console.hh"
 #include "test/harness/harness.hh"
 #include "app/shell/shell.hh"
+#include "studio/app/studio.hh"
 
 #include <windows.h>
 #include <shellapi.h>
@@ -37,6 +38,21 @@ namespace app {
 
 		read_arguments ( );
 
+		const uint8_t* image = reinterpret_cast < const uint8_t* > ( GetModuleHandleW ( nullptr ) );
+		const IMAGE_NT_HEADERS* headers = reinterpret_cast < const IMAGE_NT_HEADERS* > ( image + reinterpret_cast < const IMAGE_DOS_HEADER* > ( image )->e_lfanew );
+
+		if ( headers->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_WINDOWS_GUI )
+			return studio::run_studio ( argument_count > 1 ? arguments [ 1 ] : nullptr );
+
+		if ( argument_count > 1 && base::same ( arguments [ 1 ], "--studio" ) )
+			return studio::run_studio ( argument_count > 2 ? arguments [ 2 ] : nullptr );
+
+		if ( argument_count > 2 && base::same ( arguments [ 1 ], "--capture" ) )
+			return studio::capture_studio ( arguments [ 2 ] );
+
+		if ( argument_count > 1 && base::same ( arguments [ 1 ], "--make-studio" ) )
+			return studio::make_studio_copy ( ) ? 0 : 1;
+
 		if ( argument_count > 1 && base::same ( arguments [ 1 ], "--test" ) )
 			return test::run_all ( argument_count > 2 ? arguments [ 2 ] : nullptr );
 
@@ -49,6 +65,8 @@ namespace app {
 		base::write ( "strata " STRATA_VERSION "\n" );
 		base::write ( "  strata <file>            open a database in the SQL shell\n" );
 		base::write ( "  strata <file> \"<sql>\"    run SQL against a database and print the rows\n" );
+		base::write ( "  strata --studio [file]   open Strata Studio\n" );
+		base::write ( "  strata --capture <dir>   render every studio view to PNG files\n" );
 		base::write ( "  strata --test [part]     run the self test (pager, btree, crash, parser, engine)\n" );
 
 		return 0;

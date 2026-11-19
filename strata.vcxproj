@@ -67,6 +67,19 @@
     <ClCompile Include="src\engine\database\database.cc" />
     <ClCompile Include="src\test\engine\engine_test.cc" />
     <ClCompile Include="src\app\shell\shell.cc" />
+    <ClCompile Include="src\base\png\png.cc" />
+    <ClCompile Include="src\ui\render\render.cc" />
+    <ClCompile Include="src\base\clipboard\clipboard.cc" />
+    <ClCompile Include="src\studio\widgets\widgets.cc" />
+    <ClCompile Include="src\studio\grid\grid.cc" />
+    <ClCompile Include="src\studio\editor\editor.cc" />
+    <ClCompile Include="src\studio\app\studio.cc" />
+    <ClCompile Include="src\studio\views\chrome.cc" />
+    <ClCompile Include="src\studio\views\data_view.cc" />
+    <ClCompile Include="src\studio\views\query_view.cc" />
+    <ClCompile Include="src\studio\views\map_view.cc" />
+    <ClCompile Include="src\studio\views\pages_view.cc" />
+    <ClCompile Include="src\studio\sample\sample.cc" />
     <ClCompile Include="src\app\main\main.cc" />
   </ItemGroup>
   <ItemGroup>
@@ -91,6 +104,14 @@
     <ClInclude Include="src\engine\run\run.hh" />
     <ClInclude Include="src\engine\database\database.hh" />
     <ClInclude Include="src\app\shell\shell.hh" />
+    <ClInclude Include="src\base\png\png.hh" />
+    <ClInclude Include="src\ui\render\render.hh" />
+    <ClInclude Include="src\base\clipboard\clipboard.hh" />
+    <ClInclude Include="src\studio\theme\theme.hh" />
+    <ClInclude Include="src\studio\widgets\widgets.hh" />
+    <ClInclude Include="src\studio\grid\grid.hh" />
+    <ClInclude Include="src\studio\editor\editor.hh" />
+    <ClInclude Include="src\studio\app\studio.hh" />
     <ClInclude Include="src\app\main\main.hh" />
   </ItemGroup>
   <ItemGroup>
