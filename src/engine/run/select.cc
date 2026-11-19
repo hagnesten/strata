@@ -353,8 +353,17 @@ namespace engine {
 
 		prepared_select* plan = scope.plan;
 
-		if ( level == plan->source_count )
-			return plan->grouping ? group_step ( ctx, scope, groups ) : output_row ( ctx, scope, pipe, nullptr );
+		if ( level == plan->source_count ) {
+
+			if ( plan->grouping )
+				return group_step ( ctx, scope, groups );
+
+			if ( scope.captured )
+				return capture_window_row ( ctx, scope, *scope.captured );
+
+			return output_row ( ctx, scope, pipe, nullptr );
+
+		}
 
 		source_state& source = scope.sources [ level ];
 		prepared_source& definition = plan->sources [ level ];
@@ -498,7 +507,7 @@ namespace engine {
 
 			}
 
-			if ( fine && !output_row ( ctx, scope, pipe, nullptr ) )
+			if ( fine && ( scope.captured ? !capture_window_row ( ctx, scope, *scope.captured ) : !output_row ( ctx, scope, pipe, nullptr ) ) )
 				return false;
 
 			ctx.scratch->rewind ( mark );
@@ -558,8 +567,12 @@ namespace engine {
 		}
 
 		group_table groups = { };
+		window_rows captured = { };
 		bool fine = true;
 		base::arena_mark mark = ctx.scratch->mark ( );
+
+		if ( plan->window_count )
+			scope.captured = &captured;
 
 		if ( !passes ( ctx, &scope, plan->constant_filters, plan->constant_count, fine ) )
 			return false;
@@ -569,8 +582,37 @@ namespace engine {
 		if ( fine && !run_level ( ctx, scope, 0, pipe, groups ) )
 			return false;
 
-		if ( plan->grouping )
-			return output_groups ( ctx, scope, pipe, groups );
+		if ( plan->grouping && !output_groups ( ctx, scope, pipe, groups ) )
+			return false;
+
+		if ( !plan->window_count )
+			return true;
+
+		storage::value* values = nullptr;
+
+		if ( !compute_windows ( ctx, scope, captured, values ) )
+			return false;
+
+		scope.captured = nullptr;
+
+		for ( uint32_t i = 0; i < captured.count && !pipe.stopped; i++ ) {
+
+			base::arena_mark row_mark = ctx.scratch->mark ( );
+
+			if ( !restore_window_row ( ctx, scope, *captured.rows [ i ] ) )
+				return false;
+
+			scope.window_values = values + static_cast < size_t > ( i ) * plan->window_count;
+
+			if ( !output_row ( ctx, scope, pipe, nullptr ) )
+				return false;
+
+			ctx.scratch->rewind ( row_mark );
+
+		}
+
+		scope.window_values = nullptr;
+		scope.aggregate_values = nullptr;
 
 		return true;
 

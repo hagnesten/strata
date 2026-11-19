@@ -267,6 +267,16 @@ namespace test {
 		rows ( db, "SELECT name FROM people WHERE id IN ( WITH picked AS ( SELECT 3 AS id ) SELECT id FROM picked )", "Grace" );
 		rows ( db, "WITH RECURSIVE nums ( n ) AS ( SELECT 1 UNION ALL SELECT n + 1 FROM nums WHERE n < 1000 ) SELECT count ( * ), sum ( n ) FROM nums", "1000|500500" );
 		fails ( db, "WITH RECURSIVE bad ( n ) AS ( SELECT n FROM bad ) SELECT * FROM bad", "must start with a part" );
+		rows ( db, "SELECT name, row_number ( ) OVER ( ORDER BY age DESC ) FROM people WHERE age IS NOT NULL ORDER BY 2", "Grace|1\nAlan|2\nAda|3\nLinus|4" );
+		rows ( db, "SELECT name, city, rank ( ) OVER ( PARTITION BY city ORDER BY age ) FROM people WHERE city = 'London' ORDER BY 3", "Ada|London|1\nAlan|London|2" );
+		rows ( db, "SELECT name, sum ( age ) OVER ( ORDER BY id ), count ( * ) OVER ( ) FROM people ORDER BY id", "Ada|36|5\nLinus|64|5\nGrace|109|5\nAlan|150|5\nBarbara|150|5" );
+		rows ( db, "SELECT id, lag ( id ) OVER ( ORDER BY id ), lead ( id, 2, -1 ) OVER ( ORDER BY id ) FROM people ORDER BY id", "1|NULL|3\n2|1|4\n3|2|5\n4|3|-1\n5|4|-1" );
+		rows ( db, "SELECT id, avg ( age ) OVER ( ORDER BY id ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING ) FROM people WHERE id < 4 ORDER BY id", "1|32.0\n2|36.3333333333333\n3|36.5" );
+		rows ( db, "SELECT city, count ( * ), rank ( ) OVER ( ORDER BY count ( * ) DESC ) FROM people GROUP BY city ORDER BY 3, 1", "London|2|1\nBoston|1|2\nHelsinki|1|2\nNew York|1|2" );
+		rows ( db, "SELECT dense_rank ( ) OVER ( ORDER BY city ), ntile ( 2 ) OVER ( ORDER BY id ), first_value ( name ) OVER ( PARTITION BY city ORDER BY id ), last_value ( name ) OVER ( ORDER BY id ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING ) FROM people ORDER BY id", "3|1|Ada|Barbara\n2|1|Linus|Barbara\n4|1|Grace|Barbara\n3|2|Ada|Barbara\n1|2|Barbara|Barbara" );
+		rows ( db, "SELECT percent_rank ( ) OVER ( ORDER BY id ), cume_dist ( ) OVER ( ORDER BY id ), nth_value ( name, 2 ) OVER ( ORDER BY id ) FROM people WHERE id <= 2 ORDER BY id", "0.0|0.5|NULL\n1.0|1.0|Linus" );
+		fails ( db, "SELECT row_number ( ) FROM people", "needs an OVER clause" );
+		fails ( db, "SELECT name FROM people WHERE rank ( ) OVER ( ) > 1", "can only be used in the result columns" );
 		fails ( db, "WITH x ( a, b ) AS ( SELECT 1 ) SELECT * FROM x", "different number of columns" );
 
 	}

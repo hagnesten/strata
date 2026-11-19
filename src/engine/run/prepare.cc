@@ -356,6 +356,70 @@ namespace engine {
 
 				item->column = id;
 
+				if ( item->window ) {
+
+					if ( mode != BIND_AGGREGATES ) {
+
+						fine = fail_named ( ctx, "the window function ", item->name, "() can only be used in the result columns and ORDER BY" );
+
+						break;
+
+					}
+
+					if ( !aggregate && !window_function ( id ) ) {
+
+						fine = fail_named ( ctx, "the function ", item->name, "() cannot be used with OVER" );
+
+						break;
+
+					}
+
+					if ( item->distinct ) {
+
+						fine = fail_run ( ctx, "DISTINCT cannot be used inside a window function" );
+
+						break;
+
+					}
+
+					if ( item->window_index < 0 ) {
+
+						if ( !base::push ( *ctx.lasting, scope->windows, scope->window_count, scope->window_room, item ) ) {
+
+							fine = fail_run ( ctx, "out of memory" );
+
+							break;
+
+						}
+
+						item->window_index = static_cast < int32_t > ( scope->window_count - 1 );
+
+					}
+
+					sql::window_spec& spec = *item->window;
+
+					fine = bind_children ( ctx, scope, item, BIND_AGGREGATES, false );
+
+					for ( uint32_t i = 0; fine && i < spec.partition_count; i++ )
+						fine = bind ( ctx, scope, spec.partition [ i ], BIND_AGGREGATES, false );
+
+					for ( uint32_t i = 0; fine && i < spec.order_count; i++ )
+						fine = bind ( ctx, scope, spec.order [ i ].value, BIND_AGGREGATES, false );
+
+					fine = fine && bind ( ctx, scope, spec.start_offset, BIND_CONSTANT, false ) && bind ( ctx, scope, spec.end_offset, BIND_CONSTANT, false );
+
+					break;
+
+				}
+
+				if ( window_function ( id ) ) {
+
+					fine = fail_named ( ctx, "the window function ", item->name, "() needs an OVER clause after it" );
+
+					break;
+
+				}
+
 				if ( item->distinct && !aggregate ) {
 
 					fine = fail_named ( ctx, "DISTINCT only works inside an aggregate, not in ", item->name, "()" );
@@ -1054,9 +1118,25 @@ namespace engine {
 
 	}
 
-	static void finish_flags ( prepared_select* plan ) {
+	static void finish_flags ( run_context& ctx, prepared_select* plan ) {
 
 		plan->grouping = plan->group_count || plan->aggregate_count;
+
+		if ( plan->window_count ) {
+
+			plan->window_offsets = ctx.lasting->make < uint32_t > ( plan->window_count );
+			plan->window_width = 0;
+
+			for ( uint32_t w = 0; plan->window_offsets && w < plan->window_count; w++ ) {
+
+				const sql::expression* call = plan->windows [ w ];
+
+				plan->window_offsets [ w ] = plan->window_width;
+				plan->window_width += call->count + call->window->partition_count + call->window->order_count;
+
+			}
+
+		}
 		plan->snapshot_aggregate = -1;
 
 		if ( plan->aggregate_count == 1 && ( plan->aggregates [ 0 ]->column == FUNCTION_MIN_AGGREGATE || plan->aggregates [ 0 ]->column == FUNCTION_MAX_AGGREGATE ) )
@@ -1239,7 +1319,7 @@ namespace engine {
 
 		for ( prepared_select* core = first; core; core = core->next ) {
 
-			finish_flags ( core );
+			finish_flags ( ctx, core );
 
 			if ( core->syntax && core->syntax->having && !core->grouping ) {
 

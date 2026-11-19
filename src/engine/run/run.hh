@@ -95,6 +95,17 @@ namespace engine {
 		FUNCTION_MIN_AGGREGATE,
 		FUNCTION_MAX_AGGREGATE,
 		FUNCTION_GROUP_CONCAT,
+		FUNCTION_ROW_NUMBER,
+		FUNCTION_RANK,
+		FUNCTION_DENSE_RANK,
+		FUNCTION_PERCENT_RANK,
+		FUNCTION_CUME_DIST,
+		FUNCTION_NTILE,
+		FUNCTION_LAG,
+		FUNCTION_LEAD,
+		FUNCTION_FIRST_VALUE,
+		FUNCTION_LAST_VALUE,
+		FUNCTION_NTH_VALUE,
 
 	};
 
@@ -207,6 +218,11 @@ namespace engine {
 		sql::expression** aggregates;
 		uint32_t aggregate_count;
 		uint32_t aggregate_room;
+		sql::expression** windows;
+		uint32_t window_count;
+		uint32_t window_room;
+		uint32_t* window_offsets;
+		uint32_t window_width;
 		sql::expression** group;
 		uint32_t group_count;
 		sql::expression* having;
@@ -271,6 +287,36 @@ namespace engine {
 		source_state* sources;
 		query_state* parent;
 		storage::value* aggregate_values;
+		storage::value* window_values;
+		struct window_rows* captured;
+
+	};
+
+	struct window_row {
+
+		int64_t* rowids;
+		storage::value** rows;
+		bool* null_rows;
+		storage::value* aggregates;
+		storage::value* inputs;
+		uint32_t index;
+
+	};
+
+	struct window_rows {
+
+		window_row** rows;
+		uint32_t count;
+		uint32_t room;
+
+	};
+
+	struct window_order {
+
+		uint32_t offset;
+		uint32_t partitions;
+		uint32_t orders;
+		const sql::window_spec* spec;
 
 	};
 
@@ -518,6 +564,14 @@ namespace engine {
 	bool collect_plan ( run_context& ctx, prepared_select* plan, query_state* parent, collected_rows& out );
 
 	bool collect_recursive ( run_context& ctx, cte_entry& cte, query_state* parent, collected_rows& out );
+
+	bool capture_window_row ( run_context& ctx, query_state& scope, window_rows& out );
+
+	bool compute_windows ( run_context& ctx, query_state& scope, window_rows& rows, storage::value*& out );
+
+	bool restore_window_row ( run_context& ctx, query_state& scope, const window_row& row );
+
+	bool window_function ( int32_t id );
 
 	bool run_child ( run_context& ctx, query_state* scope, const sql::expression* item, storage::value& out );
 

@@ -50,6 +50,17 @@ namespace engine {
 		{ "max", 1, 1, true, FUNCTION_MAX_AGGREGATE },
 		{ "group_concat", 1, 2, true, FUNCTION_GROUP_CONCAT },
 		{ "string_agg", 2, 2, true, FUNCTION_GROUP_CONCAT },
+		{ "row_number", 0, 0, false, FUNCTION_ROW_NUMBER },
+		{ "rank", 0, 0, false, FUNCTION_RANK },
+		{ "dense_rank", 0, 0, false, FUNCTION_DENSE_RANK },
+		{ "percent_rank", 0, 0, false, FUNCTION_PERCENT_RANK },
+		{ "cume_dist", 0, 0, false, FUNCTION_CUME_DIST },
+		{ "ntile", 1, 1, false, FUNCTION_NTILE },
+		{ "lag", 1, 3, false, FUNCTION_LAG },
+		{ "lead", 1, 3, false, FUNCTION_LEAD },
+		{ "first_value", 1, 1, false, FUNCTION_FIRST_VALUE },
+		{ "last_value", 1, 1, false, FUNCTION_LAST_VALUE },
+		{ "nth_value", 2, 2, false, FUNCTION_NTH_VALUE },
 
 	};
 
@@ -83,6 +94,12 @@ namespace engine {
 		}
 
 		return -1;
+
+	}
+
+	bool window_function ( int32_t id ) {
+
+		return id >= FUNCTION_ROW_NUMBER;
 
 	}
 

@@ -64,6 +64,7 @@
     <ClCompile Include="src\engine\run\changes.cc" />
     <ClCompile Include="src\engine\run\schema.cc" />
     <ClCompile Include="src\engine\run\explain.cc" />
+    <ClCompile Include="src\engine\run\window.cc" />
     <ClCompile Include="src\engine\database\database.cc" />
     <ClCompile Include="src\test\engine\engine_test.cc" />
     <ClCompile Include="src\app\shell\shell.cc" />

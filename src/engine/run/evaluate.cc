@@ -542,6 +542,17 @@ namespace engine {
 
 			case sql::EXPRESSION_FUNCTION: {
 
+				if ( item->window ) {
+
+					if ( !scope || !scope->window_values || item->window_index < 0 )
+						return fail_named ( ctx, "the window function ", item->name, "() cannot be used here" );
+
+					out = scope->window_values [ item->window_index ];
+
+					return true;
+
+				}
+
 				if ( item->aggregate >= 0 ) {
 
 					if ( !scope || !scope->aggregate_values )
