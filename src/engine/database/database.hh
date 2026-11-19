@@ -61,6 +61,8 @@ namespace engine {
 
 	void forget_savepoints ( database& item );
 
+	bool run_vacuum ( database& item, run_context& ctx, const sql::statement* statement );
+
 	void describe_value ( base::text& out, const storage::value& item );
 
 }

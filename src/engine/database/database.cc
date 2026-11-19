@@ -271,13 +271,7 @@ namespace engine {
 				return true;
 
 			case sql::STATEMENT_VACUUM:
-				if ( item.in_transaction )
-					return fail_run ( ctx, "VACUUM cannot run inside a transaction" );
-
-				if ( !storage::checkpoint ( item.pages ) )
-					return pager_problem ( item, "the log could not be folded into the database" );
-
-				return true;
+				return run_vacuum ( item, ctx, statement );
 
 			default:
 				break;

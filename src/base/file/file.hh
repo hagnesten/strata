@@ -46,6 +46,8 @@ namespace base {
 
 	bool erase_path ( const char* path );
 
+	bool replace_path ( const char* from, const char* to );
+
 	bool path_exists ( const char* path );
 
 	bool wide_path ( const char* path, wchar_t* out, size_t room );

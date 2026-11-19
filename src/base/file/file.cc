@@ -212,6 +212,15 @@ namespace base {
 
 	}
 
+	bool replace_path ( const char* from, const char* to ) {
+
+		wchar_t wide_from [ FILE_PATH_ROOM ];
+		wchar_t wide_to [ FILE_PATH_ROOM ];
+
+		return wide_path ( from, wide_from, FILE_PATH_ROOM ) && wide_path ( to, wide_to, FILE_PATH_ROOM ) && MoveFileExW ( wide_from, wide_to, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH );
+
+	}
+
 	bool path_exists ( const char* path ) {
 
 		wchar_t wide [ FILE_PATH_ROOM ];

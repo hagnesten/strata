@@ -16,6 +16,9 @@ namespace sql {
 		parse_error* error;
 		uint32_t parameters;
 		uint32_t depth;
+		common_table* pending_with;
+		uint32_t pending_count;
+		bool pending_recursive;
 
 	};
 

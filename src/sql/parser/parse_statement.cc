@@ -366,6 +366,40 @@ namespace sql {
 
 	}
 
+	static bool parse_with_clause ( parser& item, common_table*& out, uint32_t& count, bool& recursive ) {
+
+		grow_list < common_table > tables;
+
+		recursive = accept_word ( item, "recursive" );
+
+		do {
+
+			common_table table = { };
+
+			table.name = take_name ( item, "a name for the WITH query" );
+
+			if ( !table.name || ( symbol_is ( item.current, "(" ) && !parse_names ( item, table.columns, table.column_count ) ) || !expect_word ( item, "as" ) )
+				return false;
+
+			accept_word ( item, "materialized" );
+
+			if ( !expect_symbol ( item, "(" ) )
+				return false;
+
+			table.query = parse_select ( item );
+
+			if ( !table.query || !expect_symbol ( item, ")" ) || !tables.push ( item, table ) )
+				return false;
+
+		} while ( accept_symbol ( item, "," ) );
+
+		out = tables.items;
+		count = tables.count;
+
+		return true;
+
+	}
+
 	select_statement* parse_select ( parser& item ) {
 
 		if ( ++item.depth > PARSE_DEPTH ) {
@@ -376,48 +410,22 @@ namespace sql {
 
 		}
 
-		grow_list < common_table > tables;
+		common_table* with = nullptr;
+		uint32_t with_count = 0;
 		bool recursive = false;
 
-		if ( accept_word ( item, "with" ) ) {
+		if ( item.pending_with ) {
 
-			recursive = accept_word ( item, "recursive" );
+			with = item.pending_with;
+			with_count = item.pending_count;
+			recursive = item.pending_recursive;
+			item.pending_with = nullptr;
 
-			do {
+		} else if ( accept_word ( item, "with" ) && !parse_with_clause ( item, with, with_count, recursive ) ) {
 
-				common_table table = { };
+			item.depth--;
 
-				table.name = take_name ( item, "a name for the WITH query" );
-
-				if ( !table.name || ( symbol_is ( item.current, "(" ) && !parse_names ( item, table.columns, table.column_count ) ) || !expect_word ( item, "as" ) ) {
-
-					item.depth--;
-
-					return nullptr;
-
-				}
-
-				accept_word ( item, "materialized" );
-
-				if ( !expect_symbol ( item, "(" ) ) {
-
-					item.depth--;
-
-					return nullptr;
-
-				}
-
-				table.query = parse_select ( item );
-
-				if ( !table.query || !expect_symbol ( item, ")" ) || !tables.push ( item, table ) ) {
-
-					item.depth--;
-
-					return nullptr;
-
-				}
-
-			} while ( accept_symbol ( item, "," ) );
+			return nullptr;
 
 		}
 
@@ -426,8 +434,8 @@ namespace sql {
 
 		if ( first ) {
 
-			first->with = tables.items;
-			first->with_count = tables.count;
+			first->with = with;
+			first->with_count = with_count;
 			first->recursive = recursive;
 
 		}
@@ -1090,7 +1098,51 @@ namespace sql {
 
 	static bool parse_body ( parser& item, statement& out ) {
 
-		if ( token_is ( item.current, "select" ) || token_is ( item.current, "values" ) || token_is ( item.current, "with" ) ) {
+		if ( accept_word ( item, "with" ) ) {
+
+			common_table* with = nullptr;
+			uint32_t count = 0;
+			bool recursive = false;
+
+			if ( !parse_with_clause ( item, with, count, recursive ) )
+				return false;
+
+			if ( token_is ( item.current, "insert" ) || token_is ( item.current, "replace" ) ) {
+
+				bool replacing = token_is ( item.current, "replace" );
+
+				advance ( item );
+
+				if ( !parse_insert ( item, out, replacing ) )
+					return false;
+
+				select_statement* query = out.insert->query;
+
+				if ( !query )
+					return fail_here ( item, "a WITH before INSERT needs the rows to come from a SELECT or VALUES" );
+
+				if ( query->with_count )
+					return fail_here ( item, "this INSERT already has its own WITH" );
+
+				query->with = with;
+				query->with_count = count;
+				query->recursive = recursive;
+
+				return true;
+
+			}
+
+			item.pending_with = with;
+			item.pending_count = count;
+			item.pending_recursive = recursive;
+			out.kind = STATEMENT_SELECT;
+			out.select = parse_select ( item );
+
+			return out.select != nullptr;
+
+		}
+
+		if ( token_is ( item.current, "select" ) || token_is ( item.current, "values" ) ) {
 
 			out.kind = STATEMENT_SELECT;
 			out.select = parse_select ( item );
@@ -1315,6 +1367,26 @@ namespace sql {
 		if ( accept_word ( item, "vacuum" ) ) {
 
 			out.kind = STATEMENT_VACUUM;
+
+			if ( item.current.kind == TOKEN_NAME && !token_is ( item.current, "into" ) ) {
+
+				const char* schema = take_name ( item, "a schema name" );
+
+				if ( !schema )
+					return false;
+
+				if ( !base::same_folded ( schema, "main" ) )
+					return fail_here ( item, "only the main database can be vacuumed" );
+
+			}
+
+			if ( accept_word ( item, "into" ) ) {
+
+				out.into = parse_expression ( item );
+
+				return out.into != nullptr;
+
+			}
 
 			return true;
 

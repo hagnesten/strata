@@ -399,6 +399,7 @@ namespace sql {
 		statement* inner;
 		bool query_plan;
 		const char* savepoint;
+		expression* into;
 		const char* text;
 		uint32_t text_size;
 		uint32_t parameter_count;

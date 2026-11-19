@@ -162,4 +162,6 @@ namespace storage {
 
 	bool check_btree ( pager& owner, uint32_t root, bool index, tree_report& report );
 
+	bool copy_btree ( pager& from, uint32_t root, bool index, pager& to, uint32_t& made );
+
 }

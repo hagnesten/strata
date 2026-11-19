@@ -73,10 +73,13 @@
     <ClCompile Include="src\base\clock\clock.cc" />
     <ClCompile Include="src\engine\database\database.cc" />
     <ClCompile Include="src\engine\database\transaction.cc" />
+    <ClCompile Include="src\engine\database\vacuum.cc" />
+    <ClCompile Include="src\storage\btree\copy.cc" />
     <ClCompile Include="src\test\engine\engine_test.cc" />
     <ClCompile Include="src\test\engine\checks.cc" />
     <ClCompile Include="src\test\engine\savepoint_test.cc" />
     <ClCompile Include="src\test\engine\join_test.cc" />
+    <ClCompile Include="src\test\engine\vacuum_test.cc" />
     <ClCompile Include="src\app\shell\shell.cc" />
     <ClCompile Include="src\base\png\png.cc" />
     <ClCompile Include="src\ui\render\render.cc" />
