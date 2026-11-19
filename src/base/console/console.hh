@@ -1,14 +1,13 @@
 #pragma once
 
-#include <stdint.h>
-#include <stddef.h>
+#include "base/text/text.hh"
 
 namespace base {
 
-	size_t length ( const char* text );
+	void write ( const char* value );
 
-	void write ( const char* text );
+	void write ( const text& value );
 
-	void write_error ( const char* text );
+	void write_error ( const char* value );
 
 }

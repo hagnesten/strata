@@ -16,6 +16,15 @@
     <Filter Include="src\base\console">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D05}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\base\text">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D08}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\file">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D09}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\hash">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D0A}</UniqueIdentifier>
+    </Filter>
     <Filter Include="src\app">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D06}</UniqueIdentifier>
     </Filter>
@@ -27,11 +36,17 @@
     <ClCompile Include="src\base\runtime\start.cc"><Filter>src\base\runtime</Filter></ClCompile>
     <ClCompile Include="src\base\runtime\memory.cc"><Filter>src\base\runtime</Filter></ClCompile>
     <ClCompile Include="src\base\console\console.cc"><Filter>src\base\console</Filter></ClCompile>
+    <ClCompile Include="src\base\text\text.cc"><Filter>src\base\text</Filter></ClCompile>
+    <ClCompile Include="src\base\file\file.cc"><Filter>src\base\file</Filter></ClCompile>
+    <ClCompile Include="src\base\hash\crc32c.cc"><Filter>src\base\hash</Filter></ClCompile>
     <ClCompile Include="src\app\main\main.cc"><Filter>src\app\main</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base\runtime\memory.hh"><Filter>src\base\runtime</Filter></ClInclude>
     <ClInclude Include="src\base\console\console.hh"><Filter>src\base\console</Filter></ClInclude>
+    <ClInclude Include="src\base\text\text.hh"><Filter>src\base\text</Filter></ClInclude>
+    <ClInclude Include="src\base\file\file.hh"><Filter>src\base\file</Filter></ClInclude>
+    <ClInclude Include="src\base\hash\crc32c.hh"><Filter>src\base\hash</Filter></ClInclude>
     <ClInclude Include="src\app\main\main.hh"><Filter>src\app\main</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>

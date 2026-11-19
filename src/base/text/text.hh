@@ -1,0 +1,65 @@
+#pragma once
+
+#include "base/runtime/memory.hh"
+
+namespace base {
+
+	size_t length ( const char* value );
+
+	bool same ( const char* a, const char* b );
+
+	bool same_folded ( const char* a, const char* b );
+
+	bool starts_with ( const char* value, const char* prefix );
+
+	void copy_text ( char* out, size_t room, const char* value );
+
+	void copy_span ( char* out, size_t room, const char* value, size_t size );
+
+	bool read_number ( const char* value, uint64_t& out );
+
+	char lower ( char value );
+
+	struct text {
+
+		char* data = nullptr;
+		size_t size = 0;
+		size_t room = 0;
+
+		text ( ) = default;
+
+		text ( const text& ) = delete;
+
+		text& operator = ( const text& ) = delete;
+
+		~text ( );
+
+		text& add ( char value );
+
+		text& add ( const char* value );
+
+		text& add ( const char* value, size_t count );
+
+		text& number ( uint64_t value );
+
+		text& signed_number ( int64_t value );
+
+		text& decimal ( uint64_t value, uint64_t unit, uint32_t places );
+
+		text& real ( double value );
+
+		text& hex ( uint64_t value, uint32_t digits );
+
+		text& repeat ( char value, size_t count );
+
+		text& pad_to ( size_t column );
+
+		const char* value ( ) const;
+
+		void clear ( );
+
+		bool reserve ( size_t wanted );
+
+	};
+
+}

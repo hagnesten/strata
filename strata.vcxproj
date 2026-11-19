@@ -35,11 +35,17 @@
     <ClCompile Include="src\base\runtime\start.cc" />
     <ClCompile Include="src\base\runtime\memory.cc" />
     <ClCompile Include="src\base\console\console.cc" />
+    <ClCompile Include="src\base\text\text.cc" />
+    <ClCompile Include="src\base\file\file.cc" />
+    <ClCompile Include="src\base\hash\crc32c.cc" />
     <ClCompile Include="src\app\main\main.cc" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base\runtime\memory.hh" />
     <ClInclude Include="src\base\console\console.hh" />
+    <ClInclude Include="src\base\text\text.hh" />
+    <ClInclude Include="src\base\file\file.hh" />
+    <ClInclude Include="src\base\hash\crc32c.hh" />
     <ClInclude Include="src\app\main\main.hh" />
   </ItemGroup>
   <ItemGroup>

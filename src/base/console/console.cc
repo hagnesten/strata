@@ -4,36 +4,31 @@
 
 namespace base {
 
-	size_t length ( const char* text ) {
-
-		size_t size = 0;
-
-		while ( text && text [ size ] )
-			size++;
-
-		return size;
-
-	}
-
-	static void write_to ( DWORD which, const char* text ) {
+	static void write_to ( DWORD which, const char* value, size_t size ) {
 
 		HANDLE handle = GetStdHandle ( which );
 		DWORD written = 0;
 
-		if ( handle && handle != INVALID_HANDLE_VALUE )
-			WriteFile ( handle, text, static_cast < DWORD > ( length ( text ) ), &written, nullptr );
+		if ( handle && handle != INVALID_HANDLE_VALUE && size )
+			WriteFile ( handle, value, static_cast < DWORD > ( size ), &written, nullptr );
 
 	}
 
-	void write ( const char* text ) {
+	void write ( const char* value ) {
 
-		write_to ( STD_OUTPUT_HANDLE, text );
+		write_to ( STD_OUTPUT_HANDLE, value, length ( value ) );
 
 	}
 
-	void write_error ( const char* text ) {
+	void write ( const text& value ) {
 
-		write_to ( STD_ERROR_HANDLE, text );
+		write_to ( STD_OUTPUT_HANDLE, value.value ( ), value.size );
+
+	}
+
+	void write_error ( const char* value ) {
+
+		write_to ( STD_ERROR_HANDLE, value, length ( value ) );
 
 	}
 
