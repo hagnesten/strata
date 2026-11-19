@@ -35,6 +35,23 @@
     <ClCompile Include="src\base\platform\windows\start.cc" />
     <ClCompile Include="src\base\platform\windows\system.cc" />
     <ClCompile Include="src\base\platform\windows\heap.cc" />
+    <ClCompile Include="src\base\platform\windows\coroutine.cc" />
+    <ClCompile Include="src\base\platform\windows\probe.cc" />
+    <None Include="src\base\platform\windows\library.cc" />
+    <ClInclude Include="src\base\runtime\coroutine.hh" />
+    <ClCompile Include="src\base\text\unicode.cc" />
+    <ClInclude Include="src\base\text\unicode.hh" />
+    <ClInclude Include="include\strata.h" />
+    <ClInclude Include="src\api\api.hh" />
+    <ClCompile Include="src\api\connection.cc" />
+    <ClCompile Include="src\api\statement.cc" />
+    <ClCompile Include="src\api\stepping.cc" />
+    <ClCompile Include="src\api\columns.cc" />
+    <ClCompile Include="src\api\batch.cc" />
+    <ClCompile Include="src\test\api\api_test.cc" />
+    <ClInclude Include="src\engine\version.hh" />
+    <None Include="src\base\platform\linux\coroutine.cc" />
+    <None Include="src\base\platform\linux\runtime.cc" />
     <ClInclude Include="src\base\platform\os.hh" />
     <ClInclude Include="src\base\platform\windows\wide.hh" />
     <ClCompile Include="src\base\runtime\memory.cc" />
@@ -203,6 +220,15 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="props\strata.props" />
+    <None Include="Makefile" />
+    <None Include=".github\workflows\linux.yml" />
+    <None Include="src\base\platform\linux\calls.hh" />
+    <None Include="src\base\platform\linux\heap.hh" />
+    <None Include="src\base\platform\linux\heap.cc" />
+    <None Include="src\base\platform\linux\start.cc" />
+    <None Include="src\base\platform\linux\system.cc" />
+    <None Include="src\base\platform\linux\zone.hh" />
+    <None Include="src\base\platform\linux\zone.cc" />
     <None Include="README.md" />
     <None Include="docs\format.md" />
     <None Include=".gitignore" />

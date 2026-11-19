@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="include">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B01}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B02}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\api">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B03}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B04}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\platform">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B05}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\platform\windows">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B06}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\runtime">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B07}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\console">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B08}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\text">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B09}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\file">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B0A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\hash">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B0B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\arena">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B0C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\sort">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B0D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\math">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B0E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\clock">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B0F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\storage">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B10}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\storage\pager">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B11}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\storage\record">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B12}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\storage\btree">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B13}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\sql">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B14}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\sql\lexer">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B15}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\sql\parser">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B16}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\sql\print">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B17}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B18}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\value">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B19}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\catalog">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B1A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\run">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B1B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\plan">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B1C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\search">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B1D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\query">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B1E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\functions">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B1F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\write">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B20}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\schema">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B21}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\database">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B22}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\check">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B23}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\strata.h"><Filter>include</Filter></ClInclude>
+    <ClInclude Include="src\api\api.hh"><Filter>src\api</Filter></ClInclude>
+    <ClCompile Include="src\api\connection.cc"><Filter>src\api</Filter></ClCompile>
+    <ClCompile Include="src\api\statement.cc"><Filter>src\api</Filter></ClCompile>
+    <ClCompile Include="src\api\stepping.cc"><Filter>src\api</Filter></ClCompile>
+    <ClCompile Include="src\api\columns.cc"><Filter>src\api</Filter></ClCompile>
+    <ClCompile Include="src\api\batch.cc"><Filter>src\api</Filter></ClCompile>
+    <ClCompile Include="src\base\platform\windows\library.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
+    <ClCompile Include="src\base\platform\windows\system.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
+    <ClCompile Include="src\base\platform\windows\heap.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
+    <ClCompile Include="src\base\platform\windows\coroutine.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
+    <ClCompile Include="src\base\platform\windows\probe.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
+    <ClInclude Include="src\base\platform\os.hh"><Filter>src\base\platform</Filter></ClInclude>
+    <ClInclude Include="src\base\platform\windows\wide.hh"><Filter>src\base\platform\windows</Filter></ClInclude>
+    <ClCompile Include="src\base\runtime\memory.cc"><Filter>src\base\runtime</Filter></ClCompile>
+    <ClInclude Include="src\base\runtime\memory.hh"><Filter>src\base\runtime</Filter></ClInclude>
+    <ClInclude Include="src\base\runtime\coroutine.hh"><Filter>src\base\runtime</Filter></ClInclude>
+    <ClCompile Include="src\base\console\console.cc"><Filter>src\base\console</Filter></ClCompile>
+    <ClCompile Include="src\base\text\text.cc"><Filter>src\base\text</Filter></ClCompile>
+    <ClCompile Include="src\base\text\unicode.cc"><Filter>src\base\text</Filter></ClCompile>
+    <ClInclude Include="src\base\text\unicode.hh"><Filter>src\base\text</Filter></ClInclude>
+    <ClCompile Include="src\base\file\file.cc"><Filter>src\base\file</Filter></ClCompile>
+    <ClCompile Include="src\base\file\folder.cc"><Filter>src\base\file</Filter></ClCompile>
+    <ClCompile Include="src\base\hash\crc32c.cc"><Filter>src\base\hash</Filter></ClCompile>
+    <ClCompile Include="src\base\arena\arena.cc"><Filter>src\base\arena</Filter></ClCompile>
+    <ClCompile Include="src\base\sort\sort.cc"><Filter>src\base\sort</Filter></ClCompile>
+    <ClCompile Include="src\base\math\math.cc"><Filter>src\base\math</Filter></ClCompile>
+    <ClCompile Include="src\base\clock\clock.cc"><Filter>src\base\clock</Filter></ClCompile>
+    <ClCompile Include="src\storage\pager\pager.cc"><Filter>src\storage\pager</Filter></ClCompile>
+    <ClCompile Include="src\storage\pager\wal.cc"><Filter>src\storage\pager</Filter></ClCompile>
+    <ClCompile Include="src\storage\pager\marks.cc"><Filter>src\storage\pager</Filter></ClCompile>
+    <ClCompile Include="src\storage\record\record.cc"><Filter>src\storage\record</Filter></ClCompile>
+    <ClCompile Include="src\storage\btree\btree.cc"><Filter>src\storage\btree</Filter></ClCompile>
+    <ClCompile Include="src\storage\btree\estimate.cc"><Filter>src\storage\btree</Filter></ClCompile>
+    <ClCompile Include="src\storage\btree\copy.cc"><Filter>src\storage\btree</Filter></ClCompile>
+    <ClCompile Include="src\sql\lexer\lexer.cc"><Filter>src\sql\lexer</Filter></ClCompile>
+    <ClCompile Include="src\sql\parser\parse_expression.cc"><Filter>src\sql\parser</Filter></ClCompile>
+    <ClCompile Include="src\sql\parser\parse_statement.cc"><Filter>src\sql\parser</Filter></ClCompile>
+    <ClCompile Include="src\sql\print\print.cc"><Filter>src\sql\print</Filter></ClCompile>
+    <ClCompile Include="src\engine\value\value.cc"><Filter>src\engine\value</Filter></ClCompile>
+    <ClCompile Include="src\engine\catalog\catalog.cc"><Filter>src\engine\catalog</Filter></ClCompile>
+    <ClCompile Include="src\engine\catalog\statistics.cc"><Filter>src\engine\catalog</Filter></ClCompile>
+    <ClCompile Include="src\engine\run\evaluate.cc"><Filter>src\engine\run</Filter></ClCompile>
+    <ClCompile Include="src\engine\plan\prepare.cc"><Filter>src\engine\plan</Filter></ClCompile>
+    <ClCompile Include="src\engine\plan\explain.cc"><Filter>src\engine\plan</Filter></ClCompile>
+    <ClCompile Include="src\engine\plan\join_order.cc"><Filter>src\engine\plan</Filter></ClCompile>
+    <ClCompile Include="src\engine\search\tokens.cc"><Filter>src\engine\search</Filter></ClCompile>
+    <ClCompile Include="src\engine\search\postings.cc"><Filter>src\engine\search</Filter></ClCompile>
+    <ClCompile Include="src\engine\search\query.cc"><Filter>src\engine\search</Filter></ClCompile>
+    <ClCompile Include="src\engine\search\snippets.cc"><Filter>src\engine\search</Filter></ClCompile>
+    <ClCompile Include="src\engine\query\select.cc"><Filter>src\engine\query</Filter></ClCompile>
+    <ClCompile Include="src\engine\query\source.cc"><Filter>src\engine\query</Filter></ClCompile>
+    <ClCompile Include="src\engine\query\aggregate.cc"><Filter>src\engine\query</Filter></ClCompile>
+    <ClCompile Include="src\engine\query\window.cc"><Filter>src\engine\query</Filter></ClCompile>
+    <ClCompile Include="src\engine\functions\functions.cc"><Filter>src\engine\functions</Filter></ClCompile>
+    <ClCompile Include="src\engine\functions\dates.cc"><Filter>src\engine\functions</Filter></ClCompile>
+    <ClCompile Include="src\engine\functions\json.cc"><Filter>src\engine\functions</Filter></ClCompile>
+    <ClCompile Include="src\engine\write\changes.cc"><Filter>src\engine\write</Filter></ClCompile>
+    <ClCompile Include="src\engine\write\generated.cc"><Filter>src\engine\write</Filter></ClCompile>
+    <ClCompile Include="src\engine\schema\schema.cc"><Filter>src\engine\schema</Filter></ClCompile>
+    <ClCompile Include="src\engine\schema\alter.cc"><Filter>src\engine\schema</Filter></ClCompile>
+    <ClCompile Include="src\engine\schema\analyze.cc"><Filter>src\engine\schema</Filter></ClCompile>
+    <ClCompile Include="src\engine\database\database.cc"><Filter>src\engine\database</Filter></ClCompile>
+    <ClCompile Include="src\engine\database\prepared.cc"><Filter>src\engine\database</Filter></ClCompile>
+    <ClCompile Include="src\engine\database\transaction.cc"><Filter>src\engine\database</Filter></ClCompile>
+    <ClCompile Include="src\engine\database\vacuum.cc"><Filter>src\engine\database</Filter></ClCompile>
+    <ClCompile Include="src\engine\check\check.cc"><Filter>src\engine\check</Filter></ClCompile>
+    <ClInclude Include="src\engine\version.hh"><Filter>src\engine</Filter></ClInclude>
+  </ItemGroup>
+</Project>

@@ -604,10 +604,62 @@ namespace sql {
 				made->parameter = static_cast < uint32_t > ( number - 1 );
 				item.parameters = base::max < uint32_t > ( item.parameters, made->parameter + 1 );
 
-			} else {
-
+			} else if ( here.start [ 0 ] == '?' )
 				made->parameter = item.parameters++;
-				made->name = here.start [ 0 ] == '?' ? nullptr : item.memory->keep ( here.start, here.size );
+			else {
+
+				made->name = item.memory->keep ( here.start, here.size );
+
+				if ( !made->name )
+					return nullptr;
+
+				bool known = false;
+
+				for ( uint32_t i = 0; i < item.name_count && !known; i++ ) {
+
+					if ( base::same ( item.names [ i ], made->name ) ) {
+
+						made->parameter = item.name_slots [ i ];
+						known = true;
+
+					}
+
+				}
+
+				if ( !known ) {
+
+					if ( item.name_count == item.name_room ) {
+
+						uint32_t grown = item.name_room ? item.name_room * 2 : 8;
+						const char** names = item.memory->make < const char* > ( grown );
+						uint32_t* slots = item.memory->make < uint32_t > ( grown );
+
+						if ( !names || !slots ) {
+
+							fail_here ( item, "out of memory" );
+
+							return nullptr;
+
+						}
+
+						if ( item.name_count ) {
+
+							base::copy ( names, item.names, sizeof ( const char* ) * item.name_count );
+							base::copy ( slots, item.name_slots, sizeof ( uint32_t ) * item.name_count );
+
+						}
+
+						item.names = names;
+						item.name_slots = slots;
+						item.name_room = grown;
+
+					}
+
+					made->parameter = item.parameters++;
+					item.names [ item.name_count ] = made->name;
+					item.name_slots [ item.name_count++ ] = made->parameter;
+
+				}
 
 			}
 

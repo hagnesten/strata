@@ -2,7 +2,8 @@
 
 #include <stdint.h>
 
-#define STRATA_VERSION "0.6"
+#include "engine/version.hh"
+
 #define MAIN_ARGUMENTS 16
 
 namespace app {

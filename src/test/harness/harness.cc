@@ -109,6 +109,9 @@ namespace test {
 		if ( chosen ( "engine" ) )
 			engine_tests ( );
 
+		if ( chosen ( "api" ) )
+			api_tests ( );
+
 		base::text line;
 
 		line.number ( counts.checks - counts.failures ).add ( " of " ).number ( counts.checks ).add ( " checks passed\n" );

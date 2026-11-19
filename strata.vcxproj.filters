@@ -187,6 +187,15 @@
     <Filter Include="src\base\platform">
       <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F10}</UniqueIdentifier>
     </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F13}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\api">
+      <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F14}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\test\api">
+      <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F15}</UniqueIdentifier>
+    </Filter>
     <Filter Include="src\base\platform\windows">
       <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F11}</UniqueIdentifier>
     </Filter>
@@ -213,6 +222,23 @@
     <ClCompile Include="src\base\platform\windows\start.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
     <ClCompile Include="src\base\platform\windows\system.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
     <ClCompile Include="src\base\platform\windows\heap.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
+    <ClCompile Include="src\base\platform\windows\coroutine.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
+    <ClCompile Include="src\base\platform\windows\probe.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
+    <None Include="src\base\platform\windows\library.cc"><Filter>src\base\platform\windows</Filter></None>
+    <ClInclude Include="src\base\runtime\coroutine.hh"><Filter>src\base\runtime</Filter></ClInclude>
+    <ClCompile Include="src\base\text\unicode.cc"><Filter>src\base\text</Filter></ClCompile>
+    <ClInclude Include="src\base\text\unicode.hh"><Filter>src\base\text</Filter></ClInclude>
+    <ClInclude Include="include\strata.h"><Filter>include</Filter></ClInclude>
+    <ClInclude Include="src\api\api.hh"><Filter>src\api</Filter></ClInclude>
+    <ClCompile Include="src\api\connection.cc"><Filter>src\api</Filter></ClCompile>
+    <ClCompile Include="src\api\statement.cc"><Filter>src\api</Filter></ClCompile>
+    <ClCompile Include="src\api\stepping.cc"><Filter>src\api</Filter></ClCompile>
+    <ClCompile Include="src\api\columns.cc"><Filter>src\api</Filter></ClCompile>
+    <ClCompile Include="src\api\batch.cc"><Filter>src\api</Filter></ClCompile>
+    <ClCompile Include="src\test\api\api_test.cc"><Filter>src\test\api</Filter></ClCompile>
+    <ClInclude Include="src\engine\version.hh"><Filter>src\engine</Filter></ClInclude>
+    <None Include="src\base\platform\linux\coroutine.cc"><Filter>src\base\platform\linux</Filter></None>
+    <None Include="src\base\platform\linux\runtime.cc"><Filter>src\base\platform\linux</Filter></None>
     <ClInclude Include="src\base\platform\os.hh"><Filter>src\base\platform</Filter></ClInclude>
     <ClInclude Include="src\base\platform\windows\wide.hh"><Filter>src\base\platform\windows</Filter></ClInclude>
     <ClCompile Include="src\base\runtime\memory.cc"><Filter>src\base\runtime</Filter></ClCompile>
@@ -381,6 +407,15 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="props\strata.props"><Filter>props</Filter></None>
+    <None Include="Makefile" />
+    <None Include=".github\workflows\linux.yml" />
+    <None Include="src\base\platform\linux\calls.hh"><Filter>src\base\platform\linux</Filter></None>
+    <None Include="src\base\platform\linux\heap.hh"><Filter>src\base\platform\linux</Filter></None>
+    <None Include="src\base\platform\linux\heap.cc"><Filter>src\base\platform\linux</Filter></None>
+    <None Include="src\base\platform\linux\start.cc"><Filter>src\base\platform\linux</Filter></None>
+    <None Include="src\base\platform\linux\system.cc"><Filter>src\base\platform\linux</Filter></None>
+    <None Include="src\base\platform\linux\zone.hh"><Filter>src\base\platform\linux</Filter></None>
+    <None Include="src\base\platform\linux\zone.cc"><Filter>src\base\platform\linux</Filter></None>
     <None Include="README.md" />
     <None Include="docs\format.md"><Filter>docs</Filter></None>
     <None Include=".gitignore" />

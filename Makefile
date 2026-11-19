@@ -7,7 +7,7 @@ TARGET := --target=x86_64-linux-gnu
 
 CXXFLAGS := $(TARGET) -std=c++20 -O2 -g -ffreestanding -nostdlib -fno-exceptions -fno-rtti -fno-threadsafe-statics \
 	-fno-stack-protector -fPIC -fvisibility=hidden -fasynchronous-unwind-tables -ffunction-sections -fdata-sections \
-	-Wall -Wno-unused-parameter -Wno-missing-braces -Isrc -Iinclude
+	-Wall -Wno-unused-parameter -Wno-missing-braces -DSTRATA_BUILDING -Isrc -Iinclude
 LINKFLAGS := $(TARGET) -fuse-ld=lld -nostdlib -static -Wl,-e,_start -Wl,--gc-sections
 LIBRARYFLAGS := $(TARGET) -fuse-ld=lld -nostdlib -shared -Wl,--gc-sections -Wl,-z,defs -Wl,-soname,libstrata.so
 
@@ -22,12 +22,22 @@ BASE := \
 	src/base/sort/sort.cc \
 	src/base/math/math.cc \
 	src/base/clock/clock.cc \
+	src/base/text/unicode.cc \
 	src/base/platform/linux/system.cc \
 	src/base/platform/linux/heap.cc \
-	src/base/platform/linux/zone.cc
+	src/base/platform/linux/zone.cc \
+	src/base/platform/linux/coroutine.cc \
+	src/base/platform/linux/runtime.cc
 
 START := \
 	src/base/platform/linux/start.cc
+
+API := \
+	src/api/connection.cc \
+	src/api/statement.cc \
+	src/api/stepping.cc \
+	src/api/columns.cc \
+	src/api/batch.cc
 
 STORAGE := \
 	src/storage/pager/pager.cc \
@@ -88,21 +98,27 @@ TESTS := \
 	src/test/engine/search_test.cc \
 	src/test/engine/check_test.cc \
 	src/test/engine/prepared_test.cc \
-	src/test/engine/limit_test.cc
+	src/test/engine/limit_test.cc \
+	src/test/api/api_test.cc
 
 APP := \
 	src/app/main/main.cc \
 	src/app/shell/shell.cc
 
-PROGRAM := $(BASE) $(START) $(STORAGE) $(SQL) $(ENGINE) $(TESTS) $(APP)
+PROGRAM := $(BASE) $(START) $(STORAGE) $(SQL) $(ENGINE) $(API) $(TESTS) $(APP)
 PROGRAM_OBJECTS := $(patsubst src/%.cc,$(BUILD)/objects/%.o,$(PROGRAM))
+LIBRARY := $(BASE) $(STORAGE) $(SQL) $(ENGINE) $(API)
+LIBRARY_OBJECTS := $(patsubst src/%.cc,$(BUILD)/objects/%.o,$(LIBRARY))
 
 .PHONY: all test clean
 
-all: $(BUILD)/strata
+all: $(BUILD)/strata $(BUILD)/libstrata.so
 
 $(BUILD)/strata: $(PROGRAM_OBJECTS)
 	$(CXX) $(LINKFLAGS) -o $@ $^
+
+$(BUILD)/libstrata.so: $(LIBRARY_OBJECTS)
+	$(CXX) $(LIBRARYFLAGS) -o $@ $^
 
 $(BUILD)/objects/%.o: src/%.cc
 	@mkdir -p $(dir $@)

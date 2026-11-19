@@ -63,4 +63,6 @@ namespace test {
 
 	void engine_tests ( );
 
+	void api_tests ( );
+
 }

@@ -168,6 +168,65 @@ namespace engine {
 
 	}
 
+	bool describe_statement ( prepared_statement& item, const char* const*& names, uint32_t& count ) {
+
+		static const char* const explained [ 3 ] = { "id", "parent", "detail" };
+		database& owner = *item.owner;
+
+		names = nullptr;
+		count = 0;
+		start_problem ( owner );
+
+		if ( ( item.stale || ( item.planned && item.loads != owner.schema->loads ) ) && !reparse ( item ) )
+			return false;
+
+		if ( item.statement->kind == sql::STATEMENT_EXPLAIN ) {
+
+			names = explained;
+			count = 3;
+
+			return true;
+
+		}
+
+		if ( item.statement->kind != sql::STATEMENT_SELECT )
+			return true;
+
+		run_context ctx = { };
+
+		start_context ( owner, ctx, &item.lasting, &item.memory, &item.scratch, &item.results, nullptr, 0 );
+		ctx.scopes = item.scopes;
+		ctx.next_id = item.next_id;
+
+		uint64_t loads = owner.schema->loads;
+		prepared_select* plan = prepare_select ( ctx, item.statement->select, nullptr );
+
+		item.scopes = ctx.scopes;
+		item.next_id = ctx.next_id;
+		item.loads = loads;
+		item.planned = true;
+
+		if ( !plan ) {
+
+			item.stale = true;
+
+			return false;
+
+		}
+
+		names = plan->names;
+		count = plan->output_count;
+
+		return true;
+
+	}
+
+	bool statement_returns_rows ( const prepared_statement& item ) {
+
+		return item.statement && ( item.statement->kind == sql::STATEMENT_SELECT || item.statement->kind == sql::STATEMENT_EXPLAIN );
+
+	}
+
 	uint32_t statement_parameters ( const prepared_statement& item ) {
 
 		return item.statement ? item.statement->parameter_count : 0;

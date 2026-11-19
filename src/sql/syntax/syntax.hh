@@ -410,6 +410,7 @@ namespace sql {
 		const char* text;
 		uint32_t text_size;
 		uint32_t parameter_count;
+		const char** parameter_names;
 
 	};
 

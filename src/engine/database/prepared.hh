@@ -29,6 +29,10 @@ namespace engine {
 
 	uint32_t statement_parameters ( const prepared_statement& item );
 
+	bool describe_statement ( prepared_statement& item, const char* const*& names, uint32_t& count );
+
+	bool statement_returns_rows ( const prepared_statement& item );
+
 	void finish_statement ( prepared_statement* item );
 
 }

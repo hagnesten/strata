@@ -15,6 +15,10 @@ namespace sql {
 		base::arena* memory;
 		parse_error* error;
 		uint32_t parameters;
+		const char** names;
+		uint32_t* name_slots;
+		uint32_t name_count;
+		uint32_t name_room;
 		uint32_t depth;
 		common_table* pending_with;
 		uint32_t pending_count;

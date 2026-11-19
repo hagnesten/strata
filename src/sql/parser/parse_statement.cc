@@ -1457,12 +1457,21 @@ namespace sql {
 		made->text = memory.keep ( start, static_cast < size_t > ( item.current.start - start ) );
 		made->text_size = static_cast < uint32_t > ( item.current.start - start );
 		made->parameter_count = item.parameters;
+		made->parameter_names = memory.make < const char* > ( item.parameters + 1 );
+
+		if ( !made->parameter_names )
+			return fail_here ( item, "out of memory" );
+
+		for ( uint32_t i = 0; i < item.name_count; i++ )
+			if ( item.name_slots [ i ] < item.parameters )
+				made->parameter_names [ item.name_slots [ i ] ] = item.names [ i ];
 
 		if ( made->inner ) {
 
 			made->inner->text = made->text;
 			made->inner->text_size = made->text_size;
 			made->inner->parameter_count = item.parameters;
+			made->inner->parameter_names = made->parameter_names;
 
 		}
 
