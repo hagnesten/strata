@@ -425,18 +425,7 @@ namespace engine {
 
 	static uint32_t next_code ( const uint8_t* text, size_t size, size_t& at ) {
 
-		uint8_t first = text [ at++ ];
-
-		if ( first < 0x80 )
-			return first;
-
-		uint32_t length = first >= 0xF0 ? 3 : first >= 0xE0 ? 2 : first >= 0xC0 ? 1 : 0;
-		uint32_t code = first & ( 0x3F >> length );
-
-		for ( uint32_t i = 0; i < length && at < size && ( text [ at ] & 0xC0 ) == 0x80; i++ )
-			code = code << 6 | ( text [ at++ ] & 0x3F );
-
-		return code;
+		return base::next_code ( text, size, at );
 
 	}
 

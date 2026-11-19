@@ -1,0 +1,627 @@
+#include "engine/run/run.hh"
+
+namespace engine {
+
+	static bool numeric_affinity ( sql::affinity_kind affinity ) {
+
+		return affinity == sql::AFFINITY_INTEGER || affinity == sql::AFFINITY_REAL || affinity == sql::AFFINITY_NUMERIC;
+
+	}
+
+	void comparison_affinity ( base::arena& memory, sql::affinity_kind left, sql::affinity_kind right, storage::value& a, storage::value& b ) {
+
+		if ( numeric_affinity ( left ) && !numeric_affinity ( right ) )
+			b = apply_affinity ( memory, b, sql::AFFINITY_NUMERIC );
+		else if ( numeric_affinity ( right ) && !numeric_affinity ( left ) )
+			a = apply_affinity ( memory, a, sql::AFFINITY_NUMERIC );
+		else if ( left == sql::AFFINITY_TEXT && right == sql::AFFINITY_ANY )
+			b = apply_affinity ( memory, b, sql::AFFINITY_TEXT );
+		else if ( right == sql::AFFINITY_TEXT && left == sql::AFFINITY_ANY )
+			a = apply_affinity ( memory, a, sql::AFFINITY_TEXT );
+
+	}
+
+	storage::value seek_value ( base::arena& memory, sql::affinity_kind affinity, const storage::value& item ) {
+
+		storage::value column = storage::null_value ( );
+		storage::value other = item;
+
+		comparison_affinity ( memory, affinity, sql::AFFINITY_ANY, column, other );
+
+		return other;
+
+	}
+
+	bool condition ( run_context& ctx, query_state* scope, const sql::expression* item, truth_kind& out ) {
+
+		storage::value result;
+
+		if ( !evaluate ( ctx, scope, item, result ) )
+			return false;
+
+		out = truth_of ( result );
+
+		return true;
+
+	}
+
+	bool passes ( run_context& ctx, query_state* scope, sql::expression* const* terms, uint32_t count, bool& out ) {
+
+		out = true;
+
+		for ( uint32_t i = 0; i < count; i++ ) {
+
+			truth_kind truth = TRUTH_NULL;
+
+			if ( !condition ( ctx, scope, terms [ i ], truth ) )
+				return false;
+
+			if ( truth != TRUTH_TRUE ) {
+
+				out = false;
+
+				return true;
+
+			}
+
+		}
+
+		return true;
+
+	}
+
+	static truth_kind negate ( truth_kind truth ) {
+
+		return truth == TRUTH_NULL ? TRUTH_NULL : truth == TRUTH_TRUE ? TRUTH_FALSE : TRUTH_TRUE;
+
+	}
+
+	static truth_kind both ( truth_kind a, truth_kind b ) {
+
+		if ( a == TRUTH_FALSE || b == TRUTH_FALSE )
+			return TRUTH_FALSE;
+
+		if ( a == TRUTH_NULL || b == TRUTH_NULL )
+			return TRUTH_NULL;
+
+		return TRUTH_TRUE;
+
+	}
+
+	static truth_kind compare_expressions ( run_context& ctx, sql::operator_kind op, const sql::expression* left, storage::value a, const sql::expression* right, storage::value b ) {
+
+		comparison_affinity ( *ctx.scratch, expression_affinity ( left ), expression_affinity ( right ), a, b );
+
+		return compare_with ( op, a, b );
+
+	}
+
+	static bool cast_value ( run_context& ctx, const storage::value& item, sql::affinity_kind affinity, storage::value& out ) {
+
+		if ( item.kind == storage::VALUE_NULL ) {
+
+			out = item;
+
+			return true;
+
+		}
+
+		switch ( affinity ) {
+
+			case sql::AFFINITY_INTEGER: {
+
+				int64_t number = 0;
+
+				if ( item.kind == storage::VALUE_TEXT || item.kind == storage::VALUE_BLOB ) {
+
+					storage::value parsed;
+
+					read_number_text ( item.bytes, item.size, parsed, false );
+					integer_of ( parsed, number );
+
+				} else
+					integer_of ( item, number );
+
+				out = storage::integer_value ( number );
+
+				return true;
+
+			}
+
+			case sql::AFFINITY_REAL: {
+
+				double number = 0;
+
+				if ( item.kind == storage::VALUE_TEXT || item.kind == storage::VALUE_BLOB ) {
+
+					storage::value parsed;
+
+					read_number_text ( item.bytes, item.size, parsed, false );
+					real_of ( parsed, number );
+
+				} else
+					real_of ( item, number );
+
+				out = storage::real_value ( number );
+
+				return true;
+
+			}
+
+			case sql::AFFINITY_NUMERIC: {
+
+				storage::value parsed = item;
+
+				if ( item.kind == storage::VALUE_TEXT || item.kind == storage::VALUE_BLOB )
+					read_number_text ( item.bytes, item.size, parsed, false );
+
+				out = apply_affinity ( *ctx.scratch, parsed, sql::AFFINITY_NUMERIC );
+
+				return true;
+
+			}
+
+			case sql::AFFINITY_TEXT:
+				out = text_of ( *ctx.scratch, item );
+
+				if ( item.kind == storage::VALUE_BLOB )
+					out.kind = storage::VALUE_TEXT;
+
+				return true;
+
+			default: {
+
+				storage::value text = text_of ( *ctx.scratch, item );
+
+				out = storage::blob_value ( text.bytes, text.size );
+
+				return true;
+
+			}
+
+		}
+
+	}
+
+	static bool concatenate ( run_context& ctx, const storage::value& a, const storage::value& b, storage::value& out ) {
+
+		if ( a.kind == storage::VALUE_NULL || b.kind == storage::VALUE_NULL ) {
+
+			out = storage::null_value ( );
+
+			return true;
+
+		}
+
+		storage::value x = text_of ( *ctx.scratch, a );
+		storage::value y = text_of ( *ctx.scratch, b );
+		char* joined = ctx.scratch->make < char > ( x.size + y.size + 1 );
+
+		if ( !joined )
+			return fail_run ( ctx, "out of memory" );
+
+		if ( x.size )
+			base::copy ( joined, x.bytes, x.size );
+
+		if ( y.size )
+			base::copy ( joined + x.size, y.bytes, y.size );
+
+		out = storage::text_value ( joined, x.size + y.size );
+
+		return true;
+
+	}
+
+	static bool evaluate_in_list ( run_context& ctx, query_state* scope, const sql::expression* item, storage::value& out ) {
+
+		storage::value probe;
+
+		if ( !evaluate ( ctx, scope, item->left, probe ) )
+			return false;
+
+		if ( !item->count ) {
+
+			out = storage::integer_value ( item->negated ? 1 : 0 );
+
+			return true;
+
+		}
+
+		if ( probe.kind == storage::VALUE_NULL ) {
+
+			out = storage::null_value ( );
+
+			return true;
+
+		}
+
+		truth_kind result = TRUTH_FALSE;
+
+		for ( uint32_t i = 0; i < item->count && result != TRUTH_TRUE; i++ ) {
+
+			storage::value candidate;
+
+			if ( !evaluate ( ctx, scope, item->list [ i ], candidate ) )
+				return false;
+
+			truth_kind here = compare_expressions ( ctx, sql::OPERATOR_EQUAL, item->left, probe, item->list [ i ], candidate );
+
+			if ( here == TRUTH_TRUE )
+				result = TRUTH_TRUE;
+			else if ( here == TRUTH_NULL )
+				result = TRUTH_NULL;
+
+		}
+
+		out = truth_value ( item->negated ? negate ( result ) : result );
+
+		return true;
+
+	}
+
+	static bool evaluate_like ( run_context& ctx, query_state* scope, const sql::expression* item, storage::value& out ) {
+
+		storage::value text;
+		storage::value pattern;
+		storage::value escape = storage::null_value ( );
+
+		if ( !evaluate ( ctx, scope, item->left, text ) || !evaluate ( ctx, scope, item->right, pattern ) || ( item->third && !evaluate ( ctx, scope, item->third, escape ) ) )
+			return false;
+
+		if ( text.kind == storage::VALUE_NULL || pattern.kind == storage::VALUE_NULL || ( item->third && escape.kind == storage::VALUE_NULL ) ) {
+
+			out = storage::null_value ( );
+
+			return true;
+
+		}
+
+		uint32_t escape_code = 0;
+
+		if ( item->third ) {
+
+			storage::value written = text_of ( *ctx.scratch, escape );
+			size_t at = 0;
+
+			if ( !written.size )
+				return fail_run ( ctx, "ESCAPE needs exactly one character" );
+
+			uint8_t first = written.bytes [ 0 ];
+			uint32_t length = first >= 0xF0 ? 4 : first >= 0xE0 ? 3 : first >= 0xC0 ? 2 : 1;
+
+			if ( length != written.size )
+				return fail_run ( ctx, "ESCAPE needs exactly one character" );
+
+			escape_code = first & ( length == 1 ? 0x7F : 0x3F >> ( length - 1 ) );
+
+			for ( at = 1; at < length; at++ )
+				escape_code = escape_code << 6 | ( written.bytes [ at ] & 0x3F );
+
+		}
+
+		storage::value a = text_of ( *ctx.scratch, text );
+		storage::value b = text_of ( *ctx.scratch, pattern );
+		bool hit = like_match ( b.bytes, b.size, a.bytes, a.size, escape_code, item->star );
+
+		out = storage::integer_value ( hit != item->negated ? 1 : 0 );
+
+		return true;
+
+	}
+
+	static bool evaluate_case ( run_context& ctx, query_state* scope, const sql::expression* item, storage::value& out ) {
+
+		storage::value base_value = storage::null_value ( );
+
+		if ( item->left && !evaluate ( ctx, scope, item->left, base_value ) )
+			return false;
+
+		for ( uint32_t i = 0; i + 1 < item->count; i += 2 ) {
+
+			bool chosen = false;
+
+			if ( item->left ) {
+
+				storage::value candidate;
+
+				if ( !evaluate ( ctx, scope, item->list [ i ], candidate ) )
+					return false;
+
+				chosen = compare_expressions ( ctx, sql::OPERATOR_EQUAL, item->left, base_value, item->list [ i ], candidate ) == TRUTH_TRUE;
+
+			} else {
+
+				truth_kind truth = TRUTH_NULL;
+
+				if ( !condition ( ctx, scope, item->list [ i ], truth ) )
+					return false;
+
+				chosen = truth == TRUTH_TRUE;
+
+			}
+
+			if ( chosen )
+				return evaluate ( ctx, scope, item->list [ i + 1 ], out );
+
+		}
+
+		if ( item->right )
+			return evaluate ( ctx, scope, item->right, out );
+
+		out = storage::null_value ( );
+
+		return true;
+
+	}
+
+	static bool evaluate_binary ( run_context& ctx, query_state* scope, const sql::expression* item, storage::value& out ) {
+
+		if ( item->op == sql::OPERATOR_AND || item->op == sql::OPERATOR_OR ) {
+
+			truth_kind left = TRUTH_NULL;
+
+			if ( !condition ( ctx, scope, item->left, left ) )
+				return false;
+
+			if ( item->op == sql::OPERATOR_AND && left == TRUTH_FALSE ) {
+
+				out = storage::integer_value ( 0 );
+
+				return true;
+
+			}
+
+			if ( item->op == sql::OPERATOR_OR && left == TRUTH_TRUE ) {
+
+				out = storage::integer_value ( 1 );
+
+				return true;
+
+			}
+
+			truth_kind right = TRUTH_NULL;
+
+			if ( !condition ( ctx, scope, item->right, right ) )
+				return false;
+
+			if ( item->op == sql::OPERATOR_AND )
+				out = truth_value ( both ( left, right ) );
+			else
+				out = truth_value ( right == TRUTH_TRUE ? TRUTH_TRUE : left == TRUTH_NULL || right == TRUTH_NULL ? TRUTH_NULL : TRUTH_FALSE );
+
+			return true;
+
+		}
+
+		storage::value a;
+		storage::value b;
+
+		if ( !evaluate ( ctx, scope, item->left, a ) || !evaluate ( ctx, scope, item->right, b ) )
+			return false;
+
+		switch ( item->op ) {
+
+			case sql::OPERATOR_EQUAL:
+			case sql::OPERATOR_NOT_EQUAL:
+			case sql::OPERATOR_LESS:
+			case sql::OPERATOR_LESS_EQUAL:
+			case sql::OPERATOR_GREATER:
+			case sql::OPERATOR_GREATER_EQUAL:
+			case sql::OPERATOR_IS:
+			case sql::OPERATOR_IS_NOT:
+				out = truth_value ( compare_expressions ( ctx, item->op, item->left, a, item->right, b ) );
+
+				return true;
+
+			case sql::OPERATOR_CONCAT:
+				return concatenate ( ctx, a, b, out );
+
+			default:
+				out = arithmetic ( item->op, a, b );
+
+				return true;
+
+		}
+
+	}
+
+	static bool evaluate_unary ( run_context& ctx, query_state* scope, const sql::expression* item, storage::value& out ) {
+
+		storage::value inner;
+
+		if ( !evaluate ( ctx, scope, item->left, inner ) )
+			return false;
+
+		switch ( item->op ) {
+
+			case sql::OPERATOR_NOT:
+				out = truth_value ( negate ( truth_of ( inner ) ) );
+
+				return true;
+
+			case sql::OPERATOR_NEGATE: {
+
+				if ( inner.kind == storage::VALUE_NULL ) {
+
+					out = inner;
+
+					return true;
+
+				}
+
+				storage::value number = numeric_of ( inner );
+
+				if ( number.kind == storage::VALUE_INTEGER )
+					out = number.integer == static_cast < int64_t > ( 0x8000000000000000ull ) ? storage::real_value ( 9223372036854775808.0 ) : storage::integer_value ( -number.integer );
+				else
+					out = storage::real_value ( -number.real );
+
+				return true;
+
+			}
+
+			case sql::OPERATOR_BIT_NOT: {
+
+				int64_t number = 0;
+
+				if ( !integer_of ( inner, number ) ) {
+
+					out = storage::null_value ( );
+
+					return true;
+
+				}
+
+				out = storage::integer_value ( ~number );
+
+				return true;
+
+			}
+
+			default:
+				out = inner;
+
+				return true;
+
+		}
+
+	}
+
+	bool evaluate ( run_context& ctx, query_state* scope, const sql::expression* item, storage::value& out ) {
+
+		if ( !item ) {
+
+			out = storage::null_value ( );
+
+			return true;
+
+		}
+
+		switch ( item->kind ) {
+
+			case sql::EXPRESSION_LITERAL:
+				out = item->literal;
+
+				return true;
+
+			case sql::EXPRESSION_PARAMETER:
+				out = item->parameter < ctx.parameter_count ? ctx.parameters [ item->parameter ] : storage::null_value ( );
+
+				return true;
+
+			case sql::EXPRESSION_COLUMN: {
+
+				query_state* owner = scope;
+
+				for ( uint32_t i = 0; i < item->depth && owner; i++ )
+					owner = owner->parent;
+
+				if ( !owner || item->source < 0 )
+					return fail_named ( ctx, "the column ", item->name, " cannot be read here" );
+
+				source_state& source = owner->sources [ item->source ];
+
+				if ( source.null_row || !source.values )
+					out = storage::null_value ( );
+				else if ( item->column < 0 )
+					out = storage::integer_value ( source.rowid );
+				else
+					out = source.values [ item->column ];
+
+				return true;
+
+			}
+
+			case sql::EXPRESSION_UNARY:
+				return evaluate_unary ( ctx, scope, item, out );
+
+			case sql::EXPRESSION_BINARY:
+				return evaluate_binary ( ctx, scope, item, out );
+
+			case sql::EXPRESSION_FUNCTION: {
+
+				if ( item->aggregate >= 0 ) {
+
+					if ( !scope || !scope->aggregate_values )
+						return fail_named ( ctx, "the aggregate ", item->name, "() cannot be used here" );
+
+					out = scope->aggregate_values [ item->aggregate ];
+
+					return true;
+
+				}
+
+				storage::value* args = item->count ? ctx.scratch->make < storage::value > ( item->count ) : nullptr;
+
+				if ( item->count && !args )
+					return fail_run ( ctx, "out of memory" );
+
+				for ( uint32_t i = 0; i < item->count; i++ )
+					if ( !evaluate ( ctx, scope, item->list [ i ], args [ i ] ) )
+						return false;
+
+				return call_function ( ctx, item, args, item->count, out );
+
+			}
+
+			case sql::EXPRESSION_IN:
+				if ( item->query )
+					return run_child ( ctx, scope, item, out );
+
+				return evaluate_in_list ( ctx, scope, item, out );
+
+			case sql::EXPRESSION_BETWEEN: {
+
+				storage::value value;
+				storage::value low;
+				storage::value high;
+
+				if ( !evaluate ( ctx, scope, item->left, value ) || !evaluate ( ctx, scope, item->right, low ) || !evaluate ( ctx, scope, item->third, high ) )
+					return false;
+
+				truth_kind result = both ( compare_expressions ( ctx, sql::OPERATOR_GREATER_EQUAL, item->left, value, item->right, low ), compare_expressions ( ctx, sql::OPERATOR_LESS_EQUAL, item->left, value, item->third, high ) );
+
+				out = truth_value ( item->negated ? negate ( result ) : result );
+
+				return true;
+
+			}
+
+			case sql::EXPRESSION_NULL_TEST: {
+
+				storage::value value;
+
+				if ( !evaluate ( ctx, scope, item->left, value ) )
+					return false;
+
+				out = storage::integer_value ( ( value.kind == storage::VALUE_NULL ) != item->negated ? 1 : 0 );
+
+				return true;
+
+			}
+
+			case sql::EXPRESSION_LIKE:
+				return evaluate_like ( ctx, scope, item, out );
+
+			case sql::EXPRESSION_CASE:
+				return evaluate_case ( ctx, scope, item, out );
+
+			case sql::EXPRESSION_CAST: {
+
+				storage::value value;
+
+				return evaluate ( ctx, scope, item->left, value ) && cast_value ( ctx, value, item->cast, out );
+
+			}
+
+			case sql::EXPRESSION_SUBQUERY:
+			case sql::EXPRESSION_EXISTS:
+				return run_child ( ctx, scope, item, out );
+
+		}
+
+		return fail_run ( ctx, "this expression cannot be evaluated" );
+
+	}
+
+}
