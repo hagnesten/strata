@@ -42,6 +42,22 @@ namespace engine {
 		{ "unicode", 1, 1, false, FUNCTION_UNICODE },
 		{ "upper", 1, 1, false, FUNCTION_UPPER },
 		{ "zeroblob", 1, 1, false, FUNCTION_ZEROBLOB },
+		{ "date", 0, 255, false, FUNCTION_DATE },
+		{ "time", 0, 255, false, FUNCTION_TIME },
+		{ "datetime", 0, 255, false, FUNCTION_DATETIME },
+		{ "julianday", 0, 255, false, FUNCTION_JULIANDAY },
+		{ "unixepoch", 0, 255, false, FUNCTION_UNIXEPOCH },
+		{ "strftime", 1, 255, false, FUNCTION_STRFTIME },
+		{ "json", 1, 1, false, FUNCTION_JSON },
+		{ "json_valid", 1, 1, false, FUNCTION_JSON_VALID },
+		{ "json_extract", 2, 255, false, FUNCTION_JSON_EXTRACT },
+		{ "json_type", 1, 2, false, FUNCTION_JSON_TYPE },
+		{ "json_array", 0, 255, false, FUNCTION_JSON_ARRAY },
+		{ "json_object", 0, 255, false, FUNCTION_JSON_OBJECT },
+		{ "json_array_length", 1, 2, false, FUNCTION_JSON_ARRAY_LENGTH },
+		{ "json_quote", 1, 1, false, FUNCTION_JSON_QUOTE },
+		{ "json_group_array", 1, 1, true, FUNCTION_JSON_GROUP_ARRAY },
+		{ "json_group_object", 2, 2, true, FUNCTION_JSON_GROUP_OBJECT },
 		{ "count", 0, 1, true, FUNCTION_COUNT },
 		{ "sum", 1, 1, true, FUNCTION_SUM },
 		{ "total", 1, 1, true, FUNCTION_TOTAL },
@@ -1130,6 +1146,24 @@ namespace engine {
 				return true;
 
 			}
+
+			case FUNCTION_DATE:
+			case FUNCTION_TIME:
+			case FUNCTION_DATETIME:
+			case FUNCTION_JULIANDAY:
+			case FUNCTION_UNIXEPOCH:
+			case FUNCTION_STRFTIME:
+				return call_date_function ( ctx, static_cast < function_kind > ( item->column ), args, count, out );
+
+			case FUNCTION_JSON:
+			case FUNCTION_JSON_VALID:
+			case FUNCTION_JSON_EXTRACT:
+			case FUNCTION_JSON_TYPE:
+			case FUNCTION_JSON_ARRAY:
+			case FUNCTION_JSON_OBJECT:
+			case FUNCTION_JSON_ARRAY_LENGTH:
+			case FUNCTION_JSON_QUOTE:
+				return call_json_function ( ctx, static_cast < function_kind > ( item->column ), args, count, out );
 
 			default:
 				return fail_named ( ctx, "the function ", item->name, "() cannot be called here" );

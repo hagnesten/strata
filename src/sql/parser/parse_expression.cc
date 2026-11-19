@@ -697,6 +697,31 @@ namespace sql {
 		if ( accept_word ( item, "case" ) )
 			return parse_case ( item );
 
+		if ( token_is ( here, "current_timestamp" ) || token_is ( here, "current_date" ) || token_is ( here, "current_time" ) ) {
+
+			expression* made = new_expression ( item, EXPRESSION_FUNCTION );
+			expression* now = new_expression ( item, EXPRESSION_LITERAL );
+			expression** list = item.memory->make < expression* > ( 1 );
+
+			if ( !made || !now || !list ) {
+
+				fail_here ( item, "out of memory" );
+
+				return nullptr;
+
+			}
+
+			made->name = token_is ( here, "current_timestamp" ) ? "datetime" : token_is ( here, "current_date" ) ? "date" : "time";
+			now->literal = storage::text_value ( "now", 3 );
+			list [ 0 ] = now;
+			made->list = list;
+			made->count = 1;
+			advance ( item );
+
+			return made;
+
+		}
+
 		if ( accept_word ( item, "cast" ) ) {
 
 			expression* made = new_expression ( item, EXPRESSION_CAST );
@@ -888,10 +913,12 @@ namespace sql {
 
 		expression* left = parse_unary ( item );
 
-		while ( left && symbol_is ( item.current, "||" ) ) {
+		while ( left && ( symbol_is ( item.current, "||" ) || symbol_is ( item.current, "->" ) || symbol_is ( item.current, "->>" ) ) ) {
+
+			operator_kind op = symbol_is ( item.current, "||" ) ? OPERATOR_CONCAT : symbol_is ( item.current, "->" ) ? OPERATOR_JSON : OPERATOR_JSON_VALUE;
 
 			advance ( item );
-			left = binary ( item, OPERATOR_CONCAT, left, parse_unary ( item ) );
+			left = binary ( item, op, left, parse_unary ( item ) );
 
 		}
 
@@ -1282,6 +1309,8 @@ namespace sql {
 			case OPERATOR_DIVIDE: return "/";
 			case OPERATOR_MODULO: return "%";
 			case OPERATOR_CONCAT: return "||";
+			case OPERATOR_JSON: return "->";
+			case OPERATOR_JSON_VALUE: return "->>";
 			case OPERATOR_EQUAL: return "=";
 			case OPERATOR_NOT_EQUAL: return "<>";
 			case OPERATOR_LESS: return "<";

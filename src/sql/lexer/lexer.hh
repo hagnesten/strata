@@ -25,7 +25,7 @@ namespace sql {
 		uint32_t size;
 		uint32_t line;
 		uint32_t column;
-		char symbol [ 3 ];
+		char symbol [ 4 ];
 
 	};
 

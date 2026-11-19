@@ -416,6 +416,10 @@ namespace engine {
 			case sql::OPERATOR_CONCAT:
 				return concatenate ( ctx, a, b, out );
 
+			case sql::OPERATOR_JSON:
+			case sql::OPERATOR_JSON_VALUE:
+				return json_arrow ( ctx, a, b, item->op == sql::OPERATOR_JSON_VALUE, out );
+
 			default:
 				out = arithmetic ( item->op, a, b );
 

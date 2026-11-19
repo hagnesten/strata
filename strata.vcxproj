@@ -65,6 +65,9 @@
     <ClCompile Include="src\engine\run\schema.cc" />
     <ClCompile Include="src\engine\run\explain.cc" />
     <ClCompile Include="src\engine\run\window.cc" />
+    <ClCompile Include="src\engine\run\dates.cc" />
+    <ClCompile Include="src\engine\run\json.cc" />
+    <ClCompile Include="src\base\clock\clock.cc" />
     <ClCompile Include="src\engine\database\database.cc" />
     <ClCompile Include="src\test\engine\engine_test.cc" />
     <ClCompile Include="src\app\shell\shell.cc" />
@@ -102,6 +105,7 @@
     <ClInclude Include="src\engine\value\value.hh" />
     <ClInclude Include="src\engine\catalog\catalog.hh" />
     <ClInclude Include="src\base\sort\sort.hh" />
+    <ClInclude Include="src\base\clock\clock.hh" />
     <ClInclude Include="src\engine\run\run.hh" />
     <ClInclude Include="src\engine\database\database.hh" />
     <ClInclude Include="src\app\shell\shell.hh" />

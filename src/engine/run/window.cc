@@ -205,7 +205,7 @@ namespace engine {
 			int64_t start_offset = 0;
 			int64_t end_offset = 0;
 			function_kind kind = static_cast < function_kind > ( call->column );
-			bool aggregate = kind <= FUNCTION_GROUP_CONCAT && kind >= FUNCTION_COUNT;
+			bool aggregate = kind <= FUNCTION_JSON_GROUP_OBJECT && kind >= FUNCTION_COUNT;
 
 			if ( !frame_offset ( ctx, scope, spec.start_offset, start_offset ) || !frame_offset ( ctx, scope, spec.end_offset, end_offset ) )
 				return false;

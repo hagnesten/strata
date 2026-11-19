@@ -147,6 +147,8 @@ namespace engine {
 			case FUNCTION_AVG: state.kind = AGGREGATE_AVG; break;
 			case FUNCTION_MIN_AGGREGATE: state.kind = AGGREGATE_MIN; break;
 			case FUNCTION_MAX_AGGREGATE: state.kind = AGGREGATE_MAX; break;
+			case FUNCTION_JSON_GROUP_ARRAY: state.kind = AGGREGATE_JSON_ARRAY; break;
+			case FUNCTION_JSON_GROUP_OBJECT: state.kind = AGGREGATE_JSON_OBJECT; break;
 			default: state.kind = AGGREGATE_GROUP_CONCAT; break;
 
 		}
@@ -197,6 +199,39 @@ namespace engine {
 		}
 
 		const storage::value& item = args [ 0 ];
+
+		if ( state.kind == AGGREGATE_JSON_ARRAY || state.kind == AGGREGATE_JSON_OBJECT ) {
+
+			base::text piece;
+
+			if ( state.kind == AGGREGATE_JSON_OBJECT ) {
+
+				if ( item.kind == storage::VALUE_NULL )
+					return true;
+
+				storage::value key = text_of ( *ctx.scratch, item );
+
+				key.subtype = 0;
+
+				if ( !append_json ( ctx, piece, key ) )
+					return false;
+
+				piece.add ( ':' );
+
+				if ( !append_json ( ctx, piece, args [ 1 ] ) )
+					return false;
+
+			} else if ( !append_json ( ctx, piece, item ) )
+				return false;
+
+			if ( state.count && !append_joined ( ctx, state, reinterpret_cast < const uint8_t* > ( "," ), 1 ) )
+				return false;
+
+			state.count++;
+
+			return append_joined ( ctx, state, reinterpret_cast < const uint8_t* > ( piece.value ( ) ), piece.size );
+
+		}
 
 		if ( item.kind == storage::VALUE_NULL )
 			return true;
@@ -334,6 +369,28 @@ namespace engine {
 				out = state.has_best ? state.best : storage::null_value ( );
 
 				return true;
+
+			case AGGREGATE_JSON_ARRAY:
+			case AGGREGATE_JSON_OBJECT: {
+
+				size_t size = state.joined_size + 2;
+				char* made = ctx.scratch->make < char > ( size + 1 );
+
+				if ( !made )
+					return fail_run ( ctx, "out of memory" );
+
+				made [ 0 ] = state.kind == AGGREGATE_JSON_ARRAY ? '[' : '{';
+
+				if ( state.joined_size )
+					base::copy ( made + 1, state.joined, state.joined_size );
+
+				made [ size - 1 ] = state.kind == AGGREGATE_JSON_ARRAY ? ']' : '}';
+				out = storage::text_value ( made, size );
+				out.subtype = 1;
+
+				return true;
+
+			}
 
 			default:
 				out = state.count ? storage::text_value ( state.joined ? state.joined : "", state.joined_size ) : storage::null_value ( );

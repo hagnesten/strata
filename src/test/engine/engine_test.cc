@@ -183,6 +183,15 @@ namespace test {
 		rows ( db, "SELECT typeof ( -9223372036854775808 ), -9223372036854775808, CAST ( -9223372036854775808.0 AS INTEGER )", "integer|-9223372036854775808|-9223372036854775808" );
 		rows ( db, "\xEF\xBB\xBFSELECT 'after a byte order mark'", "after a byte order mark" );
 		rows ( db, "SELECT printf ( '%.3c|%5s|%-3s|', 'ab', 'x', 'y' )", "aaa|    x|y  |" );
+		rows ( db, "SELECT date ( '2024-03-15' ), datetime ( '2024-03-15 10:20:30', '+1 day', '-2 hours' ), date ( '2024-01-31', '+1 month' ), time ( '2024-03-15T07:08:09Z' )", "2024-03-15|2024-03-16 08:20:30|2024-03-02|07:08:09" );
+		rows ( db, "SELECT strftime ( '%Y/%m/%d %H:%M %j %w %u', '2024-02-29 13:05:00' ), julianday ( '2000-01-01 12:00:00' ), unixepoch ( '1970-01-02' )", "2024/02/29 13:05 060 4 4|2451545.0|86400" );
+		rows ( db, "SELECT datetime ( 1700000000, 'unixepoch' ), date ( '2024-03-15', 'start of month' ), date ( '2024-03-15', 'start of year' ), date ( '2024-03-15', 'weekday 0' ), date ( '2024-12-31', '+1 day' )", "2023-11-14 22:13:20|2024-03-01|2024-01-01|2024-03-17|2025-01-01" );
+		rows ( db, "SELECT typeof ( CURRENT_TIMESTAMP ), length ( CURRENT_DATE ), length ( time ( 'now' ) ), date ( 'not a date' ), date ( '2024-02-30' ) IS NOT NULL, strftime ( '%f', '12:00:01.250' )", "text|10|8|NULL|1|01.250" );
+		rows ( db, "SELECT json_extract ( '{\"a\":{\"b\":[1,2,{\"c\":\"x\"}]}}', '$.a.b[2].c' ), '{\"a\":[1,2,3]}' -> '$.a', '{\"a\":[1,2,3]}' ->> '$.a[#-1]', '{\"x\":\"\\u00e9\"}' ->> 'x'", "x|[1,2,3]|3|\xC3\xA9" );
+		rows ( db, "SELECT json_array ( 1, 'two', NULL, json ( '{\"k\": true}' ) ), json_object ( 'n', 1, 'list', json_array ( 1, 2 ) ), json ( ' { \"a\" : 1 } ' )", "[1,\"two\",null,{\"k\":true}]|{\"n\":1,\"list\":[1,2]}|{\"a\":1}" );
+		rows ( db, "SELECT json_type ( '{\"a\":1.5}', '$.a' ), json_array_length ( '[1,[2,3]]' ), json_valid ( '{\"a\":' ), json_valid ( '[1, 2]' ), json_extract ( '[1,2]', '$[0]', '$[5]' ), json_quote ( 'say \"hi\"' )", "real|2|0|1|[1,null]|\"say \\\"hi\\\"\"" );
+		rows ( db, "SELECT json_group_array ( column1 ) FROM ( VALUES ( 1 ), ( 'b' ), ( NULL ) ) AS v", "[1,\"b\",null]" );
+		fails ( db, "SELECT json_extract ( '{bad', '$' )", "malformed JSON" );
 		rows ( db, "VALUES ( 1, 'a' ), ( 2, 'b' )", "1|a\n2|b" );
 		rows ( db, "SELECT * FROM ( VALUES ( 3 ), ( 1 ), ( 2 ) ) AS v ORDER BY column1 DESC", "3\n2\n1" );
 		fails ( db, "SELECT nosuch ( 1 )", "no such function: nosuch" );
@@ -276,6 +285,7 @@ namespace test {
 		rows ( db, "SELECT dense_rank ( ) OVER ( ORDER BY city ), ntile ( 2 ) OVER ( ORDER BY id ), first_value ( name ) OVER ( PARTITION BY city ORDER BY id ), last_value ( name ) OVER ( ORDER BY id ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING ) FROM people ORDER BY id", "3|1|Ada|Barbara\n2|1|Linus|Barbara\n4|1|Grace|Barbara\n3|2|Ada|Barbara\n1|2|Barbara|Barbara" );
 		rows ( db, "SELECT percent_rank ( ) OVER ( ORDER BY id ), cume_dist ( ) OVER ( ORDER BY id ), nth_value ( name, 2 ) OVER ( ORDER BY id ) FROM people WHERE id <= 2 ORDER BY id", "0.0|0.5|NULL\n1.0|1.0|Linus" );
 		fails ( db, "SELECT row_number ( ) FROM people", "needs an OVER clause" );
+		rows ( db, "SELECT json_group_object ( name, age ) FROM people WHERE id <= 2", "{\"Ada\":36,\"Linus\":28}" );
 		fails ( db, "SELECT name FROM people WHERE rank ( ) OVER ( ) > 1", "can only be used in the result columns" );
 		fails ( db, "WITH x ( a, b ) AS ( SELECT 1 ) SELECT * FROM x", "different number of columns" );
 

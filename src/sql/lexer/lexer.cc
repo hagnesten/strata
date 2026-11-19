@@ -298,7 +298,20 @@ namespace sql {
 
 		}
 
-		static const char* const pairs [ ] = { "<=", ">=", "<>", "!=", "==", "||", "<<", ">>" };
+		if ( c == '-' && start [ 1 ] == '>' && start [ 2 ] == '>' ) {
+
+			out.kind = TOKEN_SYMBOL;
+			out.symbol [ 0 ] = '-';
+			out.symbol [ 1 ] = '>';
+			out.symbol [ 2 ] = '>';
+			out.size = 3;
+			item.at = start + 3;
+
+			return out;
+
+		}
+
+		static const char* const pairs [ ] = { "<=", ">=", "<>", "!=", "==", "||", "<<", ">>", "->" };
 
 		for ( const char* pair : pairs ) {
 

@@ -20,6 +20,7 @@ namespace storage {
 	struct value {
 
 		value_kind kind;
+		uint8_t subtype;
 		int64_t integer;
 		double real;
 		const uint8_t* bytes;

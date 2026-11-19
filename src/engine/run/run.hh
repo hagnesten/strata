@@ -19,6 +19,8 @@ namespace engine {
 		AGGREGATE_MIN,
 		AGGREGATE_MAX,
 		AGGREGATE_GROUP_CONCAT,
+		AGGREGATE_JSON_ARRAY,
+		AGGREGATE_JSON_OBJECT,
 
 	};
 
@@ -88,6 +90,20 @@ namespace engine {
 		FUNCTION_UPPER,
 		FUNCTION_VERSION,
 		FUNCTION_ZEROBLOB,
+		FUNCTION_DATE,
+		FUNCTION_TIME,
+		FUNCTION_DATETIME,
+		FUNCTION_JULIANDAY,
+		FUNCTION_UNIXEPOCH,
+		FUNCTION_STRFTIME,
+		FUNCTION_JSON,
+		FUNCTION_JSON_VALID,
+		FUNCTION_JSON_EXTRACT,
+		FUNCTION_JSON_TYPE,
+		FUNCTION_JSON_ARRAY,
+		FUNCTION_JSON_OBJECT,
+		FUNCTION_JSON_ARRAY_LENGTH,
+		FUNCTION_JSON_QUOTE,
 		FUNCTION_COUNT,
 		FUNCTION_SUM,
 		FUNCTION_TOTAL,
@@ -95,6 +111,8 @@ namespace engine {
 		FUNCTION_MIN_AGGREGATE,
 		FUNCTION_MAX_AGGREGATE,
 		FUNCTION_GROUP_CONCAT,
+		FUNCTION_JSON_GROUP_ARRAY,
+		FUNCTION_JSON_GROUP_OBJECT,
 		FUNCTION_ROW_NUMBER,
 		FUNCTION_RANK,
 		FUNCTION_DENSE_RANK,
@@ -572,6 +590,14 @@ namespace engine {
 	bool restore_window_row ( run_context& ctx, query_state& scope, const window_row& row );
 
 	bool window_function ( int32_t id );
+
+	bool call_date_function ( run_context& ctx, function_kind kind, const storage::value* args, uint32_t count, storage::value& out );
+
+	bool call_json_function ( run_context& ctx, function_kind kind, const storage::value* args, uint32_t count, storage::value& out );
+
+	bool json_arrow ( run_context& ctx, const storage::value& document, const storage::value& path, bool value, storage::value& out );
+
+	bool append_json ( run_context& ctx, base::text& out, const storage::value& item );
 
 	bool run_child ( run_context& ctx, query_state* scope, const sql::expression* item, storage::value& out );
 
