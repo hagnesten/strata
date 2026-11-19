@@ -12,6 +12,22 @@ namespace base {
 
 	};
 
+	struct file_faults {
+
+		bool armed;
+		bool tripped;
+		bool torn;
+		uint64_t countdown;
+		uint64_t operations;
+
+	};
+
+	extern file_faults faults;
+
+	void plan_fault ( uint64_t after, bool torn );
+
+	void clear_faults ( );
+
 	bool open_file ( file_handle& out, const char* path, bool create );
 
 	bool read_at ( const file_handle& file, uint64_t offset, void* out, size_t size );

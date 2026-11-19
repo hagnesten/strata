@@ -4,6 +4,48 @@
 
 namespace base {
 
+	file_faults faults;
+
+	void plan_fault ( uint64_t after, bool torn ) {
+
+		faults = { };
+		faults.armed = true;
+		faults.countdown = after;
+		faults.torn = torn;
+
+	}
+
+	void clear_faults ( ) {
+
+		uint64_t operations = faults.operations;
+
+		faults = { };
+		faults.operations = operations;
+
+	}
+
+	static bool fault_now ( ) {
+
+		faults.operations++;
+
+		if ( !faults.armed )
+			return false;
+
+		if ( faults.tripped )
+			return true;
+
+		if ( faults.countdown && --faults.countdown == 0 ) {
+
+			faults.tripped = true;
+
+			return true;
+
+		}
+
+		return false;
+
+	}
+
 	bool wide_path ( const char* path, wchar_t* out, size_t room ) {
 
 		return MultiByteToWideChar ( CP_UTF8, 0, path, -1, out, static_cast < int32_t > ( room ) ) > 0;
@@ -67,6 +109,22 @@ namespace base {
 	bool write_at ( const file_handle& file, uint64_t offset, const void* data, size_t size ) {
 
 		const uint8_t* at = static_cast < const uint8_t* > ( data );
+		bool was_tripped = faults.tripped;
+
+		if ( fault_now ( ) ) {
+
+			if ( !was_tripped && faults.torn && size > 1 ) {
+
+				OVERLAPPED place = at_offset ( offset );
+				DWORD put = 0;
+
+				WriteFile ( file.handle, at, static_cast < DWORD > ( size / 2 ), &put, &place );
+
+			}
+
+			return false;
+
+		}
 
 		while ( size ) {
 
@@ -89,6 +147,9 @@ namespace base {
 
 	bool sync_file ( const file_handle& file ) {
 
+		if ( fault_now ( ) )
+			return false;
+
 		return FlushFileBuffers ( file.handle ) != 0;
 
 	}
@@ -102,6 +163,9 @@ namespace base {
 	}
 
 	bool truncate_file ( const file_handle& file, uint64_t size ) {
+
+		if ( fault_now ( ) )
+			return false;
 
 		FILE_END_OF_FILE_INFO end = { };
 
