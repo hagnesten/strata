@@ -602,7 +602,7 @@ namespace storage {
 
 	}
 
-	static bool split_leaf ( btree& tree, page_frame* frame, cell_span* cells, uint32_t count, split_result& out ) {
+	static bool split_leaf ( btree& tree, page_frame* frame, cell_span* cells, uint32_t count, split_result& out, bool appending ) {
 
 		pager& owner = *tree.owner;
 		uint8_t kind = frame->data [ 0 ];
@@ -618,6 +618,9 @@ namespace storage {
 
 		if ( !k )
 			k = 1;
+
+		if ( appending && count >= 2 && !link_a ( frame->data ) )
+			k = count - 1;
 
 		page_frame* right = new_page ( owner, static_cast < page_kind > ( kind ) );
 
@@ -686,7 +689,7 @@ namespace storage {
 
 	}
 
-	static bool split_interior ( btree& tree, page_frame* frame, cell_span* cells, uint32_t count, uint32_t right_child, split_result& out ) {
+	static bool split_interior ( btree& tree, page_frame* frame, cell_span* cells, uint32_t count, uint32_t right_child, split_result& out, bool appending ) {
 
 		pager& owner = *tree.owner;
 		uint8_t kind = frame->data [ 0 ];
@@ -702,6 +705,9 @@ namespace storage {
 
 		if ( !m )
 			m = 1;
+
+		if ( appending && count >= 3 )
+			m = count - 2;
 
 		cell_info middle;
 
@@ -819,7 +825,7 @@ namespace storage {
 				if ( rebuild ( frame->data, kind, cells, count, link_a ( frame->data ), link_b ( frame->data ) ) )
 					dirty_page ( frame );
 				else
-					fine = split_leaf ( tree, frame, cells, count, out );
+					fine = split_leaf ( tree, frame, cells, count, out, !exact && slot == count - 1 );
 
 			}
 
@@ -851,6 +857,7 @@ namespace storage {
 				fine = gather ( owner, frame, scratch, used, cells, count );
 
 				uint32_t right_child = link_a ( frame->data );
+				bool appending = position == count;
 
 				if ( fine ) {
 
@@ -866,7 +873,7 @@ namespace storage {
 					if ( rebuild ( frame->data, kind, cells, count, right_child, 0 ) )
 						dirty_page ( frame );
 					else
-						fine = split_interior ( tree, frame, cells, count, right_child, out );
+						fine = split_interior ( tree, frame, cells, count, right_child, out, appending );
 
 				}
 
