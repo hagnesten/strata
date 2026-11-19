@@ -86,6 +86,12 @@ namespace storage {
 
 	}
 
+	page_frame* cached_frame ( pager& item, uint32_t number ) {
+
+		return find_frame ( item, number );
+
+	}
+
 	static void unlink_frame ( pager& item, page_frame* frame ) {
 
 		page_frame** at = bucket_of ( item, frame->number );

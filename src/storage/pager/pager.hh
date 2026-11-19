@@ -16,6 +16,8 @@
 #define WAL_FRAME_HEADER 24
 #define WAL_FRAME ( WAL_FRAME_HEADER + PAGE_SIZE )
 #define WAL_CHECKPOINT_FRAMES 1000
+#define WAL_BATCH 64
+#define WAL_KEEP_BYTES ( 64ull * 1024 * 1024 )
 
 namespace storage {
 
@@ -98,6 +100,7 @@ namespace storage {
 		uint32_t index_room;
 		uint32_t index_used;
 		uint32_t checkpoint_frames;
+		uint8_t* batch;
 
 	};
 
@@ -191,6 +194,8 @@ namespace storage {
 	void close_pager ( pager& item );
 
 	page_frame* get_page ( pager& item, uint32_t number );
+
+	page_frame* cached_frame ( pager& item, uint32_t number );
 
 	page_frame* new_page ( pager& item, page_kind kind );
 

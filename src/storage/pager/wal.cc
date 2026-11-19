@@ -117,7 +117,9 @@ namespace storage {
 		wal.sequence++;
 		encode_wal_header ( wal, header );
 
-		if ( !base::write_at ( wal.file, 0, header, WAL_HEADER ) || !base::truncate_file ( wal.file, WAL_HEADER ) || !base::sync_file ( wal.file ) ) {
+		bool shrink = base::file_size ( wal.file ) > WAL_KEEP_BYTES;
+
+		if ( !base::write_at ( wal.file, 0, header, WAL_HEADER ) || ( shrink && !base::truncate_file ( wal.file, WAL_HEADER ) ) || !base::sync_file ( wal.file ) ) {
 
 			fail ( item, PAGER_IO, "the log could not be reset", 0, nullptr );
 
@@ -273,30 +275,34 @@ namespace storage {
 
 	}
 
+	static bool ready_batch ( pager& item ) {
+
+		if ( item.wal.batch )
+			return true;
+
+		item.wal.batch = base::make < uint8_t > ( static_cast < size_t > ( WAL_BATCH ) * WAL_FRAME );
+
+		if ( !item.wal.batch )
+			fail ( item, PAGER_MEMORY, "out of memory while committing", 0, nullptr );
+
+		return item.wal.batch != nullptr;
+
+	}
+
 	bool wal_commit ( pager& item, const uint8_t* header_page ) {
 
 		wal_state& wal = item.wal;
-		uint32_t dirty = 0;
 
-		for ( uint32_t i = 0; i < item.frame_count; i++ )
-			if ( item.frames [ i ]->number > 1 && item.frames [ i ]->dirty )
-				dirty++;
-
-		size_t size = static_cast < size_t > ( dirty + 1 ) * WAL_FRAME;
-		uint8_t* batch = base::make < uint8_t > ( size );
-
-		if ( !batch ) {
-
-			fail ( item, PAGER_MEMORY, "out of memory while committing", 0, nullptr );
-
+		if ( !ready_batch ( item ) )
 			return false;
-
-		}
 
 		uint32_t chain = wal.chain;
 		uint32_t written = 0;
+		uint32_t pending = 0;
+		uint64_t at_offset = wal.end;
+		bool fine = true;
 
-		for ( uint32_t i = 0; i <= item.frame_count; i++ ) {
+		for ( uint32_t i = 0; i <= item.frame_count && fine; i++ ) {
 
 			const uint8_t* data = nullptr;
 			uint32_t number = 0;
@@ -319,35 +325,57 @@ namespace storage {
 
 			}
 
-			uint8_t* at = batch + static_cast < size_t > ( written ) * WAL_FRAME;
+			uint8_t* at = wal.batch + static_cast < size_t > ( pending ) * WAL_FRAME;
 
 			base::write32 ( at, number );
 			base::write32 ( at + 4, number == 1 ? item.header.page_count : 0 );
 			base::write32 ( at + 8, wal.salt [ 0 ] );
 			base::write32 ( at + 12, wal.salt [ 1 ] );
+			base::write32 ( at + 20, 0 );
 			base::copy ( at + WAL_FRAME_HEADER, data, PAGE_SIZE );
 			chain = base::crc32c ( at + WAL_FRAME_HEADER, PAGE_SIZE, base::crc32c ( at, 16, chain ) );
 			base::write32 ( at + 16, chain );
-			written++;
+			pending++;
+
+			if ( pending == WAL_BATCH || i == item.frame_count ) {
+
+				size_t size = static_cast < size_t > ( pending ) * WAL_FRAME;
+
+				fine = base::write_at ( wal.file, at_offset, wal.batch, size );
+				at_offset += size;
+				written += pending;
+				pending = 0;
+
+			}
 
 		}
 
-		bool fine = base::write_at ( wal.file, wal.end, batch, size ) && base::sync_file ( wal.file );
+		fine = fine && base::sync_file ( wal.file );
 
 		if ( !fine ) {
 
-			base::release ( batch );
 			fail ( item, PAGER_IO, "the commit could not be written to the log", 0, nullptr );
 
 			return false;
 
 		}
 
-		for ( uint32_t i = 0; i < written && fine; i++ )
-			fine = index_put ( wal, base::read32 ( batch + static_cast < size_t > ( i ) * WAL_FRAME ), wal.end + static_cast < uint64_t > ( i ) * WAL_FRAME );
+		uint64_t offset = wal.end;
 
-		base::release ( batch );
-		wal.end += size;
+		for ( uint32_t i = 0; i < item.frame_count && fine; i++ ) {
+
+			page_frame* frame = item.frames [ i ];
+
+			if ( frame->number <= 1 || !frame->dirty )
+				continue;
+
+			fine = index_put ( wal, frame->number, offset );
+			offset += WAL_FRAME;
+
+		}
+
+		fine = fine && index_put ( wal, 1, offset );
+		wal.end = at_offset;
 		wal.chain = chain;
 		wal.frames += written;
 		item.stats.writes += written;
@@ -359,6 +387,27 @@ namespace storage {
 
 	}
 
+	static void sort_entries ( wal_entry* items, uint32_t count ) {
+
+		for ( uint32_t gap = count / 2; gap; gap /= 2 )
+			for ( uint32_t i = gap; i < count; i++ ) {
+
+				wal_entry held = items [ i ];
+				uint32_t k = i;
+
+				while ( k >= gap && items [ k - gap ].page > held.page ) {
+
+					items [ k ] = items [ k - gap ];
+					k -= gap;
+
+				}
+
+				items [ k ] = held;
+
+			}
+
+	}
+
 	bool checkpoint ( pager& item ) {
 
 		wal_state& wal = item.wal;
@@ -366,30 +415,57 @@ namespace storage {
 		if ( !wal.index_used )
 			return true;
 
-		uint8_t* page = base::make < uint8_t > ( PAGE_SIZE );
+		wal_entry* entries = base::make < wal_entry > ( wal.index_used + 1 );
 
-		if ( !page ) {
+		if ( !entries || !ready_batch ( item ) ) {
 
+			base::release ( entries );
 			fail ( item, PAGER_MEMORY, "out of memory during a checkpoint", 0, nullptr );
 
 			return false;
 
 		}
 
+		uint32_t count = 0;
+
+		for ( uint32_t i = 0; i < wal.index_room; i++ )
+			if ( wal.index [ i ].page && wal.index [ i ].page <= item.committed.page_count )
+				entries [ count++ ] = wal.index [ i ];
+
+		sort_entries ( entries, count );
+
 		bool fine = true;
+		uint32_t run = 0;
+		uint32_t first = 0;
 
-		for ( uint32_t i = 0; i < wal.index_room && fine; i++ ) {
+		for ( uint32_t i = 0; i < count && fine; i++ ) {
 
-			const wal_entry& entry = wal.index [ i ];
+			const wal_entry& entry = entries [ i ];
+			uint8_t* slot = wal.batch + static_cast < size_t > ( run ) * PAGE_SIZE;
+			page_frame* frame = cached_frame ( item, entry.page );
 
-			if ( !entry.page || entry.page > item.committed.page_count )
-				continue;
+			if ( !run )
+				first = entry.page;
 
-			fine = base::read_at ( wal.file, entry.offset + WAL_FRAME_HEADER, page, PAGE_SIZE ) && base::write_at ( item.file, static_cast < uint64_t > ( entry.page - 1 ) * PAGE_SIZE, page, PAGE_SIZE );
+			if ( frame && !frame->dirty && frame->number != 1 )
+				base::copy ( slot, frame->data, PAGE_SIZE );
+			else
+				fine = base::read_at ( wal.file, entry.offset + WAL_FRAME_HEADER, slot, PAGE_SIZE );
+
+			run++;
+
+			bool last = i + 1 == count || entries [ i + 1 ].page != entry.page + 1 || run == WAL_BATCH;
+
+			if ( fine && last ) {
+
+				fine = base::write_at ( item.file, static_cast < uint64_t > ( first - 1 ) * PAGE_SIZE, wal.batch, static_cast < size_t > ( run ) * PAGE_SIZE );
+				run = 0;
+
+			}
 
 		}
 
-		base::release ( page );
+		base::release ( entries );
 		fine = fine && base::truncate_file ( item.file, static_cast < uint64_t > ( item.committed.page_count ) * PAGE_SIZE ) && base::sync_file ( item.file );
 
 		if ( !fine ) {
@@ -413,6 +489,8 @@ namespace storage {
 
 		base::close_file ( item.wal.file );
 		base::release ( item.wal.index );
+		base::release ( item.wal.batch );
+		item.wal.batch = nullptr;
 		item.wal.index = nullptr;
 		item.wal.index_room = 0;
 		item.wal.index_used = 0;
