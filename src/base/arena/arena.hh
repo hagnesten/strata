@@ -52,4 +52,28 @@ namespace base {
 
 	};
 
+	template < typename type > bool push ( arena& memory, type*& items, uint32_t& count, uint32_t& room, const type& value ) {
+
+		if ( count == room ) {
+
+			uint32_t grown = room ? room * 2 : 8;
+			type* made = memory.make < type > ( grown );
+
+			if ( !made )
+				return false;
+
+			if ( items )
+				copy ( made, items, sizeof ( type ) * count );
+
+			items = made;
+			room = grown;
+
+		}
+
+		items [ count++ ] = value;
+
+		return true;
+
+	}
+
 }

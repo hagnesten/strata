@@ -10,4 +10,8 @@ namespace base {
 
 	void write_error ( const char* value );
 
+	bool read_line ( text& out );
+
+	void use_utf8 ( );
+
 }

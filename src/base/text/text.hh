@@ -20,6 +20,14 @@ namespace base {
 
 	char lower ( char value );
 
+	char upper ( char value );
+
+	uint32_t next_code ( const uint8_t* bytes, size_t size, size_t& at );
+
+	size_t count_codes ( const uint8_t* bytes, size_t size );
+
+	size_t skip_codes ( const uint8_t* bytes, size_t size, size_t codes );
+
 	struct text {
 
 		char* data = nullptr;
@@ -48,9 +56,11 @@ namespace base {
 
 		text& real ( double value );
 
-		text& hex ( uint64_t value, uint32_t digits );
+		text& hex ( uint64_t value, uint32_t digits, bool upper = false );
 
 		text& repeat ( char value, size_t count );
+
+		text& code ( uint32_t value );
 
 		text& pad_to ( size_t column );
 

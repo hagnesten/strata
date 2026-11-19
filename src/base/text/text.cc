@@ -35,6 +35,55 @@ namespace base {
 
 	}
 
+	char upper ( char value ) {
+
+		return value >= 'a' && value <= 'z' ? static_cast < char > ( value - 32 ) : value;
+
+	}
+
+	uint32_t next_code ( const uint8_t* bytes, size_t size, size_t& at ) {
+
+		uint8_t first = bytes [ at++ ];
+
+		if ( first < 0x80 )
+			return first;
+
+		uint32_t extra = first >= 0xF0 ? 3 : first >= 0xE0 ? 2 : first >= 0xC0 ? 1 : 0;
+		uint32_t code = first & ( 0x3F >> extra );
+
+		for ( uint32_t i = 0; i < extra && at < size && ( bytes [ at ] & 0xC0 ) == 0x80; i++ )
+			code = code << 6 | ( bytes [ at++ ] & 0x3F );
+
+		return code;
+
+	}
+
+	size_t count_codes ( const uint8_t* bytes, size_t size ) {
+
+		size_t count = 0;
+
+		for ( size_t i = 0; i < size; i++ )
+			count += ( bytes [ i ] & 0xC0 ) != 0x80;
+
+		return count;
+
+	}
+
+	size_t skip_codes ( const uint8_t* bytes, size_t size, size_t codes ) {
+
+		size_t at = 0;
+
+		while ( codes && at < size ) {
+
+			next_code ( bytes, size, at );
+			codes--;
+
+		}
+
+		return at;
+
+	}
+
 	bool same_folded ( const char* a, const char* b ) {
 
 		if ( !a || !b )
@@ -235,48 +284,119 @@ namespace base {
 
 		}
 
-		if ( value > 1e18 )
-			return add ( "1e18+" );
+		if ( value > 1.7976931348623157e308 )
+			return add ( "Inf" );
 
-		uint64_t whole = static_cast < uint64_t > ( value );
-		double part = value - static_cast < double > ( whole );
-		uint64_t scaled = static_cast < uint64_t > ( part * 1000000.0 + 0.5 );
+		if ( value == 0 )
+			return add ( "0.0" );
 
-		if ( scaled >= 1000000 ) {
+		static const double up [ 9 ] = { 1e1, 1e2, 1e4, 1e8, 1e16, 1e32, 1e64, 1e128, 1e256 };
+		int32_t exponent = 0;
+		double scaled = value;
 
-			whole++;
-			scaled -= 1000000;
+		if ( scaled >= 10 ) {
+
+			for ( int32_t i = 8; i >= 0; i-- ) {
+
+				if ( scaled >= up [ i ] ) {
+
+					scaled /= up [ i ];
+					exponent += 1 << i;
+
+				}
+
+			}
+
+		} else if ( scaled < 1 ) {
+
+			for ( int32_t i = 8; i >= 0; i-- ) {
+
+				if ( scaled * up [ i ] < 10 ) {
+
+					scaled *= up [ i ];
+					exponent -= 1 << i;
+
+				}
+
+			}
+
+			while ( scaled < 1 ) {
+
+				scaled *= 10;
+				exponent--;
+
+			}
 
 		}
 
-		number ( whole );
+		uint64_t digits = static_cast < uint64_t > ( scaled * 1e14 + 0.5 );
 
-		if ( !scaled )
-			return add ( ".0" );
+		if ( digits >= 1000000000000000ull ) {
 
-		char digits [ 6 ];
-
-		for ( int32_t i = 5; i >= 0; i-- ) {
-
-			digits [ i ] = static_cast < char > ( '0' + scaled % 10 );
-			scaled /= 10;
+			digits = ( digits + 5 ) / 10;
+			exponent++;
 
 		}
 
-		int32_t last = 5;
+		char written [ 16 ];
+		int32_t count = 15;
 
-		while ( last > 0 && digits [ last ] == '0' )
-			last--;
+		for ( int32_t i = 14; i >= 0; i-- ) {
 
-		add ( '.' );
+			written [ i ] = static_cast < char > ( '0' + digits % 10 );
+			digits /= 10;
 
-		return add ( digits, static_cast < size_t > ( last + 1 ) );
+		}
+
+		while ( count > 1 && written [ count - 1 ] == '0' )
+			count--;
+
+		if ( exponent >= -5 && exponent < 15 ) {
+
+			if ( exponent < 0 ) {
+
+				add ( "0." );
+				repeat ( '0', static_cast < size_t > ( -exponent - 1 ) );
+
+				return add ( written, static_cast < size_t > ( count ) );
+
+			}
+
+			for ( int32_t i = 0; i <= exponent; i++ )
+				add ( i < count ? written [ i ] : '0' );
+
+			add ( '.' );
+
+			if ( count <= exponent + 1 )
+				return add ( '0' );
+
+			return add ( written + exponent + 1, static_cast < size_t > ( count - exponent - 1 ) );
+
+		}
+
+		add ( written [ 0 ] ).add ( '.' );
+
+		if ( count > 1 )
+			add ( written + 1, static_cast < size_t > ( count - 1 ) );
+		else
+			add ( '0' );
+
+		add ( exponent < 0 ? "e-" : "e+" );
+
+		uint32_t magnitude = static_cast < uint32_t > ( exponent < 0 ? -exponent : exponent );
+
+		if ( magnitude < 10 )
+			add ( '0' );
+
+		return number ( magnitude );
 
 	}
 
-	text& text::hex ( uint64_t value, uint32_t digits ) {
+	text& text::hex ( uint64_t value, uint32_t digits, bool upper ) {
 
-		static const char table [ ] = "0123456789abcdef";
+		static const char lower_table [ ] = "0123456789abcdef";
+		static const char upper_table [ ] = "0123456789ABCDEF";
+		const char* table = upper ? upper_table : lower_table;
 
 		for ( int32_t shift = static_cast < int32_t > ( digits - 1 ) * 4; shift >= 0; shift -= 4 )
 			add ( table [ value >> shift & 15 ] );
@@ -291,6 +411,24 @@ namespace base {
 			add ( value );
 
 		return *this;
+
+	}
+
+	text& text::code ( uint32_t value ) {
+
+		if ( value > 0x10FFFF )
+			value = 0xFFFD;
+
+		if ( value < 0x80 )
+			return add ( static_cast < char > ( value ) );
+
+		if ( value < 0x800 )
+			return add ( static_cast < char > ( 0xC0 | value >> 6 ) ).add ( static_cast < char > ( 0x80 | ( value & 0x3F ) ) );
+
+		if ( value < 0x10000 )
+			return add ( static_cast < char > ( 0xE0 | value >> 12 ) ).add ( static_cast < char > ( 0x80 | ( value >> 6 & 0x3F ) ) ).add ( static_cast < char > ( 0x80 | ( value & 0x3F ) ) );
+
+		return add ( static_cast < char > ( 0xF0 | value >> 18 ) ).add ( static_cast < char > ( 0x80 | ( value >> 12 & 0x3F ) ) ).add ( static_cast < char > ( 0x80 | ( value >> 6 & 0x3F ) ) ).add ( static_cast < char > ( 0x80 | ( value & 0x3F ) ) );
 
 	}
 
