@@ -196,6 +196,7 @@
     <ClCompile Include="src\engine\functions\json.cc"><Filter>src\engine\functions</Filter></ClCompile>
     <ClCompile Include="src\engine\write\changes.cc"><Filter>src\engine\write</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\schema.cc"><Filter>src\engine\schema</Filter></ClCompile>
+    <ClCompile Include="src\engine\schema\alter.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\base\clock\clock.cc"><Filter>src\base\clock</Filter></ClCompile>
     <ClCompile Include="src\engine\database\database.cc"><Filter>src\engine\database</Filter></ClCompile>
     <ClCompile Include="src\engine\database\transaction.cc"><Filter>src\engine\database</Filter></ClCompile>
@@ -241,6 +242,7 @@
     <ClInclude Include="src\base\sort\sort.hh"><Filter>src\base\sort</Filter></ClInclude>
     <ClInclude Include="src\base\clock\clock.hh"><Filter>src\base\clock</Filter></ClInclude>
     <ClInclude Include="src\engine\run\run.hh"><Filter>src\engine\run</Filter></ClInclude>
+    <ClInclude Include="src\engine\schema\schema.hh"><Filter>src\engine\schema</Filter></ClInclude>
     <ClInclude Include="src\engine\database\database.hh"><Filter>src\engine\database</Filter></ClInclude>
     <ClInclude Include="src\app\shell\shell.hh"><Filter>src\app\shell</Filter></ClInclude>
     <ClInclude Include="src\base\png\png.hh"><Filter>src\base\png</Filter></ClInclude>

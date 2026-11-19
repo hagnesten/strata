@@ -335,7 +335,18 @@ namespace sql {
 
 			const table_source& source = item->sources [ i ];
 
-			out.add ( source.join == JOIN_FIRST ? " FROM " : source.join == JOIN_LEFT ? " LEFT JOIN " : source.join == JOIN_CROSS ? ", " : " JOIN " );
+			if ( source.join == JOIN_FIRST )
+				out.add ( " FROM " );
+			else if ( source.join == JOIN_CROSS )
+				out.add ( ", " );
+			else {
+
+				if ( source.natural )
+					out.add ( " NATURAL" );
+
+				out.add ( source.join == JOIN_LEFT ? " LEFT JOIN " : source.join == JOIN_RIGHT ? " RIGHT JOIN " : source.join == JOIN_FULL ? " FULL JOIN " : " JOIN " );
+
+			}
 
 			if ( source.query ) {
 

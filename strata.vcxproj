@@ -68,6 +68,7 @@
     <ClCompile Include="src\engine\functions\json.cc" />
     <ClCompile Include="src\engine\write\changes.cc" />
     <ClCompile Include="src\engine\schema\schema.cc" />
+    <ClCompile Include="src\engine\schema\alter.cc" />
     <ClCompile Include="src\base\clock\clock.cc" />
     <ClCompile Include="src\engine\database\database.cc" />
     <ClCompile Include="src\engine\database\transaction.cc" />
@@ -113,6 +114,7 @@
     <ClInclude Include="src\base\sort\sort.hh" />
     <ClInclude Include="src\base\clock\clock.hh" />
     <ClInclude Include="src\engine\run\run.hh" />
+    <ClInclude Include="src\engine\schema\schema.hh" />
     <ClInclude Include="src\engine\database\database.hh" />
     <ClInclude Include="src\app\shell\shell.hh" />
     <ClInclude Include="src\base\png\png.hh" />

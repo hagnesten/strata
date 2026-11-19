@@ -280,6 +280,28 @@ namespace test {
 		rows ( db, "SELECT * FROM londoners", "Linus|28" );
 		run ( db, "DROP TABLE londoners" );
 		fails ( db, "SELECT * FROM londoners", "no such table" );
+		run ( db, "CREATE TABLE wide ( id INTEGER PRIMARY KEY, a TEXT, b INT CHECK ( b >= 0 ), c TEXT DEFAULT 'cee', d BLOB, e INT UNIQUE )" );
+		run ( db, "INSERT INTO wide ( a, b, c, d, e ) VALUES ( 'x', 1, 'one', x'01', 10 ), ( 'y', 2, NULL, NULL, 20 ), ( NULL, 3, 'three', zeroblob ( 3000 ), 30 )" );
+		run ( db, "CREATE INDEX wide_c ON wide ( c )" );
+		run ( db, "ALTER TABLE wide ADD COLUMN f TEXT DEFAULT 'late'" );
+		fails ( db, "ALTER TABLE wide DROP COLUMN id", "PRIMARY KEY" );
+		fails ( db, "ALTER TABLE wide DROP COLUMN e", "UNIQUE" );
+		fails ( db, "ALTER TABLE wide DROP COLUMN c", "used by index wide_c" );
+		fails ( db, "ALTER TABLE wide DROP COLUMN nope", "has no column" );
+		run ( db, "ALTER TABLE wide DROP COLUMN a" );
+		rows ( db, "SELECT id, b, c, length ( d ), e, f FROM wide ORDER BY id", "1|1|one|1|10|late\n2|2|NULL|NULL|20|late\n3|3|three|3000|30|late" );
+		fails ( db, "SELECT count ( * ) FROM wide WHERE a IS NULL", "no such column: a" );
+		run ( db, "ALTER TABLE wide DROP COLUMN d" );
+		rows ( db, "SELECT id, b, c, e, f FROM wide WHERE c = 'three'", "3|3|three|30|late" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT id FROM wide WHERE c = 'one'", "USING INDEX wide_c" );
+		fails ( db, "INSERT INTO wide ( b, c, e ) VALUES ( -1, 'neg', 40 )", "CHECK" );
+		fails ( db, "INSERT INTO wide ( b, e ) VALUES ( 5, 10 )", "UNIQUE" );
+		run ( db, "INSERT INTO wide ( b, e ) VALUES ( 5, 50 )" );
+		rows ( db, "SELECT c, f FROM wide WHERE e = 50", "cee|late" );
+		run ( db, "ALTER TABLE wide DROP COLUMN f" );
+		rows ( db, "SELECT count ( * ), group_concat ( c ) FROM wide", "4|one,three,cee" );
+		run ( db, "CREATE TABLE solo ( only_one )" );
+		fails ( db, "ALTER TABLE solo DROP COLUMN only_one", "only column" );
 
 	}
 

@@ -1,9 +1,9 @@
-#include "engine/run/run.hh"
+#include "engine/schema/schema.hh"
 #include "sql/print/print.hh"
 
 namespace engine {
 
-	static bool reserved_name ( const char* name ) {
+	bool reserved_name ( const char* name ) {
 
 		const char* prefix = "strata_";
 
@@ -15,7 +15,7 @@ namespace engine {
 
 	}
 
-	static bool name_taken ( run_context& ctx, const char* name, bool if_not_exists, bool& skip ) {
+	bool name_taken ( run_context& ctx, const char* name, bool if_not_exists, bool& skip ) {
 
 		skip = false;
 
@@ -34,7 +34,7 @@ namespace engine {
 
 	}
 
-	static bool uses_query ( const sql::expression* item ) {
+	bool uses_query ( const sql::expression* item ) {
 
 		if ( !item )
 			return false;
@@ -53,7 +53,7 @@ namespace engine {
 
 	}
 
-	static bool plain_value ( const sql::expression* item ) {
+	bool plain_value ( const sql::expression* item ) {
 
 		if ( !item )
 			return true;
@@ -65,7 +65,7 @@ namespace engine {
 
 	}
 
-	static bool reload ( run_context& ctx ) {
+	bool refresh_schema ( run_context& ctx ) {
 
 		ctx.scopes = nullptr;
 		ctx.schema_changed = true;
@@ -77,7 +77,26 @@ namespace engine {
 
 	}
 
-	static void index_sql ( base::text& out, bool unique, const char* name, const char* table, const char* const* columns, uint32_t count ) {
+	bool mentions_column ( const sql::expression* item, const char* table, const char* column ) {
+
+		if ( !item )
+			return false;
+
+		if ( item->kind == sql::EXPRESSION_COLUMN && item->name && base::same_folded ( item->name, column ) && ( !item->table || base::same_folded ( item->table, table ) ) )
+			return true;
+
+		if ( mentions_column ( item->left, table, column ) || mentions_column ( item->right, table, column ) || mentions_column ( item->third, table, column ) )
+			return true;
+
+		for ( uint32_t i = 0; i < item->count; i++ )
+			if ( mentions_column ( item->list [ i ], table, column ) )
+				return true;
+
+		return false;
+
+	}
+
+	void index_sql ( base::text& out, bool unique, const char* name, const char* table, const char* const* columns, uint32_t count ) {
 
 		out.clear ( );
 		out.add ( unique ? "CREATE UNIQUE INDEX " : "CREATE INDEX " );
@@ -99,7 +118,7 @@ namespace engine {
 
 	}
 
-	static bool validate_definition ( run_context& ctx, sql::create_table_statement* definition, table_info& info ) {
+	bool validate_definition ( run_context& ctx, sql::create_table_statement* definition, table_info& info ) {
 
 		if ( !describe_table ( *ctx.lasting, definition, info, *ctx.problem ) )
 			return false;
@@ -135,7 +154,7 @@ namespace engine {
 
 	}
 
-	static bool write_definition ( run_context& ctx, const sql::create_table_statement* definition, uint32_t root, int64_t& rowid ) {
+	bool write_definition ( run_context& ctx, const sql::create_table_statement* definition, uint32_t root, int64_t& rowid ) {
 
 		base::text text;
 
@@ -295,7 +314,7 @@ namespace engine {
 
 		}
 
-		if ( !reload ( ctx ) )
+		if ( !refresh_schema ( ctx ) )
 			return false;
 
 		if ( !item->query )
@@ -459,7 +478,7 @@ namespace engine {
 		if ( !write_schema_row ( *ctx.pages, "index", index.name, table->name, index.root, text.value ( ), rowid ) )
 			return fail_storage ( ctx, "the schema could not be written" );
 
-		return reload ( ctx );
+		return refresh_schema ( ctx );
 
 	}
 
@@ -478,7 +497,7 @@ namespace engine {
 			if ( !storage::drop_btree ( *ctx.pages, found->root ) || !delete_schema_row ( *ctx.pages, found->schema_rowid ) )
 				return fail_storage ( ctx, "the index could not be dropped" );
 
-			return reload ( ctx );
+			return refresh_schema ( ctx );
 
 		}
 
@@ -525,304 +544,7 @@ namespace engine {
 		if ( !storage::drop_btree ( *ctx.pages, table->root ) || !delete_schema_row ( *ctx.pages, table->schema_rowid ) )
 			return fail_storage ( ctx, "the table could not be dropped" );
 
-		return reload ( ctx );
-
-	}
-
-	static sql::create_table_statement* copy_definition ( run_context& ctx, const sql::create_table_statement* from, uint32_t extra ) {
-
-		sql::create_table_statement* made = ctx.lasting->make < sql::create_table_statement > ( 1 );
-		sql::column_definition* columns = ctx.lasting->make < sql::column_definition > ( from->column_count + extra + 1 );
-		sql::table_constraint* constraints = ctx.lasting->make < sql::table_constraint > ( from->constraint_count + 1 );
-
-		if ( !made || !columns || !constraints ) {
-
-			fail_run ( ctx, "out of memory" );
-
-			return nullptr;
-
-		}
-
-		*made = *from;
-		base::copy ( columns, from->columns, sizeof ( sql::column_definition ) * from->column_count );
-
-		if ( from->constraint_count )
-			base::copy ( constraints, from->constraints, sizeof ( sql::table_constraint ) * from->constraint_count );
-
-		made->columns = columns;
-		made->constraints = constraints;
-
-		return made;
-
-	}
-
-	static const char** copy_names ( run_context& ctx, const char* const* names, uint32_t count ) {
-
-		const char** made = ctx.lasting->make < const char* > ( count + 1 );
-
-		if ( made && count )
-			base::copy ( made, names, sizeof ( const char* ) * count );
-
-		return made;
-
-	}
-
-	static void rename_in_expression ( sql::expression* item, const char* table, const char* from, const char* to ) {
-
-		if ( !item )
-			return;
-
-		if ( item->kind == sql::EXPRESSION_COLUMN && item->name && base::same_folded ( item->name, from ) && ( !item->table || base::same_folded ( item->table, table ) ) )
-			item->name = to;
-
-		rename_in_expression ( item->left, table, from, to );
-		rename_in_expression ( item->right, table, from, to );
-		rename_in_expression ( item->third, table, from, to );
-
-		for ( uint32_t i = 0; i < item->count; i++ )
-			rename_in_expression ( item->list [ i ], table, from, to );
-
-	}
-
-	static bool rewrite_indexes ( run_context& ctx, const char* old_table, const char* new_table, const char* old_column, const char* new_column ) {
-
-		for ( uint32_t i = 0; i < ctx.schema->index_count; i++ ) {
-
-			index_info& index = ctx.schema->indexes [ i ];
-
-			if ( !base::same_folded ( index.table, old_table ) )
-				continue;
-
-			table_info* table = find_table ( *ctx.schema, old_table );
-			const char* names [ CATALOG_KEY_COLUMNS ];
-
-			for ( uint32_t k = 0; k < index.column_count; k++ ) {
-
-				names [ k ] = table->columns [ index.columns [ k ] ].name;
-
-				if ( old_column && base::same_folded ( names [ k ], old_column ) )
-					names [ k ] = new_column;
-
-			}
-
-			base::text text;
-			int64_t rowid = index.schema_rowid;
-
-			index_sql ( text, index.unique, index.name, new_table, names, index.column_count );
-
-			if ( !write_schema_row ( *ctx.pages, "index", index.name, new_table, index.root, text.value ( ), rowid ) )
-				return fail_storage ( ctx, "the schema could not be written" );
-
-		}
-
-		return true;
-
-	}
-
-	static bool rewrite_references ( run_context& ctx, const char* old_table, const char* new_table, const char* old_column, const char* new_column ) {
-
-		for ( uint32_t t = 0; t < ctx.schema->table_count; t++ ) {
-
-			table_info& other = ctx.schema->tables [ t ];
-
-			if ( base::same_folded ( other.name, old_table ) )
-				continue;
-
-			sql::create_table_statement* definition = copy_definition ( ctx, other.definition, 0 );
-			bool touched = false;
-
-			if ( !definition )
-				return false;
-
-			for ( uint32_t c = 0; c < definition->column_count; c++ ) {
-
-				sql::column_definition& column = definition->columns [ c ];
-
-				if ( !column.references || !base::same_folded ( column.references, old_table ) )
-					continue;
-
-				column.references = new_table;
-				touched = true;
-
-				if ( old_column && column.references_column && base::same_folded ( column.references_column, old_column ) )
-					column.references_column = new_column;
-
-			}
-
-			for ( uint32_t c = 0; c < definition->constraint_count; c++ ) {
-
-				sql::table_constraint& constraint = definition->constraints [ c ];
-
-				if ( !constraint.references || !base::same_folded ( constraint.references, old_table ) )
-					continue;
-
-				constraint.references = new_table;
-				touched = true;
-
-				if ( old_column ) {
-
-					constraint.references_columns = copy_names ( ctx, constraint.references_columns, constraint.references_count );
-
-					for ( uint32_t k = 0; k < constraint.references_count; k++ )
-						if ( base::same_folded ( constraint.references_columns [ k ], old_column ) )
-							constraint.references_columns [ k ] = new_column;
-
-				}
-
-			}
-
-			if ( !touched )
-				continue;
-
-			int64_t rowid = other.schema_rowid;
-
-			if ( !write_definition ( ctx, definition, other.root, rowid ) )
-				return false;
-
-		}
-
-		return true;
-
-	}
-
-	bool run_alter ( run_context& ctx, const sql::alter_statement* item ) {
-
-		table_info* table = find_table ( *ctx.schema, item->table );
-
-		if ( !table )
-			return fail_named ( ctx, "no such table: ", item->table, "" );
-
-		int64_t rowid = table->schema_rowid;
-
-		if ( item->kind == sql::ALTER_ADD_COLUMN ) {
-
-			sql::column_definition& column = *item->column;
-
-			if ( find_column ( *table, column.name ) >= 0 )
-				return fail_named ( ctx, "table ", table->name, " already has a column with that name" );
-
-			if ( column.primary || column.unique )
-				return fail_run ( ctx, "an added column cannot be PRIMARY KEY or UNIQUE" );
-
-			if ( !plain_value ( column.fallback ) )
-				return fail_run ( ctx, "the DEFAULT of an added column must be a plain value" );
-
-			if ( column.not_null ) {
-
-				storage::value fallback = storage::null_value ( );
-
-				if ( column.fallback && ( !bind_expression ( ctx, nullptr, column.fallback, BIND_CONSTANT ) || !evaluate ( ctx, nullptr, column.fallback, fallback ) ) )
-					return false;
-
-				if ( fallback.kind == storage::VALUE_NULL )
-					return fail_run ( ctx, "an added NOT NULL column needs a DEFAULT that is not NULL" );
-
-			}
-
-			sql::create_table_statement* definition = copy_definition ( ctx, table->definition, 1 );
-
-			if ( !definition )
-				return false;
-
-			definition->columns [ definition->column_count++ ] = column;
-
-			table_info info;
-
-			if ( !validate_definition ( ctx, definition, info ) || !write_definition ( ctx, definition, table->root, rowid ) )
-				return false;
-
-			return reload ( ctx );
-
-		}
-
-		if ( item->kind == sql::ALTER_RENAME_TABLE ) {
-
-			bool skip = false;
-
-			if ( base::same_folded ( item->new_name, table->name ) )
-				return true;
-
-			if ( !name_taken ( ctx, item->new_name, false, skip ) )
-				return false;
-
-			if ( reserved_name ( item->new_name ) )
-				return fail_run ( ctx, "names starting with strata_ are kept for Strata itself" );
-
-			sql::create_table_statement* definition = copy_definition ( ctx, table->definition, 0 );
-
-			if ( !definition )
-				return false;
-
-			definition->name = item->new_name;
-
-			for ( uint32_t c = 0; c < definition->column_count; c++ )
-				if ( definition->columns [ c ].references && base::same_folded ( definition->columns [ c ].references, table->name ) )
-					definition->columns [ c ].references = item->new_name;
-
-			for ( uint32_t c = 0; c < definition->constraint_count; c++ )
-				if ( definition->constraints [ c ].references && base::same_folded ( definition->constraints [ c ].references, table->name ) )
-					definition->constraints [ c ].references = item->new_name;
-
-			if ( !write_definition ( ctx, definition, table->root, rowid ) || !rewrite_indexes ( ctx, table->name, item->new_name, nullptr, nullptr ) || !rewrite_references ( ctx, table->name, item->new_name, nullptr, nullptr ) )
-				return false;
-
-			return reload ( ctx );
-
-		}
-
-		int32_t column = find_column ( *table, item->old_name );
-
-		if ( column < 0 )
-			return fail_named ( ctx, "table ", table->name, " has no column with that name" );
-
-		if ( find_column ( *table, item->new_name ) >= 0 && !base::same_folded ( item->old_name, item->new_name ) )
-			return fail_named ( ctx, "table ", table->name, " already has a column with the new name" );
-
-		sql::create_table_statement* definition = copy_definition ( ctx, table->definition, 0 );
-
-		if ( !definition )
-			return false;
-
-		const char* old_name = table->columns [ column ].name;
-
-		definition->columns [ column ].name = item->new_name;
-
-		for ( uint32_t c = 0; c < definition->column_count; c++ ) {
-
-			rename_in_expression ( definition->columns [ c ].check, table->name, old_name, item->new_name );
-
-			if ( definition->columns [ c ].references && base::same_folded ( definition->columns [ c ].references, table->name ) && definition->columns [ c ].references_column && base::same_folded ( definition->columns [ c ].references_column, old_name ) )
-				definition->columns [ c ].references_column = item->new_name;
-
-		}
-
-		for ( uint32_t c = 0; c < definition->constraint_count; c++ ) {
-
-			sql::table_constraint& constraint = definition->constraints [ c ];
-
-			rename_in_expression ( constraint.check, table->name, old_name, item->new_name );
-			constraint.columns = copy_names ( ctx, constraint.columns, constraint.column_count );
-
-			for ( uint32_t k = 0; k < constraint.column_count; k++ )
-				if ( base::same_folded ( constraint.columns [ k ], old_name ) )
-					constraint.columns [ k ] = item->new_name;
-
-			if ( constraint.references && base::same_folded ( constraint.references, table->name ) ) {
-
-				constraint.references_columns = copy_names ( ctx, constraint.references_columns, constraint.references_count );
-
-				for ( uint32_t k = 0; k < constraint.references_count; k++ )
-					if ( base::same_folded ( constraint.references_columns [ k ], old_name ) )
-						constraint.references_columns [ k ] = item->new_name;
-
-			}
-
-		}
-
-		if ( !write_definition ( ctx, definition, table->root, rowid ) || !rewrite_indexes ( ctx, table->name, table->name, old_name, item->new_name ) || !rewrite_references ( ctx, table->name, table->name, old_name, item->new_name ) )
-			return false;
-
-		return reload ( ctx );
+		return refresh_schema ( ctx );
 
 	}
 
