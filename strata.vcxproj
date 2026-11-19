@@ -59,6 +59,10 @@
     <ClCompile Include="src\engine\run\evaluate.cc" />
     <ClCompile Include="src\engine\plan\prepare.cc" />
     <ClCompile Include="src\engine\plan\explain.cc" />
+    <ClCompile Include="src\engine\plan\join_order.cc" />
+    <ClCompile Include="src\engine\catalog\statistics.cc" />
+    <ClCompile Include="src\engine\schema\analyze.cc" />
+    <ClCompile Include="src\storage\btree\estimate.cc" />
     <ClCompile Include="src\engine\query\select.cc" />
     <ClCompile Include="src\engine\query\source.cc" />
     <ClCompile Include="src\engine\query\aggregate.cc" />
@@ -119,6 +123,7 @@
     <ClInclude Include="src\base\clock\clock.hh" />
     <ClInclude Include="src\engine\run\run.hh" />
     <ClInclude Include="src\engine\schema\schema.hh" />
+    <ClInclude Include="src\engine\plan\join_order.hh" />
     <ClInclude Include="src\engine\database\database.hh" />
     <ClInclude Include="src\app\shell\shell.hh" />
     <ClInclude Include="src\base\png\png.hh" />

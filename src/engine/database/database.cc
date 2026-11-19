@@ -235,6 +235,9 @@ namespace engine {
 			case sql::STATEMENT_EXPLAIN:
 				return explain_statement ( ctx, item, sink );
 
+			case sql::STATEMENT_ANALYZE:
+				return run_analyze ( ctx );
+
 			default:
 				return fail_run ( ctx, "this statement cannot run here" );
 
@@ -266,9 +269,6 @@ namespace engine {
 			return controlled;
 
 		switch ( statement->kind ) {
-
-			case sql::STATEMENT_ANALYZE:
-				return true;
 
 			case sql::STATEMENT_VACUUM:
 				return run_vacuum ( item, ctx, statement );

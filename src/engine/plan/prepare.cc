@@ -36,6 +36,27 @@ namespace engine {
 
 	}
 
+	static int32_t highest_position ( const prepared_select* plan, const sql::expression* item ) {
+
+		if ( !item )
+			return -1;
+
+		int32_t highest = -1;
+
+		if ( item->kind == sql::EXPRESSION_COLUMN && item->depth == 0 && item->source >= 0 && static_cast < uint32_t > ( item->source ) < plan->source_count )
+			highest = static_cast < int32_t > ( plan->sources [ item->source ].position );
+
+		highest = base::max ( highest, highest_position ( plan, item->left ) );
+		highest = base::max ( highest, highest_position ( plan, item->right ) );
+		highest = base::max ( highest, highest_position ( plan, item->third ) );
+
+		for ( uint32_t i = 0; i < item->count; i++ )
+			highest = base::max ( highest, highest_position ( plan, item->list [ i ] ) );
+
+		return highest;
+
+	}
+
 	static void note_use ( prepared_source& source, int32_t column ) {
 
 		if ( source.used && column >= 0 && static_cast < uint32_t > ( column ) < source.width )
@@ -655,7 +676,12 @@ namespace engine {
 
 		bool any = false;
 
-		for ( uint32_t s = 0; s < plan->source_count; s++ ) {
+		for ( uint32_t p = 0; p < plan->source_count; p++ ) {
+
+			uint32_t s = 0;
+
+			while ( s + 1 < plan->source_count && plan->sources [ s ].position != p )
+				s++;
 
 			prepared_source& source = plan->sources [ s ];
 
@@ -914,6 +940,7 @@ namespace engine {
 			prepared_source& source = plan->sources [ i ];
 
 			source.syntax = &syntax;
+			source.position = i;
 			source.left = syntax.join == sql::JOIN_LEFT || syntax.join == sql::JOIN_FULL;
 			source.right = syntax.join == sql::JOIN_RIGHT || syntax.join == sql::JOIN_FULL;
 
@@ -968,6 +995,8 @@ namespace engine {
 
 		}
 
+		order_joins ( ctx, plan );
+
 		for ( uint32_t i = 0; i < item->source_count; i++ ) {
 
 			prepared_source& source = plan->sources [ i ];
@@ -1005,7 +1034,7 @@ namespace engine {
 
 			for ( uint32_t t = 0; t < source.on_count; t++ ) {
 
-				if ( highest_source ( source.on_terms [ t ], 0 ) > static_cast < int32_t > ( i ) && highest_source ( source.on_terms [ t ], 0 ) != 0x7FFFFFFF ) {
+				if ( highest_position ( plan, source.on_terms [ t ] ) > static_cast < int32_t > ( source.position ) ) {
 
 					fail_run ( ctx, "an ON clause can only use tables joined before it" );
 

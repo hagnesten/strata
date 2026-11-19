@@ -208,6 +208,7 @@ namespace engine {
 		bool* nocase;
 		bool* used;
 		uint32_t width;
+		uint32_t position;
 		bool left;
 		bool right;
 		int32_t* paired_source;
@@ -651,6 +652,10 @@ namespace engine {
 	bool run_drop ( run_context& ctx, const sql::drop_statement* item, bool index );
 
 	bool run_alter ( run_context& ctx, const sql::alter_statement* item );
+
+	bool run_analyze ( run_context& ctx );
+
+	void order_joins ( run_context& ctx, prepared_select* plan );
 
 	bool explain_plan ( run_context& ctx, prepared_select* plan, row_sink& sink );
 

@@ -126,4 +126,77 @@ namespace test {
 
 	}
 
+	void join_order_tests ( engine::database& db ) {
+
+		run ( db, "CREATE TABLE big_side ( id INTEGER PRIMARY KEY, k INT, v TEXT )" );
+		run ( db, "WITH RECURSIVE n ( i ) AS ( SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2000 ) INSERT INTO big_side SELECT i, i % 100, 'v' || i FROM n" );
+		run ( db, "CREATE TABLE small_side ( k INT, label TEXT )" );
+		run ( db, "INSERT INTO small_side VALUES ( 5, 'five' ), ( 10, 'ten' ), ( 15, 'fifteen' )" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT b.v FROM big_side b, small_side s WHERE b.id = s.k", "1|0|SCAN small_side AS s\n2|0|SEARCH big_side AS b USING ROWID (rowid=?)" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT b.v FROM big_side b JOIN small_side s ON s.k = b.id", "1|0|SCAN small_side AS s\n2|0|SEARCH big_side AS b USING ROWID (rowid=?)" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT b.v FROM big_side b CROSS JOIN small_side s WHERE b.id = s.k", "1|0|SCAN big_side AS b\n2|0|SCAN small_side AS s" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT b.v FROM big_side b LEFT JOIN small_side s ON b.id = s.k", "1|0|SCAN big_side AS b" );
+		rows ( db, "SELECT s.label, b.v FROM big_side b, small_side s WHERE b.id = s.k ORDER BY b.id", "five|v5\nten|v10\nfifteen|v15" );
+		rows ( db, "SELECT * FROM big_side b, small_side s WHERE b.id = s.k AND s.k = 10", "10|10|v10|10|ten" );
+		fails ( db, "SELECT 1 FROM big_side b JOIN small_side s ON s.k = c.k JOIN small_side c", "only use tables joined before it" );
+		run ( db, "CREATE INDEX big_k ON big_side ( k )" );
+		run ( db, "ANALYZE" );
+		rows ( db, "SELECT idx, stat FROM strata_stat WHERE tbl = 'big_side' ORDER BY idx", "NULL|2000\nbig_k|2000 20" );
+		rows ( db, "SELECT stat FROM strata_stat WHERE tbl = 'small_side'", "3" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT count ( * ) FROM big_side b, small_side s WHERE b.k = s.k", "1|0|SCAN small_side AS s\n2|0|SEARCH big_side AS b USING COVERING INDEX big_k (k=?)" );
+		rows ( db, "SELECT count ( * ) FROM big_side b, small_side s WHERE b.k = s.k", "60" );
+		run ( db, "ANALYZE" );
+		rows ( db, "SELECT count ( * ) FROM strata_stat WHERE tbl IN ( 'big_side', 'small_side' )", "3" );
+		run ( db, "DROP TABLE small_side" );
+		run ( db, "DROP TABLE big_side" );
+
+	}
+
+	void join_order_fuzz ( engine::database& db ) {
+
+		static const char* const shapes [ 8 ] = { "a.k = b.k", "c.k = a.v", "c.rowid = b.w", "b.k = 3", "c.w > 2", "a.v = c.w AND b.w = c.k", "c.k = a.k + 1", "a.rowid = c.w" };
+		test_random random = { 0x510E527FADE682D1ull };
+		base::text sql;
+		uint32_t mismatches = 0;
+		bool fine = true;
+
+		run ( db, "CREATE TABLE jc ( k INT, w INT )" );
+		run ( db, "CREATE INDEX jc_k ON jc ( k )" );
+
+		for ( uint32_t r = 0; r < 300 && fine; r++ ) {
+
+			sql.clear ( );
+			sql.add ( "INSERT INTO jc VALUES ( " ).number ( random.below ( 8 ) ).add ( ", " ).number ( random.below ( 20 ) ).add ( " )" );
+			fine = engine::execute ( db, sql.value ( ), nullptr, 0, nullptr );
+
+		}
+
+		for ( uint32_t round = 0; round < 120 && fine; round++ ) {
+
+			base::text where;
+			uint32_t parts = 1 + random.below ( 3 );
+
+			for ( uint32_t p = 0; p < parts; p++ ) {
+
+				if ( p )
+					where.add ( " AND " );
+
+				where.add ( shapes [ random.below ( 8 ) ] );
+
+			}
+
+			base::text free;
+			base::text fixed;
+
+			free.add ( "SELECT a.rowid, b.rowid, c.rowid FROM jc c, ja a, jb b WHERE " ).add ( where.value ( ) ).add ( " ORDER BY 1, 2, 3" );
+			fixed.add ( "SELECT a.rowid, b.rowid, c.rowid FROM jc c CROSS JOIN ja a CROSS JOIN jb b WHERE " ).add ( where.value ( ) ).add ( " ORDER BY 1, 2, 3" );
+			fine = same_answer ( db, free.value ( ), fixed.value ( ), mismatches );
+
+		}
+
+		expect ( fine && !mismatches, "reordered inner joins agree with the written order" );
+		run ( db, "DROP TABLE jc" );
+
+	}
+
 }

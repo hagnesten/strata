@@ -9,6 +9,8 @@
 #define CATALOG_CHECKS 32
 #define CATALOG_FOREIGN 32
 #define SCHEMA_COLUMNS 5
+#define STAT_TABLE "strata_stat"
+#define STAT_COLUMNS 3
 
 namespace engine {
 
@@ -48,6 +50,8 @@ namespace engine {
 		uint32_t columns [ CATALOG_KEY_COLUMNS ];
 		uint32_t column_count;
 		const char* sql;
+		uint64_t stat_average [ CATALOG_KEY_COLUMNS ];
+		bool stat_known;
 
 	};
 
@@ -69,6 +73,8 @@ namespace engine {
 		uint32_t foreign_count;
 		sql::create_table_statement* definition;
 		const char* sql;
+		uint64_t stat_rows;
+		bool stat_known;
 
 	};
 
@@ -100,5 +106,9 @@ namespace engine {
 	bool delete_schema_row ( storage::pager& pages, int64_t rowid );
 
 	bool ensure_schema_tree ( storage::pager& pages );
+
+	bool load_statistics ( storage::pager& pages, catalog& out );
+
+	uint64_t table_rows ( storage::pager& pages, const table_info& table );
 
 }

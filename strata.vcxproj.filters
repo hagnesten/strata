@@ -187,6 +187,10 @@
     <ClCompile Include="src\engine\run\evaluate.cc"><Filter>src\engine\run</Filter></ClCompile>
     <ClCompile Include="src\engine\plan\prepare.cc"><Filter>src\engine\plan</Filter></ClCompile>
     <ClCompile Include="src\engine\plan\explain.cc"><Filter>src\engine\plan</Filter></ClCompile>
+    <ClCompile Include="src\engine\plan\join_order.cc"><Filter>src\engine\plan</Filter></ClCompile>
+    <ClCompile Include="src\engine\catalog\statistics.cc"><Filter>src\engine\catalog</Filter></ClCompile>
+    <ClCompile Include="src\engine\schema\analyze.cc"><Filter>src\engine\schema</Filter></ClCompile>
+    <ClCompile Include="src\storage\btree\estimate.cc"><Filter>src\storage\btree</Filter></ClCompile>
     <ClCompile Include="src\engine\query\select.cc"><Filter>src\engine\query</Filter></ClCompile>
     <ClCompile Include="src\engine\query\source.cc"><Filter>src\engine\query</Filter></ClCompile>
     <ClCompile Include="src\engine\query\aggregate.cc"><Filter>src\engine\query</Filter></ClCompile>
@@ -247,6 +251,7 @@
     <ClInclude Include="src\base\clock\clock.hh"><Filter>src\base\clock</Filter></ClInclude>
     <ClInclude Include="src\engine\run\run.hh"><Filter>src\engine\run</Filter></ClInclude>
     <ClInclude Include="src\engine\schema\schema.hh"><Filter>src\engine\schema</Filter></ClInclude>
+    <ClInclude Include="src\engine\plan\join_order.hh"><Filter>src\engine\plan</Filter></ClInclude>
     <ClInclude Include="src\engine\database\database.hh"><Filter>src\engine\database</Filter></ClInclude>
     <ClInclude Include="src\app\shell\shell.hh"><Filter>src\app\shell</Filter></ClInclude>
     <ClInclude Include="src\base\png\png.hh"><Filter>src\base\png</Filter></ClInclude>

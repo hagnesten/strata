@@ -250,6 +250,7 @@ namespace sql {
 		uint32_t column_count;
 		table_source* sources;
 		uint32_t source_count;
+		bool fixed_order;
 		expression* where;
 		expression** group;
 		uint32_t group_count;

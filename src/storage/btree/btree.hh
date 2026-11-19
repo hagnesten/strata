@@ -164,4 +164,6 @@ namespace storage {
 
 	bool copy_btree ( pager& from, uint32_t root, bool index, pager& to, uint32_t& made );
 
+	uint64_t estimate_entries ( pager& owner, uint32_t root );
+
 }

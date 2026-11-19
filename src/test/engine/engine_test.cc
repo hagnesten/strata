@@ -647,6 +647,8 @@ namespace test {
 		persistence_tests ( *db, path );
 		savepoint_tests ( *db, path );
 		join_fuzz ( *db );
+		join_order_tests ( *db );
+		join_order_fuzz ( *db );
 		vacuum_tests ( *db, path );
 		fuzz_tests ( *db );
 		engine::close_database ( *db );

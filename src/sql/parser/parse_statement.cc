@@ -139,6 +139,7 @@ namespace sql {
 					return false;
 
 				next = JOIN_CROSS;
+				out.fixed_order = true;
 
 				continue;
 

@@ -23,6 +23,10 @@ namespace test {
 
 	void join_fuzz ( engine::database& db );
 
+	void join_order_tests ( engine::database& db );
+
+	void join_order_fuzz ( engine::database& db );
+
 	void vacuum_tests ( engine::database& db, const char* path );
 
 }

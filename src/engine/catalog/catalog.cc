@@ -480,6 +480,8 @@ namespace engine {
 
 		}
 
+		load_statistics ( pages, out );
+
 		return true;
 
 	}
