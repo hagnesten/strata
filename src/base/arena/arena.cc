@@ -53,6 +53,29 @@ namespace base {
 
 	}
 
+	arena_mark arena::mark ( ) const {
+
+		return { first, first ? first->used : 0 };
+
+	}
+
+	void arena::rewind ( const arena_mark& to ) {
+
+		while ( first && first != to.block ) {
+
+			arena_block* next = first->next;
+
+			total -= first->size;
+			release ( first );
+			first = next;
+
+		}
+
+		if ( first )
+			first->used = to.used;
+
+	}
+
 	void arena::reset ( ) {
 
 		while ( first ) {

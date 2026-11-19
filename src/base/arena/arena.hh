@@ -14,10 +14,21 @@ namespace base {
 
 	};
 
+	struct arena_mark {
+
+		arena_block* block;
+		size_t used;
+
+	};
+
 	struct arena {
 
 		arena_block* first = nullptr;
 		size_t total = 0;
+
+		arena_mark mark ( ) const;
+
+		void rewind ( const arena_mark& to );
 
 		arena ( ) = default;
 
