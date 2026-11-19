@@ -262,10 +262,19 @@ namespace sql {
 
 				if ( !column.star ) {
 
+					const char* written = item.current.start;
+
 					column.value = parse_expression ( item );
 
 					if ( !column.value )
 						return nullptr;
+
+					const char* end = item.current.start;
+
+					while ( end > written && ( end [ -1 ] == ' ' || end [ -1 ] == '\t' || end [ -1 ] == '\n' || end [ -1 ] == '\r' ) )
+						end--;
+
+					column.written = item.memory->keep ( written, static_cast < size_t > ( end - written ) );
 
 					if ( accept_word ( item, "as" ) ) {
 

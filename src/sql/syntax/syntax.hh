@@ -164,6 +164,7 @@ namespace sql {
 		const char* alias;
 		bool star;
 		const char* star_table;
+		const char* written;
 
 	};
 
@@ -206,6 +207,7 @@ namespace sql {
 		expression** values;
 		uint32_t value_rows;
 		uint32_t value_columns;
+		void* prepared;
 
 	};
 
