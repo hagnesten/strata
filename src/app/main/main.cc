@@ -9,7 +9,7 @@
 namespace app {
 
 	static int32_t argument_count;
-	static char arguments [ MAIN_ARGUMENTS ] [ MAIN_ARGUMENT_ROOM ];
+	static char* arguments [ MAIN_ARGUMENTS ];
 
 	static void read_arguments ( ) {
 
@@ -18,9 +18,15 @@ namespace app {
 
 		argument_count = 0;
 
-		for ( int32_t i = 0; wide && i < count && i < MAIN_ARGUMENTS; i++ )
-			if ( WideCharToMultiByte ( CP_UTF8, 0, wide [ i ], -1, arguments [ argument_count ], MAIN_ARGUMENT_ROOM, nullptr, nullptr ) > 0 )
-				argument_count++;
+		for ( int32_t i = 0; wide && i < count && i < MAIN_ARGUMENTS; i++ ) {
+
+			int32_t size = WideCharToMultiByte ( CP_UTF8, 0, wide [ i ], -1, nullptr, 0, nullptr, nullptr );
+			char* made = size > 0 ? base::make < char > ( static_cast < size_t > ( size ) + 1 ) : nullptr;
+
+			if ( made && WideCharToMultiByte ( CP_UTF8, 0, wide [ i ], -1, made, size, nullptr, nullptr ) > 0 )
+				arguments [ argument_count++ ] = made;
+
+		}
 
 		if ( wide )
 			LocalFree ( wide );
