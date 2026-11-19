@@ -10,38 +10,61 @@ Strata is a single-file SQL database engine and a studio app for working with it
   - one file with 4 KB checksummed pages
   - B-trees with overflow chains
   - a write-ahead log that recovers from crashes at any write
-  - statement-level undo inside transactions
+  - statement undo and nested savepoints inside transactions
+  - VACUUM, which rewrites the file compactly, and VACUUM INTO for a copy
+  - an integrity check that walks every tree, follows the free list and matches every index entry to its row
 - **SQL:**
-  - SELECT with joins (inner, left, cross, USING), subqueries (scalar, IN, EXISTS, correlated, in FROM), GROUP BY and HAVING, DISTINCT, ORDER BY and LIMIT
+  - SELECT with inner, left, right, full, cross and natural joins, USING, subqueries (scalar, IN, EXISTS, correlated, in FROM), GROUP BY and HAVING, DISTINCT, ORDER BY and LIMIT
+  - WITH and WITH RECURSIVE, also in front of INSERT
+  - window functions with PARTITION BY, ORDER BY and ROWS or RANGE frames
   - UNION, INTERSECT and EXCEPT, plus VALUES
   - INSERT, UPDATE and DELETE, with OR REPLACE, OR IGNORE and ON CONFLICT DO UPDATE
-  - CREATE and DROP for tables and indexes, CREATE TABLE AS, and ALTER TABLE ADD COLUMN, RENAME TO and RENAME COLUMN
-  - BEGIN, COMMIT and ROLLBACK
-- **Constraints:** NOT NULL, UNIQUE, PRIMARY KEY, CHECK, DEFAULT, and foreign keys with RESTRICT, CASCADE and SET NULL.
+  - CREATE and DROP for tables and indexes, CREATE TABLE AS, and ALTER TABLE ADD COLUMN, DROP COLUMN, RENAME TO and RENAME COLUMN
+  - BEGIN, COMMIT, ROLLBACK, SAVEPOINT, RELEASE and ROLLBACK TO
+  - COLLATE NOCASE on columns and expressions
+- **Constraints:** NOT NULL, UNIQUE, PRIMARY KEY, CHECK, DEFAULT, generated columns, and foreign keys with RESTRICT, CASCADE and SET NULL.
+- **Full-text search:** `CREATE FULLTEXT INDEX` on any text columns, `MATCH` with AND, OR, NOT, prefixes and phrases, ranked with `bm25()`, and `highlight()` and `snippet()` to show where the words were found.
 - **Planner:**
   - row id lookups and ranges
-  - index seeks on prefixes and ranges
-  - join lookups through indexes
+  - index seeks on prefixes and ranges, and covering indexes that skip the table
+  - ORDER BY straight from an index
+  - ANALYZE statistics and a cost-based join order
   - EXPLAIN QUERY PLAN
 - **Functions:**
-  - text: length, substr, trim, replace, instr, upper, lower, printf, quote, hex
-  - numbers: round, abs
+  - text: length, substr, trim, replace, instr, upper, lower, printf with %e and %g, quote, hex
+  - numbers: round, abs, sign
   - nulls and branching: coalesce, ifnull, nullif, iif
+  - dates: date, time, datetime, julianday, unixepoch and strftime, with modifiers
+  - JSON: json, json_extract, json_object, json_array, `->` and `->>`, and JSON aggregates
   - aggregates: count, sum, total, avg, min, max, group_concat
+  - windows: row_number, rank, dense_rank, percent_rank, cume_dist, ntile, lag, lead, first_value, last_value and nth_value
 
 ## Strata Studio
 
-`strata-studio.exe` opens a database in a window. You can also drop a file onto the window. With no file given, it makes a sample database in `Documents\Strata`.
+`strata-studio.exe` opens a database in a window. Open files with Ctrl+O or drop them onto the window. With no file given, it makes a sample database in `Documents\Strata`.
 
 | | |
 |---|---|
 | ![Query](docs/images/query.png) | ![Plan](docs/images/plan.png) |
+| ![Editing a table](docs/images/editing.png) | ![Chart](docs/images/chart.png) |
+| ![Table designer](docs/images/designer.png) | ![Autocomplete](docs/images/autocomplete.png) |
 | ![Schema map](docs/images/map.png) | ![Storage map](docs/images/storage.png) |
 
-- **Data** browses a table, next to an inspector with its rows, storage, columns, indexes and references.
-- **Query** has a SQL editor with highlighting and undo. Run with Ctrl+Enter or F5. Results show in a grid, and Explain draws the plan.
-- **Map** has two views. Schema draws the tables and their foreign keys; you can drag the tables around. Storage draws each B-tree of a table, level by level, with a bar showing how full each page is.
-- **Pages** shows every page of the file as a grid of cells. Picking a page shows its details and a hex dump.
+- **Data** shows a table with its row count, pages and indexes above the rows.
+  - Double-click a cell to change it.
+  - Add and delete rows from the header.
+  - Changes wait in a transaction until you Save or Discard them.
+  - Import CSV or JSON from a file or the clipboard into a new table, with the column types worked out for you.
+  - Export to CSV or JSON.
+  - Design shows the columns and writes the CREATE or ALTER statements for your changes.
+- **Query** has tabs of SQL editors with highlighting, undo, and suggestions for tables, columns, functions and keywords.
+  - Run with Ctrl+Enter or F5.
+  - Results show as rows, as a bar or line chart, or as the plan from Explain.
+  - Every query you run goes into History, and you can save queries by name.
+- **Map** has two views:
+  - Schema draws the tables and their foreign keys, and you can drag the tables around.
+  - Storage draws each B-tree of a table, level by level, with a bar showing how full each page is.
+- **Pages** shows every page of the file as a grid of cells. Picking a page shows its details and a hex dump, and Check file runs the integrity check and marks any bad pages.
 
 ![Pages](docs/images/pages.png)
 
@@ -51,7 +74,7 @@ Strata is a single-file SQL database engine and a studio app for working with it
 strata <file>                open a database in the SQL shell
 strata <file> "<sql>"        run SQL and print the rows
 strata --studio [file]       open the studio
-strata --capture <folder>    render every studio view to PNG
+strata --capture <folder>    render every studio view to PNG and play a scripted session
 strata --test [part]         run the self test (pager, btree, crash, parser, engine)
 ```
 
