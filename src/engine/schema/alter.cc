@@ -81,7 +81,7 @@ namespace engine {
 			base::text text;
 			int64_t rowid = index.schema_rowid;
 
-			index_sql ( text, index.unique, index.name, new_table, names, index.column_count );
+			index_sql ( text, index.unique, index.fulltext, index.name, new_table, names, index.column_count );
 
 			if ( !write_schema_row ( *ctx.pages, "index", index.name, new_table, index.root, text.value ( ), rowid ) )
 				return fail_storage ( ctx, "the schema could not be written" );

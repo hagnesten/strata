@@ -172,7 +172,7 @@ namespace engine {
 
 				const index_info& index = ctx.schema->indexes [ i ];
 
-				if ( !base::same_folded ( index.table, table.name ) )
+				if ( index.fulltext || !base::same_folded ( index.table, table.name ) )
 					continue;
 
 				uint32_t k = 0;

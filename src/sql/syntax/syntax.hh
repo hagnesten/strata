@@ -21,6 +21,7 @@ namespace sql {
 		EXPRESSION_CAST,
 		EXPRESSION_SUBQUERY,
 		EXPRESSION_EXISTS,
+		EXPRESSION_MATCH,
 
 	};
 
@@ -210,6 +211,7 @@ namespace sql {
 		window_spec* window;
 		int32_t window_index;
 		bool nocase;
+		void* search;
 
 	};
 
@@ -324,6 +326,7 @@ namespace sql {
 		const char* name;
 		const char* table;
 		bool unique;
+		bool fulltext;
 		bool if_not_exists;
 		const char** columns;
 		uint32_t column_count;

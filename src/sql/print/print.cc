@@ -227,6 +227,12 @@ namespace sql {
 
 				break;
 
+			case EXPRESSION_MATCH:
+				print_expression ( out, item->left );
+				out.add ( item->negated ? " NOT MATCH " : " MATCH " );
+				print_expression ( out, item->right );
+				break;
+
 			case EXPRESSION_CASE:
 				out.add ( "CASE" );
 

@@ -861,6 +861,10 @@ namespace sql {
 	static bool parse_create ( parser& item, statement& out ) {
 
 		bool unique = accept_word ( item, "unique" );
+		bool fulltext = !unique && accept_word ( item, "fulltext" );
+
+		if ( fulltext && !token_is ( item.current, "index" ) )
+			return fail_here ( item, "expected INDEX after FULLTEXT" );
 
 		if ( accept_word ( item, "index" ) ) {
 
@@ -872,6 +876,7 @@ namespace sql {
 			out.kind = STATEMENT_CREATE_INDEX;
 			out.create_index = made;
 			made->unique = unique;
+			made->fulltext = fulltext;
 
 			if ( accept_word ( item, "if" ) ) {
 

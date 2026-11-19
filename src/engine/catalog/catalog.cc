@@ -435,6 +435,7 @@ namespace engine {
 				info.root = root;
 				info.schema_rowid = rowid;
 				info.unique = parsed->create_index->unique;
+				info.fulltext = parsed->create_index->fulltext;
 				info.automatic = base::starts_with ( name, "strata_auto_" );
 				info.sql = text;
 				info.column_count = parsed->create_index->column_count;

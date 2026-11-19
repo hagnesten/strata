@@ -31,6 +31,7 @@ namespace engine {
 		PATH_ROWID_RANGE,
 		PATH_ROWID_LIST,
 		PATH_INDEX,
+		PATH_FULLTEXT,
 
 	};
 
@@ -104,6 +105,9 @@ namespace engine {
 		FUNCTION_JSON_OBJECT,
 		FUNCTION_JSON_ARRAY_LENGTH,
 		FUNCTION_JSON_QUOTE,
+		FUNCTION_BM25,
+		FUNCTION_HIGHLIGHT,
+		FUNCTION_SNIPPET,
 		FUNCTION_COUNT,
 		FUNCTION_SUM,
 		FUNCTION_TOTAL,
@@ -418,6 +422,7 @@ namespace engine {
 		table_scope* scopes;
 		cte_scope* ctes;
 		cte_entry* pending_cte;
+		struct search_entry* searches;
 		uint32_t depth;
 		uint32_t next_id;
 		bool schema_changed;

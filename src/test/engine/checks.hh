@@ -29,4 +29,6 @@ namespace test {
 
 	void vacuum_tests ( engine::database& db, const char* path );
 
+	void search_tests ( engine::database& db );
+
 }

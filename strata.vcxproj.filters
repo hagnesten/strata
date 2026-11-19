@@ -103,6 +103,12 @@
     <Filter Include="src\engine\schema">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D34}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\engine\search">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D35}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\base\math">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D36}</UniqueIdentifier>
+    </Filter>
     <Filter Include="src\app\shell">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D22}</UniqueIdentifier>
     </Filter>
@@ -188,6 +194,12 @@
     <ClCompile Include="src\engine\plan\prepare.cc"><Filter>src\engine\plan</Filter></ClCompile>
     <ClCompile Include="src\engine\plan\explain.cc"><Filter>src\engine\plan</Filter></ClCompile>
     <ClCompile Include="src\engine\plan\join_order.cc"><Filter>src\engine\plan</Filter></ClCompile>
+    <ClCompile Include="src\engine\search\tokens.cc"><Filter>src\engine\search</Filter></ClCompile>
+    <ClCompile Include="src\engine\search\postings.cc"><Filter>src\engine\search</Filter></ClCompile>
+    <ClCompile Include="src\engine\search\query.cc"><Filter>src\engine\search</Filter></ClCompile>
+    <ClCompile Include="src\engine\search\snippets.cc"><Filter>src\engine\search</Filter></ClCompile>
+    <ClCompile Include="src\base\math\math.cc"><Filter>src\base\math</Filter></ClCompile>
+    <ClCompile Include="src\test\engine\search_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\engine\catalog\statistics.cc"><Filter>src\engine\catalog</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\analyze.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\storage\btree\estimate.cc"><Filter>src\storage\btree</Filter></ClCompile>
@@ -252,6 +264,8 @@
     <ClInclude Include="src\engine\run\run.hh"><Filter>src\engine\run</Filter></ClInclude>
     <ClInclude Include="src\engine\schema\schema.hh"><Filter>src\engine\schema</Filter></ClInclude>
     <ClInclude Include="src\engine\plan\join_order.hh"><Filter>src\engine\plan</Filter></ClInclude>
+    <ClInclude Include="src\engine\search\search.hh"><Filter>src\engine\search</Filter></ClInclude>
+    <ClInclude Include="src\base\math\math.hh"><Filter>src\base\math</Filter></ClInclude>
     <ClInclude Include="src\engine\database\database.hh"><Filter>src\engine\database</Filter></ClInclude>
     <ClInclude Include="src\app\shell\shell.hh"><Filter>src\app\shell</Filter></ClInclude>
     <ClInclude Include="src\base\png\png.hh"><Filter>src\base\png</Filter></ClInclude>

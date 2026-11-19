@@ -46,6 +46,7 @@ namespace engine {
 		uint32_t root;
 		int64_t schema_rowid;
 		bool unique;
+		bool fulltext;
 		bool automatic;
 		uint32_t columns [ CATALOG_KEY_COLUMNS ];
 		uint32_t column_count;

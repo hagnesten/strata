@@ -146,7 +146,7 @@ namespace engine {
 				uint64_t distinct [ CATALOG_KEY_COLUMNS ];
 				uint64_t entries = 0;
 
-				if ( !base::same_folded ( index.table, table.name ) )
+				if ( index.fulltext || !base::same_folded ( index.table, table.name ) )
 					continue;
 
 				if ( !measure_index ( ctx, index, distinct, entries ) )

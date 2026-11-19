@@ -1083,7 +1083,7 @@ namespace sql {
 
 			if ( accept_word ( item, "not" ) ) {
 
-				if ( !token_is ( item.current, "in" ) && !token_is ( item.current, "like" ) && !token_is ( item.current, "glob" ) && !token_is ( item.current, "between" ) && !token_is ( item.current, "null" ) ) {
+				if ( !token_is ( item.current, "in" ) && !token_is ( item.current, "like" ) && !token_is ( item.current, "glob" ) && !token_is ( item.current, "match" ) && !token_is ( item.current, "between" ) && !token_is ( item.current, "null" ) ) {
 
 					item.lex = saved;
 					item.current = saved_token;
@@ -1164,6 +1164,26 @@ namespace sql {
 						return nullptr;
 
 				}
+
+				left = made;
+
+				continue;
+
+			}
+
+			if ( accept_word ( item, "match" ) ) {
+
+				expression* made = new_expression ( item, EXPRESSION_MATCH );
+
+				if ( !made )
+					return nullptr;
+
+				made->left = left;
+				made->negated = negated;
+				made->right = parse_comparison ( item );
+
+				if ( !made->right )
+					return nullptr;
 
 				left = made;
 

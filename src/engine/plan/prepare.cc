@@ -1,4 +1,4 @@
-#include "engine/run/run.hh"
+#include "engine/search/search.hh"
 #include "sql/print/print.hh"
 
 namespace engine {
@@ -312,6 +312,127 @@ namespace engine {
 
 	}
 
+	static bool resolve_row ( prepared_select* scope, sql::expression* item ) {
+
+		if ( !item || item->kind != sql::EXPRESSION_COLUMN || item->table || !item->name )
+			return false;
+
+		uint32_t depth = 0;
+
+		for ( prepared_select* query = scope; query; query = query->parent, depth++ ) {
+
+			for ( uint32_t s = 0; s < query->source_count; s++ ) {
+
+				prepared_source& source = query->sources [ s ];
+
+				if ( !source.table || !base::same_folded ( source.alias, item->name ) )
+					continue;
+
+				item->depth = depth;
+				item->source = static_cast < int32_t > ( s );
+				item->column = -1;
+				item->cast = sql::AFFINITY_INTEGER;
+
+				for ( prepared_select* inner = scope; inner != query; inner = inner->parent )
+					inner->correlated = true;
+
+				return true;
+
+			}
+
+		}
+
+		return false;
+
+	}
+
+	static prepared_source* bound_source ( prepared_select* scope, const sql::expression* item ) {
+
+		prepared_select* query = scope;
+
+		for ( uint32_t i = 0; i < item->depth && query; i++ )
+			query = query->parent;
+
+		return query && item->source >= 0 ? &query->sources [ item->source ] : nullptr;
+
+	}
+
+	static bool bind_match ( run_context& ctx, prepared_select* scope, sql::expression* item, bind_mode mode, bool aliases ) {
+
+		if ( mode == BIND_CONSTANT )
+			return fail_run ( ctx, "MATCH cannot be used here" );
+
+		sql::expression* target = item->left;
+
+		if ( !target || target->kind != sql::EXPRESSION_COLUMN )
+			return fail_run ( ctx, "MATCH needs a table or one of its columns on its left" );
+
+		bool found = target->source >= 0;
+		bool whole = target->source >= 0 && target->column < 0;
+
+		if ( !found && !resolve_column ( ctx, scope, target, found ) )
+			return false;
+
+		if ( !found ) {
+
+			if ( !resolve_row ( scope, target ) )
+				return fail_named ( ctx, "no such table or column for MATCH: ", target->name, "" );
+
+			whole = true;
+
+		}
+
+		prepared_source* source = bound_source ( scope, target );
+
+		if ( !source || !source->table )
+			return fail_run ( ctx, "MATCH needs a table with a FULLTEXT index on its left" );
+
+		search_binding* binding = ctx.lasting->make < search_binding > ( 1 );
+
+		if ( !binding )
+			return fail_run ( ctx, "out of memory" );
+
+		for ( uint32_t i = 0; i < ctx.schema->index_count && !binding->index; i++ ) {
+
+			index_info& index = ctx.schema->indexes [ i ];
+
+			if ( !index.fulltext || !base::same_folded ( index.table, source->table->name ) )
+				continue;
+
+			if ( whole ) {
+
+				binding->index = &index;
+				binding->columns = ~0ull;
+
+				continue;
+
+			}
+
+			for ( uint32_t k = 0; k < index.column_count; k++ ) {
+
+				if ( static_cast < int32_t > ( index.columns [ k ] ) == target->column ) {
+
+					binding->index = &index;
+					binding->columns = 1ull << k;
+
+				}
+
+			}
+
+		}
+
+		if ( !binding->index )
+			return fail_named ( ctx, "table ", source->table->name, whole ? " has no FULLTEXT index for MATCH" : " has no FULLTEXT index on that column" );
+
+		binding->table = source->table;
+		binding->source = target->source;
+		binding->depth = target->depth;
+		item->search = binding;
+
+		return bind ( ctx, scope, item->right, mode, aliases );
+
+	}
+
 	static bool bind ( run_context& ctx, prepared_select* scope, sql::expression* item, bind_mode mode, bool aliases ) {
 
 		if ( !item )
@@ -320,6 +441,10 @@ namespace engine {
 		bool fine = true;
 
 		switch ( item->kind ) {
+
+			case sql::EXPRESSION_MATCH:
+				fine = bind_match ( ctx, scope, item, mode, aliases );
+				break;
 
 			case sql::EXPRESSION_LITERAL:
 			case sql::EXPRESSION_PARAMETER:
@@ -391,6 +516,25 @@ namespace engine {
 				}
 
 				item->column = id;
+
+				if ( search_function ( id ) ) {
+
+					sql::expression* target = item->list [ 0 ];
+
+					if ( target->source < 0 && !resolve_row ( scope, target ) ) {
+
+						fine = fail_named ( ctx, "the function ", item->name, "() needs a table name as its first argument" );
+
+						break;
+
+					}
+
+					for ( uint32_t i = 1; i < item->count && fine; i++ )
+						fine = bind ( ctx, scope, item->list [ i ], mode, aliases );
+
+					break;
+
+				}
 
 				if ( item->window ) {
 
@@ -1339,7 +1483,7 @@ namespace engine {
 
 				index_info& index = ctx.schema->indexes [ i ];
 
-				if ( !base::same_folded ( index.table, source.table->name ) || !index_matches_order ( plan, index, 0 ) )
+				if ( index.fulltext || !base::same_folded ( index.table, source.table->name ) || !index_matches_order ( plan, index, 0 ) )
 					continue;
 
 				path = { };

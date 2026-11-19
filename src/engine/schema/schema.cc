@@ -1,4 +1,5 @@
 #include "engine/schema/schema.hh"
+#include "engine/search/search.hh"
 #include "sql/print/print.hh"
 
 namespace engine {
@@ -96,10 +97,10 @@ namespace engine {
 
 	}
 
-	void index_sql ( base::text& out, bool unique, const char* name, const char* table, const char* const* columns, uint32_t count ) {
+	void index_sql ( base::text& out, bool unique, bool fulltext, const char* name, const char* table, const char* const* columns, uint32_t count ) {
 
 		out.clear ( );
-		out.add ( unique ? "CREATE UNIQUE INDEX " : "CREATE INDEX " );
+		out.add ( unique ? "CREATE UNIQUE INDEX " : fulltext ? "CREATE FULLTEXT INDEX " : "CREATE INDEX " );
 		sql::print_name ( out, name );
 		out.add ( " ON " );
 		sql::print_name ( out, table );
@@ -258,7 +259,7 @@ namespace engine {
 		if ( !storage::create_btree ( *ctx.pages, true, root ) )
 			return fail_storage ( ctx, "an index could not be made" );
 
-		index_sql ( text, true, name.value ( ), table, columns, count );
+		index_sql ( text, true, false, name.value ( ), table, columns, count );
 
 		if ( !write_schema_row ( *ctx.pages, "index", name.value ( ), table, root, text.value ( ), rowid ) )
 			return fail_storage ( ctx, "the schema could not be written" );
@@ -447,7 +448,11 @@ namespace engine {
 		index.name = item->name;
 		index.table = table->name;
 		index.unique = item->unique;
+		index.fulltext = item->fulltext;
 		index.column_count = item->column_count;
+
+		if ( index.fulltext && index.column_count > SEARCH_COLUMNS )
+			return fail_run ( ctx, "a FULLTEXT index can have at most 63 columns" );
 
 		const char* names [ CATALOG_KEY_COLUMNS ];
 
@@ -531,10 +536,19 @@ namespace engine {
 
 			bool existed = false;
 
-			make_index_key ( ctx, index, values, rowid, true, key );
+			if ( index.fulltext ) {
 
-			if ( !storage::index_insert ( tree, reinterpret_cast < const uint8_t* > ( key.value ( ) ), key.size, existed ) )
-				return fail_storage ( ctx, "the index could not be written" );
+				if ( !index_document ( ctx, index, values, rowid, true ) )
+					return false;
+
+			} else {
+
+				make_index_key ( ctx, index, values, rowid, true, key );
+
+				if ( !storage::index_insert ( tree, reinterpret_cast < const uint8_t* > ( key.value ( ) ), key.size, existed ) )
+					return fail_storage ( ctx, "the index could not be written" );
+
+			}
 
 			if ( !storage::cursor_next ( at ) )
 				return fail_storage ( ctx, "the table could not be read" );
@@ -546,7 +560,7 @@ namespace engine {
 		base::text text;
 		int64_t rowid = 0;
 
-		index_sql ( text, index.unique, index.name, table->name, names, index.column_count );
+		index_sql ( text, index.unique, index.fulltext, index.name, table->name, names, index.column_count );
 
 		if ( !write_schema_row ( *ctx.pages, "index", index.name, table->name, index.root, text.value ( ), rowid ) )
 			return fail_storage ( ctx, "the schema could not be written" );

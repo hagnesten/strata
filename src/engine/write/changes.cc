@@ -1,4 +1,4 @@
-#include "engine/run/run.hh"
+#include "engine/search/search.hh"
 #include "sql/print/print.hh"
 
 namespace engine {
@@ -341,7 +341,7 @@ namespace engine {
 				for ( uint32_t i = 0; i < ctx.schema->index_count && !lookup; i++ ) {
 
 					index_info& index = ctx.schema->indexes [ i ];
-					bool leading = base::same_folded ( index.table, child.name ) && index.column_count >= key.column_count;
+					bool leading = !index.fulltext && base::same_folded ( index.table, child.name ) && index.column_count >= key.column_count;
 
 					for ( uint32_t k = 0; k < key.column_count && leading; k++ )
 						leading = index.columns [ k ] == key.columns [ k ];
@@ -506,6 +506,15 @@ namespace engine {
 
 			if ( !base::same_folded ( index.table, table.name ) )
 				continue;
+
+			if ( index.fulltext ) {
+
+				if ( !index_document ( ctx, index, values, rowid, adding ) )
+					return false;
+
+				continue;
+
+			}
 
 			storage::btree tree = { ctx.pages, index.root, true };
 			bool flag = false;

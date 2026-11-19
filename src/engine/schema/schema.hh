@@ -14,7 +14,7 @@ namespace engine {
 
 	bool refresh_schema ( run_context& ctx );
 
-	void index_sql ( base::text& out, bool unique, const char* name, const char* table, const char* const* columns, uint32_t count );
+	void index_sql ( base::text& out, bool unique, bool fulltext, const char* name, const char* table, const char* const* columns, uint32_t count );
 
 	bool validate_definition ( run_context& ctx, sql::create_table_statement* definition, table_info& info );
 

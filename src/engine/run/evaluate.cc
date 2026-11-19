@@ -1,4 +1,4 @@
-#include "engine/run/run.hh"
+#include "engine/search/search.hh"
 
 namespace engine {
 
@@ -577,6 +577,9 @@ namespace engine {
 
 				}
 
+				if ( search_function ( item->column ) )
+					return call_search_function ( ctx, scope, item, out );
+
 				storage::value* args = item->count ? ctx.scratch->make < storage::value > ( item->count ) : nullptr;
 
 				if ( item->count && !args )
@@ -628,6 +631,9 @@ namespace engine {
 
 			case sql::EXPRESSION_LIKE:
 				return evaluate_like ( ctx, scope, item, out );
+
+			case sql::EXPRESSION_MATCH:
+				return evaluate_match ( ctx, scope, item, out );
 
 			case sql::EXPRESSION_CASE:
 				return evaluate_case ( ctx, scope, item, out );

@@ -1,4 +1,4 @@
-#include "engine/run/run.hh"
+#include "engine/search/search.hh"
 #include "sql/print/print.hh"
 
 namespace engine {
@@ -175,6 +175,22 @@ namespace engine {
 
 		}
 
+		for ( uint32_t t = 0; t < count; t++ ) {
+
+			sql::expression* term = terms [ t ];
+			const search_binding* binding = static_cast < const search_binding* > ( term->search );
+
+			if ( term->kind != sql::EXPRESSION_MATCH || term->negated || !binding || binding->depth || binding->source != static_cast < int32_t > ( level ) || !usable_other ( term->right, level ) )
+				continue;
+
+			source.path.kind = PATH_FULLTEXT;
+			source.path.list = term;
+			source.path.index = binding->index;
+
+			return;
+
+		}
+
 		access_path best_index = { };
 		int32_t best_score = 0;
 
@@ -182,7 +198,7 @@ namespace engine {
 
 			index_info& index = ctx.schema->indexes [ i ];
 
-			if ( !base::same_folded ( index.table, table.name ) || !index.column_count )
+			if ( index.fulltext || !base::same_folded ( index.table, table.name ) || !index.column_count )
 				continue;
 
 			access_path path = { };
@@ -303,6 +319,10 @@ namespace engine {
 
 			case PATH_ROWID_LIST:
 				out.add ( " USING ROWID (rowid IN list)" );
+				break;
+
+			case PATH_FULLTEXT:
+				out.add ( " USING FULLTEXT INDEX " ).add ( path.index->name ).add ( " (MATCH)" );
 				break;
 
 			case PATH_ROWID_RANGE:
@@ -912,6 +932,28 @@ namespace engine {
 			case PATH_INDEX:
 				return open_index ( ctx, scope, source );
 
+			case PATH_FULLTEXT: {
+
+				search_entry* entry = nullptr;
+
+				if ( !search_lookup ( ctx, scope, plan.path.list, entry ) )
+					return false;
+
+				source.list = ctx.scratch->make < int64_t > ( entry->result.count + 1 );
+
+				if ( !source.list )
+					return fail_run ( ctx, "out of memory" );
+
+				for ( uint32_t i = 0; i < entry->result.count; i++ )
+					source.list [ i ] = entry->result.hits [ i ].rowid;
+
+				source.list_count = entry->result.count;
+				source.list_at = 0;
+
+				return true;
+
+			}
+
 		}
 
 		return true;
@@ -1094,6 +1136,7 @@ namespace engine {
 			}
 
 			case PATH_ROWID_LIST:
+			case PATH_FULLTEXT:
 				while ( source.list_at < source.list_count ) {
 
 					int64_t rowid = source.list [ source.list_at++ ];

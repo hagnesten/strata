@@ -60,6 +60,12 @@
     <ClCompile Include="src\engine\plan\prepare.cc" />
     <ClCompile Include="src\engine\plan\explain.cc" />
     <ClCompile Include="src\engine\plan\join_order.cc" />
+    <ClCompile Include="src\engine\search\tokens.cc" />
+    <ClCompile Include="src\engine\search\postings.cc" />
+    <ClCompile Include="src\engine\search\query.cc" />
+    <ClCompile Include="src\engine\search\snippets.cc" />
+    <ClCompile Include="src\base\math\math.cc" />
+    <ClCompile Include="src\test\engine\search_test.cc" />
     <ClCompile Include="src\engine\catalog\statistics.cc" />
     <ClCompile Include="src\engine\schema\analyze.cc" />
     <ClCompile Include="src\storage\btree\estimate.cc" />
@@ -124,6 +130,8 @@
     <ClInclude Include="src\engine\run\run.hh" />
     <ClInclude Include="src\engine\schema\schema.hh" />
     <ClInclude Include="src\engine\plan\join_order.hh" />
+    <ClInclude Include="src\engine\search\search.hh" />
+    <ClInclude Include="src\base\math\math.hh" />
     <ClInclude Include="src\engine\database\database.hh" />
     <ClInclude Include="src\app\shell\shell.hh" />
     <ClInclude Include="src\base\png\png.hh" />
