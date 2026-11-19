@@ -142,11 +142,35 @@ namespace engine {
 
 	};
 
+	struct cte_entry {
+
+		const sql::common_table* syntax;
+		prepared_select* plan;
+		const char** names;
+		uint32_t width;
+		bool preparing;
+		bool recursive;
+		bool distinct;
+		storage::value* working;
+		uint32_t working_count;
+
+	};
+
+	struct cte_scope {
+
+		cte_entry* entries;
+		uint32_t count;
+		cte_scope* next;
+
+	};
+
 	struct prepared_source {
 
 		const sql::table_source* syntax;
 		table_info* table;
 		prepared_select* query;
+		cte_entry* cte;
+		bool working;
 		const char* alias;
 		const char** names;
 		sql::affinity_kind* affinities;
@@ -201,6 +225,7 @@ namespace engine {
 		bool correlated;
 		bool distinct;
 		bool values_only;
+		bool uses_working;
 		int32_t snapshot_aggregate;
 		plan_child* children;
 		uint32_t id;
@@ -315,6 +340,8 @@ namespace engine {
 		uint64_t* random;
 		cached_child* cache;
 		table_scope* scopes;
+		cte_scope* ctes;
+		cte_entry* pending_cte;
 		uint32_t depth;
 		uint32_t next_id;
 		bool schema_changed;
@@ -489,6 +516,8 @@ namespace engine {
 	bool run_plan ( run_context& ctx, prepared_select* plan, query_state* parent, row_sink& sink );
 
 	bool collect_plan ( run_context& ctx, prepared_select* plan, query_state* parent, collected_rows& out );
+
+	bool collect_recursive ( run_context& ctx, cte_entry& cte, query_state* parent, collected_rows& out );
 
 	bool run_child ( run_context& ctx, query_state* scope, const sql::expression* item, storage::value& out );
 

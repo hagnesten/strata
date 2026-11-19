@@ -663,6 +663,54 @@ namespace engine {
 
 	}
 
+	static cte_entry* find_cte ( run_context& ctx, const char* name ) {
+
+		for ( cte_scope* scope = ctx.ctes; scope; scope = scope->next )
+			for ( uint32_t i = scope->count; i-- > 0; )
+				if ( base::same_folded ( scope->entries [ i ].syntax->name, name ) )
+					return &scope->entries [ i ];
+
+		return nullptr;
+
+	}
+
+	static bool fill_cte_source ( run_context& ctx, prepared_select* plan, prepared_source& source, cte_entry* cte, const char* alias ) {
+
+		source.cte = cte;
+		source.alias = alias ? alias : cte->syntax->name;
+
+		if ( cte->preparing ) {
+
+			if ( !cte->width )
+				return fail_named ( ctx, "the recursive WITH query ", cte->syntax->name, " must start with a part that does not refer to itself" );
+
+			source.working = true;
+			plan->uses_working = true;
+
+		} else {
+
+			source.query = cte->plan;
+
+			if ( !add_child ( ctx, plan, cte->plan, CHILD_FROM ) )
+				return false;
+
+			if ( cte->plan->correlated )
+				plan->correlated = true;
+
+		}
+
+		source.width = cte->width;
+		source.names = cte->names;
+		source.affinities = ctx.lasting->make < sql::affinity_kind > ( source.width + 1 );
+		source.hidden = ctx.lasting->make < bool > ( source.width + 1 );
+
+		if ( !source.affinities || !source.hidden )
+			return fail_run ( ctx, "out of memory" );
+
+		return true;
+
+	}
+
 	static prepared_select* prepare_core ( run_context& ctx, sql::select_statement* item, prepared_select* parent ) {
 
 		prepared_select* plan = ctx.lasting->make < prepared_select > ( 1 );
@@ -758,6 +806,11 @@ namespace engine {
 
 				for ( uint32_t c = 0; c < source.width; c++ )
 					source.affinities [ c ] = source.query->values_only ? sql::AFFINITY_ANY : expression_affinity ( source.query->outputs [ c ] );
+
+			} else if ( cte_entry* cte = find_cte ( ctx, syntax.name ) ) {
+
+				if ( !fill_cte_source ( ctx, plan, source, cte, syntax.alias ) )
+					return nullptr;
 
 			} else {
 
@@ -1025,8 +1078,122 @@ namespace engine {
 
 		}
 
+		cte_scope* scope = nullptr;
+
+		if ( item->with_count ) {
+
+			scope = ctx.lasting->make < cte_scope > ( 1 );
+
+			if ( !scope || !( scope->entries = ctx.lasting->make < cte_entry > ( item->with_count ) ) ) {
+
+				ctx.depth--;
+				fail_run ( ctx, "out of memory" );
+
+				return nullptr;
+
+			}
+
+			scope->next = ctx.ctes;
+			ctx.ctes = scope;
+
+			for ( uint32_t i = 0; i < item->with_count; i++ ) {
+
+				cte_entry& entry = scope->entries [ i ];
+				const sql::common_table& table = item->with [ i ];
+
+				entry.syntax = &table;
+
+				if ( item->recursive ) {
+
+					entry.preparing = true;
+					scope->count = i + 1;
+
+				}
+
+				cte_entry* saved = ctx.pending_cte;
+
+				ctx.pending_cte = &entry;
+
+				prepared_select* body = prepare_select ( ctx, table.query, parent );
+
+				ctx.pending_cte = saved;
+				entry.preparing = false;
+
+				if ( body && !entry.width ) {
+
+					entry.names = table.column_count ? table.columns : body->names;
+					entry.width = table.column_count ? table.column_count : body->output_count;
+
+				}
+
+				if ( body && table.column_count && table.column_count != body->output_count ) {
+
+					fail_named ( ctx, "the WITH query ", table.name, " names a different number of columns than it returns" );
+					body = nullptr;
+
+				}
+
+				if ( body ) {
+
+					entry.plan = body;
+
+					for ( prepared_select* core = body; core; core = core->next ) {
+
+						if ( !core->uses_working )
+							continue;
+
+						if ( !entry.recursive ) {
+
+							sql::compound_kind joiner = sql::COMPOUND_NONE;
+
+							for ( prepared_select* before = body; before && before != core; before = before->next )
+								joiner = before->compound;
+
+							if ( joiner != sql::COMPOUND_UNION && joiner != sql::COMPOUND_UNION_ALL ) {
+
+								fail_named ( ctx, "the recursive WITH query ", table.name, " must join its parts with UNION or UNION ALL" );
+								body = nullptr;
+
+								break;
+
+							}
+
+							entry.distinct = joiner == sql::COMPOUND_UNION;
+
+						}
+
+						entry.recursive = true;
+
+					}
+
+				}
+
+				if ( !body ) {
+
+					ctx.ctes = scope->next;
+					ctx.depth--;
+
+					return nullptr;
+
+				}
+
+				scope->count = i + 1;
+
+			}
+
+		}
+
 		prepared_select* first = prepare_core ( ctx, item, parent );
 		prepared_select* last = first;
+
+		if ( first && ctx.pending_cte && ctx.pending_cte->syntax->query == item && !ctx.pending_cte->width ) {
+
+			const sql::common_table* table = ctx.pending_cte->syntax;
+
+			ctx.pending_cte->names = table->column_count ? table->columns : first->names;
+			ctx.pending_cte->width = table->column_count ? table->column_count : first->output_count;
+
+		}
 
 		for ( sql::select_statement* core = item; first && core->next; core = core->next ) {
 
@@ -1084,6 +1251,9 @@ namespace engine {
 			}
 
 		}
+
+		if ( scope )
+			ctx.ctes = scope->next;
 
 		ctx.depth--;
 		item->prepared = first;

@@ -265,9 +265,17 @@ namespace engine {
 
 	void describe_path ( const prepared_source& source, base::text& out ) {
 
+		if ( source.working ) {
+
+			out.add ( "SCAN " ).add ( source.alias ).add ( " (rows from the last recursive step)" );
+
+			return;
+
+		}
+
 		if ( source.query ) {
 
-			out.add ( "SCAN " ).add ( source.alias ).add ( " (subquery " ).number ( source.query->id ).add ( ')' );
+			out.add ( "SCAN " ).add ( source.alias ).add ( source.cte ? " (WITH query " : " (subquery " ).number ( source.query->id ).add ( ')' );
 
 			return;
 
@@ -741,6 +749,16 @@ namespace engine {
 		source.first = true;
 		source.values = nullptr;
 
+		if ( plan.working ) {
+
+			source.rows = plan.cte->working;
+			source.row_count = plan.cte->working_count;
+			source.row_at = 0;
+
+			return true;
+
+		}
+
 		if ( plan.query ) {
 
 			if ( !source.materialized ) {
@@ -749,7 +767,7 @@ namespace engine {
 
 				rows.memory = ctx.memory;
 
-				if ( !collect_plan ( ctx, plan.query, scope->parent, rows ) )
+				if ( plan.cte && plan.cte->recursive ? !collect_recursive ( ctx, *plan.cte, scope->parent, rows ) : !collect_plan ( ctx, plan.query, scope->parent, rows ) )
 					return false;
 
 				source.rows = rows.values;
@@ -971,7 +989,7 @@ namespace engine {
 
 		prepared_source& plan = *source.plan;
 
-		if ( plan.query ) {
+		if ( plan.query || plan.working ) {
 
 			if ( source.row_at >= source.row_count ) {
 

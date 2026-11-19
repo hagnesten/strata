@@ -158,7 +158,7 @@ namespace engine {
 
 			group.null_rows [ s ] = source.null_row || !source.values;
 			group.rowids [ s ] = source.rowid;
-			group.rows [ s ] = source.plan->query ? source.values : nullptr;
+			group.rows [ s ] = source.plan->table ? nullptr : source.values;
 
 		}
 
@@ -184,7 +184,7 @@ namespace engine {
 
 			source.rowid = group.rowids [ s ];
 
-			if ( source.plan->query ) {
+			if ( !source.plan->table ) {
 
 				source.values = group.rows [ s ];
 
@@ -816,6 +816,115 @@ namespace engine {
 
 		if ( out.count && !out.values )
 			return fail_run ( ctx, "out of memory" );
+
+		return true;
+
+	}
+
+	bool collect_recursive ( run_context& ctx, cte_entry& cte, query_state* parent, collected_rows& out ) {
+
+		uint32_t width = cte.width;
+		value_set seen = { };
+		int64_t limit = -1;
+		collected_rows fresh = { };
+
+		out.width = width;
+
+		if ( !out.memory )
+			out.memory = ctx.memory;
+
+		if ( !limit_value ( ctx, parent, cte.plan->limit, -1, limit ) )
+			return false;
+
+		auto take = [ & ] ( collected_rows& from, collected_rows& kept ) {
+
+			for ( uint32_t r = 0; r < from.count; r++ ) {
+
+				const storage::value* row = from.values + static_cast < size_t > ( r ) * width;
+				bool added = true;
+
+				if ( limit >= 0 && out.count >= static_cast < uint64_t > ( limit ) )
+					return true;
+
+				if ( cte.distinct && !set_add ( *ctx.memory, seen, row, width, added ) )
+					return fail_run ( ctx, "out of memory" );
+
+				if ( !added )
+					continue;
+
+				if ( !collect_emit ( &out, row, width ) || !collect_emit ( &kept, row, width ) )
+					return fail_run ( ctx, "out of memory" );
+
+			}
+
+			return true;
+
+		};
+
+		auto run_part = [ & ] ( bool working, collected_rows& into ) {
+
+			into = { };
+			into.memory = ctx.memory;
+			into.width = width;
+
+			row_sink sink = { &into, collect_emit };
+
+			for ( prepared_select* core = cte.plan; core; core = core->next ) {
+
+				if ( core->uses_working != working )
+					continue;
+
+				output_pipe pipe;
+
+				start_pipe ( pipe, core, &sink, 0, -1 );
+				pipe.sorting = false;
+				pipe.key_count = 0;
+				pipe.distinct = core->distinct;
+
+				if ( !run_core ( ctx, core, parent, pipe ) )
+					return false;
+
+			}
+
+			return true;
+
+		};
+
+		collected_rows working = { };
+
+		working.memory = ctx.memory;
+		working.width = width;
+
+		if ( !run_part ( false, fresh ) || !take ( fresh, working ) )
+			return false;
+
+		for ( uint32_t round = 0; working.count; round++ ) {
+
+			if ( out.count > 50000000 || round > 10000000 )
+				return fail_named ( ctx, "the recursive WITH query ", cte.syntax->name, " made too many rows, add a WHERE or a LIMIT that stops it" );
+
+			if ( limit >= 0 && out.count >= static_cast < uint64_t > ( limit ) )
+				break;
+
+			cte.working = working.values;
+			cte.working_count = working.count;
+
+			collected_rows next = { };
+
+			if ( !run_part ( true, next ) )
+				return false;
+
+			working = { };
+			working.memory = ctx.memory;
+			working.width = width;
+
+			if ( !take ( next, working ) )
+				return false;
+
+		}
+
+		cte.working = nullptr;
+		cte.working_count = 0;
 
 		return true;
 

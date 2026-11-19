@@ -259,6 +259,15 @@ namespace test {
 		rows ( db, "SELECT city FROM people INTERSECT SELECT 'London'", "London" );
 		rows ( db, "SELECT city FROM people EXCEPT SELECT 'London' ORDER BY 1", "Boston\nHelsinki\nNew York" );
 		rows ( db, "SELECT k FROM left_side UNION SELECT k FROM right_side ORDER BY k LIMIT 3 OFFSET 1", "2\n3\n4" );
+		rows ( db, "WITH big ( n ) AS ( SELECT age FROM people WHERE age > 40 ) SELECT count ( * ), sum ( n ) FROM big", "2|86" );
+		rows ( db, "WITH a AS ( SELECT 1 AS x ), b AS ( SELECT x + 1 AS y FROM a ) SELECT x, y FROM a, b", "1|2" );
+		rows ( db, "WITH RECURSIVE counter ( n ) AS ( SELECT 1 UNION ALL SELECT n + 1 FROM counter WHERE n < 5 ) SELECT group_concat ( n ) FROM counter", "1,2,3,4,5" );
+		rows ( db, "WITH RECURSIVE fib ( a, b ) AS ( SELECT 0, 1 UNION ALL SELECT b, a + b FROM fib LIMIT 10 ) SELECT max ( a ) FROM fib", "34" );
+		rows ( db, "WITH RECURSIVE walk ( n ) AS ( SELECT 1 UNION SELECT n % 4 + 1 FROM walk ) SELECT count ( * ) FROM walk", "4" );
+		rows ( db, "SELECT name FROM people WHERE id IN ( WITH picked AS ( SELECT 3 AS id ) SELECT id FROM picked )", "Grace" );
+		rows ( db, "WITH RECURSIVE nums ( n ) AS ( SELECT 1 UNION ALL SELECT n + 1 FROM nums WHERE n < 1000 ) SELECT count ( * ), sum ( n ) FROM nums", "1000|500500" );
+		fails ( db, "WITH RECURSIVE bad ( n ) AS ( SELECT n FROM bad ) SELECT * FROM bad", "must start with a part" );
+		fails ( db, "WITH x ( a, b ) AS ( SELECT 1 ) SELECT * FROM x", "different number of columns" );
 
 	}
 
