@@ -1828,4 +1828,100 @@ namespace storage {
 
 	}
 
+	bool inspect_page ( pager& owner, uint32_t number, page_summary& out ) {
+
+		page_frame* frame = get_page ( owner, number );
+
+		if ( !frame )
+			return false;
+
+		const uint8_t* page = frame->data;
+
+		out.number = number;
+		out.kind = page [ 0 ];
+		out.cells = 0;
+		out.used = 0;
+		out.child_count = 0;
+		out.overflow_cells = 0;
+		out.has_rowids = false;
+		out.low_rowid = 0;
+		out.high_rowid = 0;
+		out.next = 0;
+		out.previous = 0;
+
+		if ( tree_kind ( out.kind ) ) {
+
+			bool leaf = leaf_kind ( out.kind );
+
+			out.cells = base::min < uint32_t > ( count_of ( page ), BTREE_CELLS );
+			out.used = BTREE_HEADER + used_bytes ( page );
+
+			for ( uint32_t slot = 0; slot < out.cells; slot++ ) {
+
+				cell_info info;
+
+				if ( !parse_cell ( page, slot, info ) )
+					continue;
+
+				if ( !leaf )
+					out.children [ out.child_count++ ] = info.child;
+
+				if ( info.overflow )
+					out.overflow_cells++;
+
+				if ( !index_kind ( out.kind ) ) {
+
+					if ( !out.has_rowids || info.rowid < out.low_rowid )
+						out.low_rowid = info.rowid;
+
+					if ( !out.has_rowids || info.rowid > out.high_rowid )
+						out.high_rowid = info.rowid;
+
+					out.has_rowids = true;
+
+				}
+
+			}
+
+			if ( leaf ) {
+
+				out.next = link_a ( page );
+				out.previous = link_b ( page );
+
+			} else
+				out.children [ out.child_count++ ] = link_a ( page );
+
+		} else if ( out.kind == PAGE_OVERFLOW ) {
+
+			out.next = base::read32 ( page + 4 );
+			out.used = OVERFLOW_HEADER + base::read32 ( page + 8 );
+
+		} else if ( out.kind == PAGE_FREE ) {
+
+			out.next = base::read32 ( page + 4 );
+
+		} else
+			out.used = PAGE_SIZE;
+
+		out.free = out.used < PAGE_USABLE ? PAGE_USABLE - out.used : 0;
+		release_page ( frame );
+
+		return true;
+
+	}
+
+	bool read_page_bytes ( pager& owner, uint32_t number, uint8_t* out ) {
+
+		page_frame* frame = get_page ( owner, number );
+
+		if ( !frame )
+			return false;
+
+		base::copy ( out, frame->data, PAGE_SIZE );
+		release_page ( frame );
+
+		return true;
+
+	}
+
 }

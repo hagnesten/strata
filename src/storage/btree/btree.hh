@@ -110,6 +110,28 @@ namespace storage {
 
 	};
 
+	struct page_summary {
+
+		uint32_t number;
+		uint8_t kind;
+		uint32_t cells;
+		uint32_t used;
+		uint32_t free;
+		uint32_t children [ BTREE_CELLS + 1 ];
+		uint32_t child_count;
+		uint32_t overflow_cells;
+		bool has_rowids;
+		int64_t low_rowid;
+		int64_t high_rowid;
+		uint32_t next;
+		uint32_t previous;
+
+	};
+
+	bool inspect_page ( pager& owner, uint32_t number, page_summary& out );
+
+	bool read_page_bytes ( pager& owner, uint32_t number, uint8_t* out );
+
 	bool create_btree ( pager& owner, bool index, uint32_t& root );
 
 	bool drop_btree ( pager& owner, uint32_t root );
