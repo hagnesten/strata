@@ -30,6 +30,8 @@ namespace base {
 
 	bool open_file ( file_handle& out, const char* path, bool create );
 
+	bool open_reading ( file_handle& out, const char* path );
+
 	bool read_at ( const file_handle& file, uint64_t offset, void* out, size_t size );
 
 	bool write_at ( const file_handle& file, uint64_t offset, const void* data, size_t size );

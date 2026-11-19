@@ -72,6 +72,26 @@ namespace base {
 
 	}
 
+	bool open_reading ( file_handle& out, const char* path ) {
+
+		wchar_t wide [ FILE_PATH_ROOM ];
+
+		out.handle = nullptr;
+
+		if ( !wide_path ( path, wide, FILE_PATH_ROOM ) )
+			return false;
+
+		HANDLE handle = CreateFileW ( wide, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr );
+
+		if ( handle == INVALID_HANDLE_VALUE )
+			return false;
+
+		out.handle = handle;
+
+		return true;
+
+	}
+
 	static OVERLAPPED at_offset ( uint64_t offset ) {
 
 		OVERLAPPED place = { };
