@@ -49,6 +49,27 @@
     <Filter Include="src\test\storage">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D10}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\base\arena">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D14}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\sql">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D15}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\sql\lexer">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D16}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\sql\syntax">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D17}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\sql\parser">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D18}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\sql\print">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D19}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\test\sql">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D1A}</UniqueIdentifier>
+    </Filter>
     <Filter Include="docs">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D11}</UniqueIdentifier>
     </Filter>
@@ -75,6 +96,12 @@
     <ClCompile Include="src\test\harness\harness.cc"><Filter>src\test\harness</Filter></ClCompile>
     <ClCompile Include="src\test\storage\pager_test.cc"><Filter>src\test\storage</Filter></ClCompile>
     <ClCompile Include="src\app\main\main.cc"><Filter>src\app\main</Filter></ClCompile>
+    <ClCompile Include="src\base\arena\arena.cc"><Filter>src\base\arena</Filter></ClCompile>
+    <ClCompile Include="src\sql\lexer\lexer.cc"><Filter>src\sql\lexer</Filter></ClCompile>
+    <ClCompile Include="src\sql\parser\parse_expression.cc"><Filter>src\sql\parser</Filter></ClCompile>
+    <ClCompile Include="src\sql\parser\parse_statement.cc"><Filter>src\sql\parser</Filter></ClCompile>
+    <ClCompile Include="src\sql\print\print.cc"><Filter>src\sql\print</Filter></ClCompile>
+    <ClCompile Include="src\test\sql\parser_test.cc"><Filter>src\test\sql</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\base\runtime\memory.hh"><Filter>src\base\runtime</Filter></ClInclude>
@@ -87,6 +114,11 @@
     <ClInclude Include="src\storage\record\record.hh"><Filter>src\storage\record</Filter></ClInclude>
     <ClInclude Include="src\storage\btree\btree.hh"><Filter>src\storage\btree</Filter></ClInclude>
     <ClInclude Include="src\test\harness\harness.hh"><Filter>src\test\harness</Filter></ClInclude>
+    <ClInclude Include="src\base\arena\arena.hh"><Filter>src\base\arena</Filter></ClInclude>
+    <ClInclude Include="src\sql\lexer\lexer.hh"><Filter>src\sql\lexer</Filter></ClInclude>
+    <ClInclude Include="src\sql\syntax\syntax.hh"><Filter>src\sql\syntax</Filter></ClInclude>
+    <ClInclude Include="src\sql\parser\parser.hh"><Filter>src\sql\parser</Filter></ClInclude>
+    <ClInclude Include="src\sql\print\print.hh"><Filter>src\sql\print</Filter></ClInclude>
     <ClInclude Include="src\app\main\main.hh"><Filter>src\app\main</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>

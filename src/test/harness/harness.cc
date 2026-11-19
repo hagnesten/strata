@@ -90,6 +90,7 @@ namespace test {
 		pager_tests ( );
 		btree_tests ( );
 		crash_tests ( );
+		parser_tests ( );
 
 		base::text line;
 

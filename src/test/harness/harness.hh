@@ -42,4 +42,6 @@ namespace test {
 
 	void crash_tests ( );
 
+	void parser_tests ( );
+
 }
