@@ -1439,7 +1439,12 @@ namespace engine {
 			if ( !found )
 				break;
 
-			if ( !passes ( ctx, &state, definition.filters, definition.filter_count, fine ) )
+			sql::expression* const* terms = nullptr;
+			uint32_t term_count = 0;
+
+			source_filters ( source, terms, term_count );
+
+			if ( !passes ( ctx, &state, terms, term_count, fine ) )
 				return false;
 
 			if ( fine && !base::push ( *ctx.memory, rowids, count, room, source.rowid ) )

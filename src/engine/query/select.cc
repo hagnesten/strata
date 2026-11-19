@@ -574,9 +574,13 @@ namespace engine {
 
 			if ( fine ) {
 
-				matched = true;
+				sql::expression* const* terms = nullptr;
+				uint32_t term_count = 0;
 
-				if ( !passes ( ctx, &scope, definition.filters, definition.filter_count, fine ) )
+				matched = true;
+				source_filters ( source, terms, term_count );
+
+				if ( !passes ( ctx, &scope, terms, term_count, fine ) )
 					return false;
 
 				if ( fine && !run_level ( ctx, scope, level + 1, pipe, groups ) )

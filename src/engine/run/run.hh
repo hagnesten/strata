@@ -280,6 +280,31 @@ namespace engine {
 
 	};
 
+	enum like_shape : uint8_t {
+
+		LIKE_GENERIC,
+		LIKE_EXACT,
+		LIKE_PREFIX,
+		LIKE_SUFFIX,
+		LIKE_CONTAINS,
+		LIKE_ANYTHING,
+
+	};
+
+	struct quick_test {
+
+		int32_t column;
+		sql::operator_kind op;
+		storage::value constant;
+		bool like;
+		bool glob;
+		bool negated;
+		like_shape shape;
+		const uint8_t* literal;
+		size_t literal_size;
+
+	};
+
 	struct source_state {
 
 		prepared_source* plan;
@@ -313,6 +338,14 @@ namespace engine {
 		value_set matched;
 		uint32_t decode_limit;
 		bool decode_ready;
+		bool quick_ready;
+		bool quick_compiled;
+		quick_test* quick;
+		uint32_t quick_count;
+		bool* quick_wanted;
+		uint32_t quick_limit;
+		sql::expression** residual;
+		uint32_t residual_count;
 
 	};
 
@@ -589,6 +622,8 @@ namespace engine {
 	bool begin_writes ( run_context& ctx, bool risky );
 
 	bool exact_rowid ( const storage::value& item, int64_t& out );
+
+	void source_filters ( const source_state& source, sql::expression* const*& terms, uint32_t& count );
 
 	prepared_select* prepare_select ( run_context& ctx, sql::select_statement* item, prepared_select* parent );
 

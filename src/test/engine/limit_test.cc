@@ -45,6 +45,28 @@ namespace test {
 
 	}
 
+	static void quick_filters ( engine::database& db ) {
+
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE w LIKE 'W1%'", "111" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE w LIKE '%9'", "20" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE w LIKE '%99%'", "2" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE w LIKE 'W5'", "1" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE w NOT LIKE 'w1%'", "89" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE id LIKE '1%'", "111" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE w GLOB 'w1*'", "111" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE w GLOB 'W1*'", "0" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE w LIKE '%%'", "200" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE w LIKE 'w_5'", "9" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE w LIKE NULL", "0" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE v = '3'", "29" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE v = 3.0 AND id > 100", "15" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE 100 < id AND v <> 3", "85" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE v IS NULL", "0" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE w = 120", "0" );
+		rows ( db, "SELECT count ( * ) FROM limit_numbers WHERE w > 'w5' AND w < 'w6'", "10" );
+
+	}
+
 	void limit_tests ( engine::database& db ) {
 
 		section ( "bounded sorts and subquery lists" );
@@ -52,6 +74,7 @@ namespace test {
 		run ( db, "WITH RECURSIVE n ( i ) AS ( SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 200 ) INSERT INTO limit_numbers SELECT i, i % 7, 'w' || i FROM n" );
 		top_rows ( db );
 		subquery_lists ( db );
+		quick_filters ( db );
 		run ( db, "DROP TABLE limit_numbers" );
 
 	}

@@ -531,6 +531,304 @@ namespace engine {
 
 	}
 
+	static bool quick_side ( const sql::expression* item, int32_t level ) {
+
+		return item && item->kind == sql::EXPRESSION_COLUMN && item->depth == 0 && item->source == level && !item->nocase;
+
+	}
+
+	static bool quick_constant ( const sql::expression* item ) {
+
+		return item && ( item->kind == sql::EXPRESSION_LITERAL || item->kind == sql::EXPRESSION_PARAMETER ) && !item->nocase;
+
+	}
+
+	static bool quick_operator ( sql::operator_kind op ) {
+
+		return op == sql::OPERATOR_EQUAL || op == sql::OPERATOR_NOT_EQUAL || op == sql::OPERATOR_LESS || op == sql::OPERATOR_LESS_EQUAL || op == sql::OPERATOR_GREATER || op == sql::OPERATOR_GREATER_EQUAL || op == sql::OPERATOR_IS || op == sql::OPERATOR_IS_NOT;
+
+	}
+
+	static uint8_t ascii_lower ( uint8_t value ) {
+
+		return value >= 'A' && value <= 'Z' ? static_cast < uint8_t > ( value + 32 ) : value;
+
+	}
+
+	static void shape_like ( base::arena& memory, quick_test& test ) {
+
+		const uint8_t* pattern = test.constant.bytes;
+		size_t size = test.constant.size;
+
+		test.shape = LIKE_GENERIC;
+
+		if ( test.glob || test.constant.kind != storage::VALUE_TEXT )
+			return;
+
+		size_t start = 0;
+		size_t end = size;
+		bool lead = false;
+		bool tail = false;
+
+		while ( start < end && pattern [ start ] == '%' ) {
+
+			start++;
+			lead = true;
+
+		}
+
+		while ( end > start && pattern [ end - 1 ] == '%' ) {
+
+			end--;
+			tail = true;
+
+		}
+
+		for ( size_t i = start; i < end; i++ )
+			if ( pattern [ i ] == '%' || pattern [ i ] == '_' )
+				return;
+
+		uint8_t* folded = static_cast < uint8_t* > ( memory.take_raw ( end - start + 1 ) );
+
+		if ( !folded )
+			return;
+
+		for ( size_t i = start; i < end; i++ )
+			folded [ i - start ] = ascii_lower ( pattern [ i ] );
+
+		test.literal = folded;
+		test.literal_size = end - start;
+		test.shape = start == end ? ( lead || tail ? LIKE_ANYTHING : LIKE_EXACT ) : lead && tail ? LIKE_CONTAINS : lead ? LIKE_SUFFIX : tail ? LIKE_PREFIX : LIKE_EXACT;
+
+	}
+
+	static bool folded_equal ( const uint8_t* text, const uint8_t* literal, size_t size ) {
+
+		for ( size_t i = 0; i < size; i++ )
+			if ( ascii_lower ( text [ i ] ) != literal [ i ] )
+				return false;
+
+		return true;
+
+	}
+
+	static bool like_fast ( run_context& ctx, const quick_test& test, const storage::value& value ) {
+
+		storage::value text = value.kind == storage::VALUE_TEXT || value.kind == storage::VALUE_BLOB ? value : text_of ( *ctx.scratch, value );
+		const uint8_t* bytes = text.bytes;
+		size_t size = text.size;
+		const uint8_t* literal = test.literal;
+		size_t wanted = test.literal_size;
+
+		switch ( test.shape ) {
+
+			case LIKE_ANYTHING:
+				return true;
+
+			case LIKE_EXACT:
+				return size == wanted && folded_equal ( bytes, literal, wanted );
+
+			case LIKE_PREFIX:
+				return size >= wanted && folded_equal ( bytes, literal, wanted );
+
+			case LIKE_SUFFIX:
+				return size >= wanted && folded_equal ( bytes + size - wanted, literal, wanted );
+
+			case LIKE_CONTAINS: {
+
+				if ( size < wanted )
+					return false;
+
+				uint8_t first = literal [ 0 ];
+
+				for ( size_t i = 0; i + wanted <= size; i++ )
+					if ( ascii_lower ( bytes [ i ] ) == first && folded_equal ( bytes + i, literal, wanted ) )
+						return true;
+
+				return false;
+
+			}
+
+			default:
+				return like_match ( test.constant.bytes, test.constant.size, bytes, size, 0, test.glob );
+
+		}
+
+	}
+
+	void source_filters ( const source_state& source, sql::expression* const*& terms, uint32_t& count ) {
+
+		if ( source.quick_ready ) {
+
+			terms = source.residual;
+			count = source.residual_count;
+
+			return;
+
+		}
+
+		terms = source.plan->filters;
+		count = source.plan->filter_count;
+
+	}
+
+	static bool compile_quick ( run_context& ctx, query_state* scope, source_state& source ) {
+
+		prepared_source& plan = *source.plan;
+		const table_info* table = plan.table;
+
+		source.quick_count = 0;
+		source.residual_count = 0;
+		source.quick_limit = 0;
+
+		if ( !table || plan.left || plan.right || !plan.filter_count || table->generated_count || !scope || !scope->plan || plan.width != table->column_count ) {
+
+			source.quick_ready = false;
+
+			return true;
+
+		}
+
+		int32_t level = static_cast < int32_t > ( &plan - scope->plan->sources );
+
+		if ( level < 0 || static_cast < uint32_t > ( level ) >= scope->plan->source_count ) {
+
+			source.quick_ready = false;
+
+			return true;
+
+		}
+
+		source.quick = ctx.memory->make < quick_test > ( plan.filter_count );
+		source.residual = ctx.memory->make < sql::expression* > ( plan.filter_count );
+		source.quick_wanted = ctx.memory->make < bool > ( table->column_count + 1 );
+
+		if ( !source.quick || !source.residual || !source.quick_wanted )
+			return fail_run ( ctx, "out of memory" );
+
+		for ( uint32_t t = 0; t < plan.filter_count; t++ ) {
+
+			sql::expression* term = plan.filters [ t ];
+			const sql::expression* column = nullptr;
+			const sql::expression* other = nullptr;
+			sql::operator_kind op = term->op;
+
+			bool like = false;
+
+			if ( term->kind == sql::EXPRESSION_BINARY && quick_operator ( op ) ) {
+
+				if ( quick_side ( term->left, level ) && quick_constant ( term->right ) ) {
+
+					column = term->left;
+					other = term->right;
+
+				} else if ( quick_side ( term->right, level ) && quick_constant ( term->left ) ) {
+
+					column = term->right;
+					other = term->left;
+					op = flipped ( op );
+
+				}
+
+			} else if ( term->kind == sql::EXPRESSION_LIKE && !term->third && quick_side ( term->left, level ) && quick_constant ( term->right ) ) {
+
+				column = term->left;
+				other = term->right;
+				like = true;
+
+			}
+
+			if ( !column ) {
+
+				source.residual [ source.residual_count++ ] = term;
+
+				continue;
+
+			}
+
+			storage::value constant;
+			storage::value unused = storage::null_value ( );
+			int32_t index = column->column;
+			bool rowid = index < 0 || index == table->rowid_column;
+
+			if ( !evaluate ( ctx, scope, other, constant ) )
+				return false;
+
+			if ( like ) {
+
+				if ( constant.kind != storage::VALUE_NULL )
+					constant = text_of ( *ctx.memory, constant );
+
+			} else
+				comparison_affinity ( *ctx.memory, rowid ? sql::AFFINITY_INTEGER : table->columns [ index ].affinity, sql::AFFINITY_ANY, unused, constant );
+
+			constant = keep_value ( *ctx.memory, constant );
+
+			quick_test& made = source.quick [ source.quick_count++ ];
+
+			made = { };
+			made.column = rowid ? -1 : index;
+			made.op = op;
+			made.constant = constant;
+			made.like = like;
+			made.glob = like && term->star;
+			made.negated = like && term->negated;
+
+			if ( like )
+				shape_like ( *ctx.memory, made );
+
+			if ( !rowid ) {
+
+				source.quick_wanted [ index ] = true;
+				source.quick_limit = base::max < uint32_t > ( source.quick_limit, static_cast < uint32_t > ( index ) + 1 );
+
+			}
+
+		}
+
+		source.quick_ready = true;
+
+		return true;
+
+	}
+
+	static bool quick_passes ( run_context& ctx, source_state& source, int64_t rowid, const uint8_t* data, size_t size, bool& pass ) {
+
+		const table_info& table = *source.plan->table;
+		storage::value* values = static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * ( table.column_count + 1 ) ) );
+		uint32_t count = 0;
+
+		pass = true;
+
+		if ( !values )
+			return fail_run ( ctx, "out of memory" );
+
+		if ( source.quick_limit && !storage::decode_wanted ( data, size, values, table.column_count, source.quick_wanted, source.quick_limit, count ) )
+			return fail_named ( ctx, "a row of table ", table.name, " is damaged" );
+
+		for ( uint32_t q = 0; q < source.quick_count && pass; q++ ) {
+
+			const quick_test& test = source.quick [ q ];
+			storage::value value;
+
+			if ( test.column < 0 )
+				value = storage::integer_value ( rowid );
+			else if ( static_cast < uint32_t > ( test.column ) < count )
+				value = values [ test.column ];
+			else if ( !fallback_value ( ctx, table.columns [ test.column ], value ) )
+				return false;
+
+			if ( test.like )
+				pass = value.kind != storage::VALUE_NULL && test.constant.kind != storage::VALUE_NULL && like_fast ( ctx, test, value ) != test.negated;
+			else
+				pass = compare_with ( test.op, value, test.constant ) == TRUTH_TRUE;
+
+		}
+
+		return true;
+
+	}
+
 	static bool decode_kept ( run_context& ctx, const table_info& table, int64_t rowid, storage::value*& values ) {
 
 		char* kept = ctx.scratch->keep ( ctx.row_bytes.value ( ), ctx.row_bytes.size );
@@ -1235,25 +1533,66 @@ namespace engine {
 
 				source.first = false;
 
-				int64_t rowid = 0;
-				const uint8_t* data = nullptr;
-				size_t size = 0;
+				if ( !source.quick_compiled ) {
 
-				if ( !storage::cursor_take ( source.at, *ctx.scratch, rowid, data, size ) )
-					return fail_storage ( ctx, "a table could not be read" );
+					source.quick_compiled = true;
 
-				if ( ( plan.path.kind == PATH_ROWID_RANGE && rowid > source.high ) || ( plan.path.kind == PATH_ROWID_EQUAL && rowid != source.low ) ) {
-
-					source.done = true;
-
-					return true;
+					if ( !compile_quick ( ctx, scope, source ) )
+						return false;
 
 				}
 
-				source.rowid = rowid;
-				found = true;
+				for ( ;; ) {
 
-				return decode_scanned ( ctx, source, rowid, data, size );
+					int64_t rowid = 0;
+					const uint8_t* data = nullptr;
+					size_t size = 0;
+					base::arena_mark mark = ctx.scratch->mark ( );
+
+					if ( !storage::cursor_take ( source.at, *ctx.scratch, rowid, data, size ) )
+						return fail_storage ( ctx, "a table could not be read" );
+
+					if ( ( plan.path.kind == PATH_ROWID_RANGE && rowid > source.high ) || ( plan.path.kind == PATH_ROWID_EQUAL && rowid != source.low ) ) {
+
+						source.done = true;
+
+						return true;
+
+					}
+
+					if ( source.quick_ready && source.quick_count ) {
+
+						bool pass = true;
+
+						if ( !quick_passes ( ctx, source, rowid, data, size, pass ) )
+							return false;
+
+						if ( !pass ) {
+
+							ctx.scratch->rewind ( mark );
+
+							if ( !source.at.valid || plan.path.kind == PATH_ROWID_EQUAL ) {
+
+								source.done = true;
+
+								return true;
+
+							}
+
+							ctx.rows_examined++;
+
+							continue;
+
+						}
+
+					}
+
+					source.rowid = rowid;
+					found = true;
+
+					return decode_scanned ( ctx, source, rowid, data, size );
+
+				}
 
 			}
 
