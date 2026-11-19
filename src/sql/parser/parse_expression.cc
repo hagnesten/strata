@@ -162,6 +162,7 @@ namespace sql {
 		made->source = -1;
 		made->column = -1;
 		made->aggregate = -1;
+		made->window_index = -1;
 		made->offset = static_cast < uint32_t > ( item.current.start - item.lex.source );
 
 		return made;
@@ -339,6 +340,136 @@ namespace sql {
 
 		made->list = gathered.items;
 		made->count = gathered.count;
+
+		return made;
+
+	}
+
+	static bool parse_bound ( parser& item, bound_kind& kind, expression*& offset ) {
+
+		if ( accept_word ( item, "unbounded" ) ) {
+
+			if ( accept_word ( item, "preceding" ) ) {
+
+				kind = BOUND_UNBOUNDED_PRECEDING;
+
+				return true;
+
+			}
+
+			kind = BOUND_UNBOUNDED_FOLLOWING;
+
+			return expect_word ( item, "following" );
+
+		}
+
+		if ( accept_word ( item, "current" ) ) {
+
+			kind = BOUND_CURRENT;
+
+			return expect_word ( item, "row" );
+
+		}
+
+		offset = parse_expression ( item );
+
+		if ( !offset )
+			return false;
+
+		if ( accept_word ( item, "preceding" ) ) {
+
+			kind = BOUND_PRECEDING;
+
+			return true;
+
+		}
+
+		kind = BOUND_FOLLOWING;
+
+		return expect_word ( item, "following" );
+
+	}
+
+	static window_spec* parse_window ( parser& item ) {
+
+		window_spec* made = item.memory->make < window_spec > ( 1 );
+
+		if ( !made ) {
+
+			fail_here ( item, "out of memory" );
+
+			return nullptr;
+
+		}
+
+		if ( !symbol_is ( item.current, "(" ) ) {
+
+			fail_here ( item, "named windows are not supported, write the window in brackets after OVER" );
+
+			return nullptr;
+
+		}
+
+		advance ( item );
+
+		if ( accept_word ( item, "partition" ) ) {
+
+			if ( !expect_word ( item, "by" ) || !parse_list ( item, made->partition, made->partition_count ) )
+				return nullptr;
+
+		}
+
+		if ( accept_word ( item, "order" ) ) {
+
+			grow_list < order_term > order;
+
+			if ( !expect_word ( item, "by" ) )
+				return nullptr;
+
+			do {
+
+				order_term term = { };
+
+				term.value = parse_expression ( item );
+
+				if ( !term.value )
+					return nullptr;
+
+				if ( accept_word ( item, "desc" ) )
+					term.descending = true;
+				else
+					accept_word ( item, "asc" );
+
+				if ( !order.push ( item, term ) )
+					return nullptr;
+
+			} while ( accept_symbol ( item, "," ) );
+
+			made->order = order.items;
+			made->order_count = order.count;
+
+		}
+
+		bool rows = token_is ( item.current, "rows" );
+
+		if ( rows || token_is ( item.current, "range" ) ) {
+
+			advance ( item );
+			made->frame = rows ? FRAME_ROWS : FRAME_RANGE;
+			made->end = BOUND_CURRENT;
+
+			if ( accept_word ( item, "between" ) ) {
+
+				if ( !parse_bound ( item, made->start, made->start_offset ) || !expect_word ( item, "and" ) || !parse_bound ( item, made->end, made->end_offset ) )
+					return nullptr;
+
+			} else if ( !parse_bound ( item, made->start, made->start_offset ) )
+				return nullptr;
+
+		}
+
+		if ( !expect_symbol ( item, ")" ) )
+			return nullptr;
 
 		return made;
 
@@ -647,6 +778,15 @@ namespace sql {
 
 				if ( !expect_symbol ( item, ")" ) )
 					return nullptr;
+
+				if ( accept_word ( item, "over" ) ) {
+
+					made->window = parse_window ( item );
+
+					if ( !made->window )
+						return nullptr;
+
+				}
 
 				return made;
 

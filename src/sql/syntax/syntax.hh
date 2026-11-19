@@ -130,7 +130,43 @@ namespace sql {
 
 	};
 
+	enum frame_kind : uint8_t {
+
+		FRAME_DEFAULT,
+		FRAME_ROWS,
+		FRAME_RANGE,
+
+	};
+
+	enum bound_kind : uint8_t {
+
+		BOUND_UNBOUNDED_PRECEDING,
+		BOUND_PRECEDING,
+		BOUND_CURRENT,
+		BOUND_FOLLOWING,
+		BOUND_UNBOUNDED_FOLLOWING,
+
+	};
+
 	struct select_statement;
+
+	struct expression;
+
+	struct order_term;
+
+	struct window_spec {
+
+		expression** partition;
+		uint32_t partition_count;
+		order_term* order;
+		uint32_t order_count;
+		frame_kind frame;
+		bound_kind start;
+		expression* start_offset;
+		bound_kind end;
+		expression* end_offset;
+
+	};
 
 	struct common_table {
 
@@ -164,6 +200,8 @@ namespace sql {
 		uint32_t depth;
 		int32_t aggregate;
 		uint32_t offset;
+		window_spec* window;
+		int32_t window_index;
 
 	};
 
