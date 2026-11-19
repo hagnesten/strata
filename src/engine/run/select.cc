@@ -682,9 +682,9 @@ namespace engine {
 
 		pipe = { };
 		pipe.width = plan->output_count;
-		pipe.key_count = plan->order_count;
+		pipe.key_count = plan->order_by_index ? 0 : plan->order_count;
 		pipe.descending = plan->order_desc;
-		pipe.sorting = plan->order_count > 0;
+		pipe.sorting = plan->order_count > 0 && !plan->order_by_index;
 		pipe.sink = sink;
 		pipe.skip = skip > 0 ? skip : 0;
 		pipe.remaining = remaining < 0 ? -1 : remaining;

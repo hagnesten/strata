@@ -1118,6 +1118,100 @@ namespace engine {
 
 	}
 
+	static int32_t order_column ( const prepared_select* plan, uint32_t term ) {
+
+		const sql::expression* value = plan->order_values [ term ];
+
+		if ( !value && plan->order_output [ term ] >= 0 )
+			value = plan->outputs [ plan->order_output [ term ] ];
+
+		if ( !value || value->kind != sql::EXPRESSION_COLUMN || value->depth != 0 || value->source != 0 )
+			return -3;
+
+		const table_info& table = *plan->sources [ 0 ].table;
+
+		return value->column < 0 || value->column == table.rowid_column ? -1 : value->column;
+
+	}
+
+	static bool index_matches_order ( const prepared_select* plan, const index_info& index, uint32_t equal_count ) {
+
+		uint32_t position = equal_count;
+
+		for ( uint32_t t = 0; t < plan->order_count; t++ ) {
+
+			int32_t column = order_column ( plan, t );
+			bool skipped = false;
+
+			for ( uint32_t k = 0; k < equal_count && !skipped; k++ )
+				skipped = static_cast < int32_t > ( index.columns [ k ] ) == column;
+
+			if ( skipped )
+				continue;
+
+			if ( column == -1 )
+				return position == index.column_count;
+
+			if ( position >= index.column_count || static_cast < int32_t > ( index.columns [ position ] ) != column )
+				return false;
+
+			position++;
+
+		}
+
+		return true;
+
+	}
+
+	static void order_through_index ( run_context& ctx, prepared_select* plan ) {
+
+		if ( plan->grouping || plan->distinct || plan->window_count || plan->next || plan->values_only || plan->source_count == 0 || !plan->order_count || !plan->sources [ 0 ].table || plan->sources [ 0 ].left )
+			return;
+
+		for ( uint32_t t = 0; t < plan->order_count; t++ )
+			if ( plan->order_desc [ t ] || order_column ( plan, t ) == -3 )
+				return;
+
+		prepared_source& source = plan->sources [ 0 ];
+		access_path& path = source.path;
+
+		if ( path.kind != PATH_INDEX ) {
+
+			if ( order_column ( plan, 0 ) == -1 ) {
+
+				plan->order_by_index = true;
+
+				return;
+
+			}
+
+			if ( path.kind != PATH_SCAN || !plan->limit )
+				return;
+
+			for ( uint32_t i = 0; i < ctx.schema->index_count; i++ ) {
+
+				index_info& index = ctx.schema->indexes [ i ];
+
+				if ( !base::same_folded ( index.table, source.table->name ) || !index_matches_order ( plan, index, 0 ) )
+					continue;
+
+				path = { };
+				path.kind = PATH_INDEX;
+				path.index = &index;
+				plan->order_by_index = true;
+
+				return;
+
+			}
+
+			return;
+
+		}
+
+		plan->order_by_index = index_matches_order ( plan, *path.index, path.equal_count );
+
+	}
+
 	static void finish_flags ( run_context& ctx, prepared_select* plan ) {
 
 		plan->grouping = plan->group_count || plan->aggregate_count;
@@ -1331,6 +1425,9 @@ namespace engine {
 			}
 
 		}
+
+		if ( first )
+			order_through_index ( ctx, first );
 
 		if ( scope )
 			ctx.ctes = scope->next;

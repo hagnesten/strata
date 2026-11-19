@@ -147,7 +147,7 @@ namespace engine {
 
 		}
 
-		if ( plan->order_count ) {
+		if ( plan->order_count && !plan->order_by_index ) {
 
 			base::text detail;
 

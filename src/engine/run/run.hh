@@ -260,6 +260,7 @@ namespace engine {
 		bool distinct;
 		bool values_only;
 		bool uses_working;
+		bool order_by_index;
 		int32_t snapshot_aggregate;
 		plan_child* children;
 		uint32_t id;
