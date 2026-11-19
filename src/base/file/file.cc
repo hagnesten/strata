@@ -1,6 +1,5 @@
 #include "base/file/file.hh"
-
-#include <windows.h>
+#include "base/platform/os.hh"
 
 namespace base {
 
@@ -46,60 +45,19 @@ namespace base {
 
 	}
 
-	bool wide_path ( const char* path, wchar_t* out, size_t room ) {
-
-		return MultiByteToWideChar ( CP_UTF8, 0, path, -1, out, static_cast < int32_t > ( room ) ) > 0;
-
-	}
-
 	bool open_file ( file_handle& out, const char* path, bool create ) {
-
-		wchar_t wide [ FILE_PATH_ROOM ];
 
 		out.handle = nullptr;
 
-		if ( !wide_path ( path, wide, FILE_PATH_ROOM ) )
-			return false;
-
-		HANDLE handle = CreateFileW ( wide, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr, create ? OPEN_ALWAYS : OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS, nullptr );
-
-		if ( handle == INVALID_HANDLE_VALUE )
-			return false;
-
-		out.handle = handle;
-
-		return true;
+		return os::open_file ( out.handle, path, true, create );
 
 	}
 
 	bool open_reading ( file_handle& out, const char* path ) {
 
-		wchar_t wide [ FILE_PATH_ROOM ];
-
 		out.handle = nullptr;
 
-		if ( !wide_path ( path, wide, FILE_PATH_ROOM ) )
-			return false;
-
-		HANDLE handle = CreateFileW ( wide, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr );
-
-		if ( handle == INVALID_HANDLE_VALUE )
-			return false;
-
-		out.handle = handle;
-
-		return true;
-
-	}
-
-	static OVERLAPPED at_offset ( uint64_t offset ) {
-
-		OVERLAPPED place = { };
-
-		place.Offset = static_cast < DWORD > ( offset );
-		place.OffsetHigh = static_cast < DWORD > ( offset >> 32 );
-
-		return place;
+		return os::open_file ( out.handle, path, false, false );
 
 	}
 
@@ -109,16 +67,33 @@ namespace base {
 
 		while ( size ) {
 
-			OVERLAPPED place = at_offset ( offset );
-			DWORD chunk = static_cast < DWORD > ( min < size_t > ( size, 1u << 30 ) );
-			DWORD got = 0;
+			size_t got = 0;
 
-			if ( !ReadFile ( file.handle, at, chunk, &got, &place ) || !got )
+			if ( !os::read_at ( file.handle, offset, at, min < size_t > ( size, 1u << 30 ), got ) || !got )
 				return false;
 
 			at += got;
 			offset += got;
 			size -= got;
+
+		}
+
+		return true;
+
+	}
+
+	static bool write_fully ( const file_handle& file, uint64_t offset, const uint8_t* at, size_t size ) {
+
+		while ( size ) {
+
+			size_t put = 0;
+
+			if ( !os::write_at ( file.handle, offset, at, min < size_t > ( size, 1u << 30 ), put ) || !put )
+				return false;
+
+			at += put;
+			offset += put;
+			size -= put;
 
 		}
 
@@ -133,35 +108,14 @@ namespace base {
 
 		if ( fault_now ( ) ) {
 
-			if ( !was_tripped && faults.torn && size > 1 ) {
-
-				OVERLAPPED place = at_offset ( offset );
-				DWORD put = 0;
-
-				WriteFile ( file.handle, at, static_cast < DWORD > ( size / 2 ), &put, &place );
-
-			}
+			if ( !was_tripped && faults.torn && size > 1 )
+				write_fully ( file, offset, at, size / 2 );
 
 			return false;
 
 		}
 
-		while ( size ) {
-
-			OVERLAPPED place = at_offset ( offset );
-			DWORD chunk = static_cast < DWORD > ( min < size_t > ( size, 1u << 30 ) );
-			DWORD put = 0;
-
-			if ( !WriteFile ( file.handle, at, chunk, &put, &place ) || !put )
-				return false;
-
-			at += put;
-			offset += put;
-			size -= put;
-
-		}
-
-		return true;
+		return write_fully ( file, offset, at, size );
 
 	}
 
@@ -170,15 +124,15 @@ namespace base {
 		if ( fault_now ( ) )
 			return false;
 
-		return FlushFileBuffers ( file.handle ) != 0;
+		return os::sync_file ( file.handle );
 
 	}
 
 	uint64_t file_size ( const file_handle& file ) {
 
-		LARGE_INTEGER size = { };
+		uint64_t size = 0;
 
-		return GetFileSizeEx ( file.handle, &size ) ? static_cast < uint64_t > ( size.QuadPart ) : 0;
+		return os::file_size ( file.handle, size ) ? size : 0;
 
 	}
 
@@ -187,18 +141,14 @@ namespace base {
 		if ( fault_now ( ) )
 			return false;
 
-		FILE_END_OF_FILE_INFO end = { };
-
-		end.EndOfFile.QuadPart = static_cast < LONGLONG > ( size );
-
-		return SetFileInformationByHandle ( file.handle, FileEndOfFileInfo, &end, sizeof ( end ) ) != 0;
+		return os::truncate_file ( file.handle, size );
 
 	}
 
 	void close_file ( file_handle& file ) {
 
 		if ( file.handle )
-			CloseHandle ( file.handle );
+			os::close_file ( file.handle );
 
 		file.handle = nullptr;
 
@@ -206,43 +156,31 @@ namespace base {
 
 	bool erase_path ( const char* path ) {
 
-		wchar_t wide [ FILE_PATH_ROOM ];
-
-		return wide_path ( path, wide, FILE_PATH_ROOM ) && DeleteFileW ( wide );
+		return os::erase_path ( path );
 
 	}
 
 	bool replace_path ( const char* from, const char* to ) {
 
-		wchar_t wide_from [ FILE_PATH_ROOM ];
-		wchar_t wide_to [ FILE_PATH_ROOM ];
-
-		return wide_path ( from, wide_from, FILE_PATH_ROOM ) && wide_path ( to, wide_to, FILE_PATH_ROOM ) && MoveFileExW ( wide_from, wide_to, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH );
+		return os::replace_path ( from, to );
 
 	}
 
 	bool path_exists ( const char* path ) {
 
-		wchar_t wide [ FILE_PATH_ROOM ];
-
-		return wide_path ( path, wide, FILE_PATH_ROOM ) && GetFileAttributesW ( wide ) != INVALID_FILE_ATTRIBUTES;
+		return os::path_exists ( path );
 
 	}
 
 	bool temp_path ( char* out, size_t room, const char* name ) {
 
-		wchar_t folder [ FILE_PATH_ROOM ];
-		DWORD got = GetTempPathW ( FILE_PATH_ROOM, folder );
+		text folder;
 
-		if ( !got || got >= FILE_PATH_ROOM )
+		if ( !os::temp_folder ( folder ) || folder.size + length ( name ) + 1 > room )
 			return false;
 
-		int32_t size = WideCharToMultiByte ( CP_UTF8, 0, folder, -1, out, static_cast < int32_t > ( room ), nullptr, nullptr );
-
-		if ( size <= 0 || static_cast < size_t > ( size ) + length ( name ) >= room )
-			return false;
-
-		copy_text ( out + size - 1, room - static_cast < size_t > ( size ) + 1, name );
+		folder.add ( name );
+		copy_text ( out, room, folder.value ( ) );
 
 		return true;
 

@@ -34,6 +34,6 @@ namespace base {
 
 	bool write_whole ( const char* path, const char* data, size_t size );
 
-	bool environment_path ( const wchar_t* name, text& out );
+	bool environment_path ( const char* name, text& out );
 
 }

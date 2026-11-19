@@ -1,34 +1,23 @@
 #include "base/console/console.hh"
-
-#include <windows.h>
+#include "base/platform/os.hh"
 
 namespace base {
 
-	static void write_to ( DWORD which, const char* value, size_t size ) {
-
-		HANDLE handle = GetStdHandle ( which );
-		DWORD written = 0;
-
-		if ( handle && handle != INVALID_HANDLE_VALUE && size )
-			WriteFile ( handle, value, static_cast < DWORD > ( size ), &written, nullptr );
-
-	}
-
 	void write ( const char* value ) {
 
-		write_to ( STD_OUTPUT_HANDLE, value, length ( value ) );
+		os::write_stream ( OS_OUT, value, length ( value ) );
 
 	}
 
 	void write ( const text& value ) {
 
-		write_to ( STD_OUTPUT_HANDLE, value.value ( ), value.size );
+		os::write_stream ( OS_OUT, value.value ( ), value.size );
 
 	}
 
 	void write_error ( const char* value ) {
 
-		write_to ( STD_ERROR_HANDLE, value, length ( value ) );
+		os::write_stream ( OS_ERROR, value, length ( value ) );
 
 	}
 
@@ -48,10 +37,9 @@ namespace base {
 				if ( input_done )
 					return out.size > 0;
 
-				HANDLE handle = GetStdHandle ( STD_INPUT_HANDLE );
-				DWORD read = 0;
+				size_t got = 0;
 
-				if ( !handle || handle == INVALID_HANDLE_VALUE || !ReadFile ( handle, input_buffer, sizeof ( input_buffer ), &read, nullptr ) || !read ) {
+				if ( !os::read_input ( input_buffer, sizeof ( input_buffer ), got ) || !got ) {
 
 					input_done = true;
 
@@ -59,7 +47,7 @@ namespace base {
 
 				}
 
-				input_used = read;
+				input_used = static_cast < uint32_t > ( got );
 				input_at = 0;
 
 			}
@@ -78,8 +66,7 @@ namespace base {
 
 	void use_utf8 ( ) {
 
-		SetConsoleOutputCP ( CP_UTF8 );
-		SetConsoleCP ( CP_UTF8 );
+		os::use_utf8 ( );
 
 	}
 

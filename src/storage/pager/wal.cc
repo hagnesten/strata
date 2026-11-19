@@ -1,7 +1,6 @@
 #include "storage/pager/pager.hh"
 #include "base/hash/crc32c.hh"
-
-#include <windows.h>
+#include "base/platform/os.hh"
 
 namespace storage {
 
@@ -109,11 +108,9 @@ namespace storage {
 
 		wal_state& wal = item.wal;
 		uint8_t header [ WAL_HEADER ];
-		LARGE_INTEGER tick = { };
 
-		QueryPerformanceCounter ( &tick );
 		wal.salt [ 0 ]++;
-		wal.salt [ 1 ] = static_cast < uint32_t > ( tick.QuadPart ) ^ wal.salt [ 1 ] * 2654435761u ^ GetCurrentProcessId ( );
+		wal.salt [ 1 ] = static_cast < uint32_t > ( base::os::ticks ( ) ) ^ wal.salt [ 1 ] * 2654435761u ^ base::os::process_id ( );
 		wal.sequence++;
 		encode_wal_header ( wal, header );
 

@@ -1,78 +1,97 @@
 #include "app/main/main.hh"
 #include "base/console/console.hh"
+#include "base/platform/os.hh"
 #include "test/harness/harness.hh"
 #include "app/shell/shell.hh"
+
+#if STRATA_WINDOWS
 #include "studio/app/studio.hh"
 #include "bench/harness/bench.hh"
-
-#include <windows.h>
-#include <shellapi.h>
+#endif
 
 namespace app {
 
-	static int32_t argument_count;
-	static char* arguments [ MAIN_ARGUMENTS ];
+	static bool named ( int32_t count, char** arguments, int32_t at, const char* name ) {
 
-	static void read_arguments ( ) {
-
-		int32_t count = 0;
-		wchar_t** wide = CommandLineToArgvW ( GetCommandLineW ( ), &count );
-
-		argument_count = 0;
-
-		for ( int32_t i = 0; wide && i < count && i < MAIN_ARGUMENTS; i++ ) {
-
-			int32_t size = WideCharToMultiByte ( CP_UTF8, 0, wide [ i ], -1, nullptr, 0, nullptr, nullptr );
-			char* made = size > 0 ? base::make < char > ( static_cast < size_t > ( size ) + 1 ) : nullptr;
-
-			if ( made && WideCharToMultiByte ( CP_UTF8, 0, wide [ i ], -1, made, size, nullptr, nullptr ) > 0 )
-				arguments [ argument_count++ ] = made;
-
-		}
-
-		if ( wide )
-			LocalFree ( wide );
+		return count > at && base::same ( arguments [ at ], name );
 
 	}
 
-	int32_t run ( ) {
+#if !STRATA_WINDOWS
+	static int32_t windows_only ( const char* what ) {
 
-		read_arguments ( );
+		base::write_error ( what );
+		base::write_error ( " needs Windows for now\n" );
 
-		const uint8_t* image = reinterpret_cast < const uint8_t* > ( GetModuleHandleW ( nullptr ) );
-		const IMAGE_NT_HEADERS* headers = reinterpret_cast < const IMAGE_NT_HEADERS* > ( image + reinterpret_cast < const IMAGE_DOS_HEADER* > ( image )->e_lfanew );
+		return 2;
 
-		if ( headers->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_WINDOWS_GUI )
-			return studio::run_studio ( argument_count > 1 ? arguments [ 1 ] : nullptr );
+	}
+#endif
 
-		if ( argument_count > 1 && base::same ( arguments [ 1 ], "--studio" ) )
-			return studio::run_studio ( argument_count > 2 ? arguments [ 2 ] : nullptr );
+	static int32_t run_tools ( int32_t count, char** arguments, bool windowed, bool& handled ) {
 
-		if ( argument_count > 2 && base::same ( arguments [ 1 ], "--capture" ) )
+		handled = true;
+
+#if STRATA_WINDOWS
+		if ( windowed )
+			return studio::run_studio ( count > 1 ? arguments [ 1 ] : nullptr );
+
+		if ( named ( count, arguments, 1, "--studio" ) )
+			return studio::run_studio ( count > 2 ? arguments [ 2 ] : nullptr );
+
+		if ( named ( count, arguments, 1, "--capture" ) && count > 2 )
 			return studio::capture_studio ( arguments [ 2 ] );
 
-		if ( argument_count > 1 && base::same ( arguments [ 1 ], "--make-studio" ) )
+		if ( named ( count, arguments, 1, "--make-studio" ) )
 			return studio::make_studio_copy ( ) ? 0 : 1;
 
-		if ( argument_count > 1 && base::same ( arguments [ 1 ], "--test" ) )
-			return test::run_all ( argument_count > 2 ? arguments [ 2 ] : nullptr );
+		if ( named ( count, arguments, 1, "--bench" ) )
+			return bench::run_bench ( count - 2, arguments + 2 );
+#else
+		( void ) windowed;
 
-		if ( argument_count > 1 && base::same ( arguments [ 1 ], "--bench" ) )
-			return bench::run_bench ( argument_count - 2, arguments + 2 );
+		if ( named ( count, arguments, 1, "--studio" ) || named ( count, arguments, 1, "--capture" ) || named ( count, arguments, 1, "--make-studio" ) )
+			return windows_only ( "Strata Studio" );
 
-		if ( argument_count == 2 && arguments [ 1 ] [ 0 ] != '-' )
+		if ( named ( count, arguments, 1, "--bench" ) )
+			return windows_only ( "the SQLite benchmark" );
+#endif
+
+		handled = false;
+
+		return 0;
+
+	}
+
+	int32_t run ( int32_t count, char** arguments, bool windowed ) {
+
+		bool handled = false;
+		int32_t code = run_tools ( count, arguments, windowed, handled );
+
+		if ( handled )
+			return code;
+
+		if ( named ( count, arguments, 1, "--test" ) )
+			return test::run_all ( count > 2 ? arguments [ 2 ] : nullptr );
+
+		if ( count == 2 && arguments [ 1 ] [ 0 ] != '-' )
 			return run_shell ( arguments [ 1 ] );
 
-		if ( argument_count == 3 && arguments [ 1 ] [ 0 ] != '-' )
+		if ( count == 3 && arguments [ 1 ] [ 0 ] != '-' )
 			return run_sql ( arguments [ 1 ], arguments [ 2 ] );
 
 		base::write ( "strata " STRATA_VERSION "\n" );
 		base::write ( "  strata <file>            open a database in the SQL shell\n" );
 		base::write ( "  strata <file> \"<sql>\"    run SQL against a database and print the rows\n" );
-		base::write ( "  strata --studio [file]   open Strata Studio\n" );
-		base::write ( "  strata --capture <dir>   render every studio view to PNG files\n" );
 		base::write ( "  strata --test [part]     run the self test (pager, btree, crash, parser, engine)\n" );
-		base::write ( "  strata --bench [rows]    race Strata against SQLite (--sqlite <dll>, --out <file.md>)\n" );
+
+		if ( STRATA_WINDOWS ) {
+
+			base::write ( "  strata --studio [file]   open Strata Studio\n" );
+			base::write ( "  strata --capture <dir>   render every studio view to PNG files\n" );
+			base::write ( "  strata --bench [rows]    race Strata against SQLite (--sqlite <dll>, --out <file.md>)\n" );
+
+		}
 
 		return 0;
 

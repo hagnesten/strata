@@ -50,8 +50,6 @@ namespace base {
 
 	bool path_exists ( const char* path );
 
-	bool wide_path ( const char* path, wchar_t* out, size_t room );
-
 	bool temp_path ( char* out, size_t room, const char* name );
 
 }

@@ -1,10 +1,11 @@
 #include "base/runtime/memory.hh"
-
-#include <windows.h>
+#include "base/platform/os.hh"
 
 extern "C" {
 
+#if STRATA_WINDOWS
 	int _fltused = 0;
+#endif
 
 	typedef uint64_t word_unaligned __attribute__ ( ( aligned ( 1 ), may_alias ) );
 	typedef uint32_t half_unaligned __attribute__ ( ( aligned ( 1 ), may_alias ) );
@@ -96,7 +97,7 @@ extern "C" {
 
 	}
 
-	void* memmove ( void* target, const void* source, size_t size ) {
+	__attribute__ ( ( no_builtin ( "memmove" ) ) ) void* memmove ( void* target, const void* source, size_t size ) {
 
 		uint8_t* to = static_cast < uint8_t* > ( target );
 		const uint8_t* from = static_cast < const uint8_t* > ( source );
@@ -111,10 +112,30 @@ extern "C" {
 
 	}
 
-	int memcmp ( const void* a, const void* b, size_t size ) {
+	__attribute__ ( ( no_builtin ( "memcmp", "bcmp" ) ) ) int memcmp ( const void* a, const void* b, size_t size ) {
 
 		const uint8_t* left = static_cast < const uint8_t* > ( a );
 		const uint8_t* right = static_cast < const uint8_t* > ( b );
+
+		while ( size >= 8 ) {
+
+			uint64_t x = *reinterpret_cast < const word_unaligned* > ( left );
+			uint64_t y = *reinterpret_cast < const word_unaligned* > ( right );
+
+			if ( x != y ) {
+
+				x = __builtin_bswap64 ( x );
+				y = __builtin_bswap64 ( y );
+
+				return x < y ? -1 : 1;
+
+			}
+
+			left += 8;
+			right += 8;
+			size -= 8;
+
+		}
 
 		for ( size_t i = 0; i < size; i++ )
 			if ( left [ i ] != right [ i ] )
@@ -124,22 +145,15 @@ extern "C" {
 
 	}
 
+	__attribute__ ( ( no_builtin ( "memcmp", "bcmp" ) ) ) int bcmp ( const void* a, const void* b, size_t size ) {
+
+		return memcmp ( a, b, size );
+
+	}
+
 }
 
 namespace base {
-
-	void* allocate ( size_t size ) {
-
-		return HeapAlloc ( GetProcessHeap ( ), HEAP_ZERO_MEMORY, size ? size : 1 );
-
-	}
-
-	void release ( void* block ) {
-
-		if ( block )
-			HeapFree ( GetProcessHeap ( ), 0, block );
-
-	}
 
 	void fill ( void* target, uint8_t value, size_t size ) {
 

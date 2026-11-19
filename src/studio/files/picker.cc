@@ -175,7 +175,7 @@ namespace studio {
 		bool clicked = false;
 
 		documents_folder ( documents );
-		base::environment_path ( L"USERPROFILE", desktop );
+		base::environment_path ( "USERPROFILE", desktop );
 		desktop.add ( "\\Desktop" );
 		place_row ( app, { inner.x - 8, y, left_w - 12, 34 }, ICON_OPEN, "Strata documents", nullptr, make_id ( "place.documents" ), clicked );
 

@@ -1,7 +1,6 @@
 #include "base/file/folder.hh"
 #include "base/sort/sort.hh"
-
-#include <windows.h>
+#include "base/platform/os.hh"
 
 namespace base {
 
@@ -67,54 +66,30 @@ namespace base {
 
 	}
 
+	static bool visit_entry ( void* context, const char* name, bool directory, uint64_t size ) {
+
+		folder_entry entry = { };
+
+		if ( length ( name ) >= FOLDER_NAME_ROOM )
+			return true;
+
+		copy_text ( entry.name, FOLDER_NAME_ROOM, name );
+		entry.directory = directory;
+		entry.size = size;
+
+		return add_entry ( *static_cast < folder_list* > ( context ), entry );
+
+	}
+
 	bool list_folder ( const char* path, folder_list& out ) {
 
 		forget_list ( out );
 
-		text pattern;
-		wchar_t wide [ FILE_PATH_ROOM ];
-
-		pattern.add ( path );
-
-		if ( pattern.size && pattern.data [ pattern.size - 1 ] != '\\' )
-			pattern.add ( '\\' );
-
-		pattern.add ( '*' );
-
-		if ( !wide_path ( pattern.value ( ), wide, FILE_PATH_ROOM ) )
+		if ( !os::list_folder ( path, visit_entry, &out ) )
 			return false;
 
-		WIN32_FIND_DATAW found;
-		HANDLE search = FindFirstFileExW ( wide, FindExInfoBasic, &found, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH );
-
-		if ( search == INVALID_HANDLE_VALUE )
-			return false;
-
-		bool fine = true;
-
-		do {
-
-			if ( found.cFileName [ 0 ] == '.' && ( !found.cFileName [ 1 ] || ( found.cFileName [ 1 ] == '.' && !found.cFileName [ 2 ] ) ) )
-				continue;
-
-			if ( found.dwFileAttributes & ( FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM ) )
-				continue;
-
-			folder_entry entry = { };
-
-			if ( WideCharToMultiByte ( CP_UTF8, 0, found.cFileName, -1, entry.name, FOLDER_NAME_ROOM, nullptr, nullptr ) <= 0 )
-				continue;
-
-			entry.directory = ( found.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ) != 0;
-			entry.size = static_cast < uint64_t > ( found.nFileSizeHigh ) << 32 | found.nFileSizeLow;
-			fine = add_entry ( out, entry );
-
-		} while ( fine && FindNextFileW ( search, &found ) );
-
-		FindClose ( search );
-
-		if ( !fine || !out.count )
-			return fine;
+		if ( !out.count )
+			return true;
 
 		folder_entry** order = make < folder_entry* > ( out.count );
 		folder_entry* sorted = make < folder_entry > ( out.room );
@@ -148,36 +123,13 @@ namespace base {
 
 		forget_list ( out );
 
-		DWORD drives = GetLogicalDrives ( );
-
-		for ( uint32_t d = 0; d < 26; d++ ) {
-
-			if ( !( drives & ( 1u << d ) ) )
-				continue;
-
-			folder_entry entry = { };
-
-			entry.name [ 0 ] = static_cast < char > ( 'A' + d );
-			entry.name [ 1 ] = ':';
-			entry.directory = true;
-
-			if ( !add_entry ( out, entry ) )
-				return false;
-
-		}
-
-		return true;
+		return os::list_roots ( visit_entry, &out );
 
 	}
 
 	bool make_folder ( const char* path ) {
 
-		wchar_t wide [ FILE_PATH_ROOM ];
-
-		if ( !wide_path ( path, wide, FILE_PATH_ROOM ) )
-			return false;
-
-		return CreateDirectoryW ( wide, nullptr ) || GetLastError ( ) == ERROR_ALREADY_EXISTS;
+		return os::make_folder ( path );
 
 	}
 
@@ -227,20 +179,9 @@ namespace base {
 
 	}
 
-	bool environment_path ( const wchar_t* name, text& out ) {
+	bool environment_path ( const char* name, text& out ) {
 
-		wchar_t wide [ FILE_PATH_ROOM ];
-		DWORD size = GetEnvironmentVariableW ( name, wide, FILE_PATH_ROOM );
-		char narrow [ FILE_PATH_ROOM ];
-
-		out.clear ( );
-
-		if ( !size || size >= FILE_PATH_ROOM || WideCharToMultiByte ( CP_UTF8, 0, wide, -1, narrow, sizeof ( narrow ), nullptr, nullptr ) <= 0 )
-			return false;
-
-		out.add ( narrow );
-
-		return true;
+		return os::environment ( name, out );
 
 	}
 

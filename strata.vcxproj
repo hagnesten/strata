@@ -32,7 +32,11 @@
     <TargetName>strata</TargetName>
   </PropertyGroup>
   <ItemGroup>
-    <ClCompile Include="src\base\runtime\start.cc" />
+    <ClCompile Include="src\base\platform\windows\start.cc" />
+    <ClCompile Include="src\base\platform\windows\system.cc" />
+    <ClCompile Include="src\base\platform\windows\heap.cc" />
+    <ClInclude Include="src\base\platform\os.hh" />
+    <ClInclude Include="src\base\platform\windows\wide.hh" />
     <ClCompile Include="src\base\runtime\memory.cc" />
     <ClCompile Include="src\base\console\console.cc" />
     <ClCompile Include="src\base\text\text.cc" />

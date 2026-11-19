@@ -1,5 +1,6 @@
 #include "bench/drivers/sqlite_api.hh"
 #include "base/file/file.hh"
+#include "base/platform/windows/wide.hh"
 
 #include <windows.h>
 
@@ -19,7 +20,7 @@ namespace bench {
 
 		out = { };
 
-		if ( !base::wide_path ( path, wide, FILE_PATH_ROOM ) )
+		if ( !base::os::wide_path ( path, wide, FILE_PATH_ROOM ) )
 			return false;
 
 		HMODULE module = LoadLibraryExW ( wide, nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS );

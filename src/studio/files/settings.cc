@@ -4,7 +4,7 @@ namespace studio {
 
 	bool settings_file ( base::text& out, const char* name ) {
 
-		if ( !base::environment_path ( L"APPDATA", out ) )
+		if ( !base::environment_path ( "APPDATA", out ) )
 			return false;
 
 		out.add ( "\\Strata" );
@@ -20,7 +20,7 @@ namespace studio {
 
 	bool documents_folder ( base::text& out ) {
 
-		if ( !base::environment_path ( L"USERPROFILE", out ) )
+		if ( !base::environment_path ( "USERPROFILE", out ) )
 			return false;
 
 		out.add ( "\\Documents\\Strata" );
