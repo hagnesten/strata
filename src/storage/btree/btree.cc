@@ -1833,6 +1833,103 @@ namespace storage {
 
 	}
 
+	bool table_lookup ( btree& tree, int64_t rowid, base::arena& memory, const uint8_t*& data, size_t& size, bool& found ) {
+
+		pager& owner = *tree.owner;
+		uint32_t number = tree.root;
+
+		found = false;
+
+		for ( uint32_t depth = 0; depth <= BTREE_DEPTH; depth++ ) {
+
+			page_frame* frame = get_page ( owner, number );
+
+			if ( !frame )
+				return false;
+
+			uint8_t kind = frame->data [ 0 ];
+
+			if ( kind == PAGE_TABLE_LEAF ) {
+
+				uint32_t slot = 0;
+				bool exact = false;
+				bool fine = find_slot ( owner, frame->data, true, rowid, nullptr, 0, 0, slot, exact );
+				cell_info info;
+
+				if ( fine && exact && ( fine = parse_cell ( frame->data, slot, info ) ) ) {
+
+					found = true;
+
+					if ( info.payload == info.local ) {
+
+						uint8_t* kept = static_cast < uint8_t* > ( memory.take_raw ( info.local + 1 ) );
+
+						fine = kept != nullptr;
+
+						if ( fine ) {
+
+							base::copy ( kept, info.local_data, info.local );
+							data = kept;
+							size = info.local;
+
+						}
+
+					} else {
+
+						base::text whole;
+
+						fine = read_full ( owner, info, whole );
+
+						char* kept = fine ? memory.keep ( whole.value ( ), whole.size ) : nullptr;
+
+						fine = kept != nullptr;
+						data = reinterpret_cast < const uint8_t* > ( kept );
+						size = whole.size;
+
+					}
+
+				}
+
+				release_page ( frame );
+
+				return fine;
+
+			}
+
+			if ( kind != PAGE_TABLE_INTERIOR ) {
+
+				release_page ( frame );
+				corrupt ( owner, "a tree points at a page of the wrong kind", number );
+
+				return false;
+
+			}
+
+			uint32_t position = 0;
+			uint32_t child = 0;
+			bool fine = child_for ( owner, frame->data, true, rowid, nullptr, 0, 0, position, child );
+
+			release_page ( frame );
+
+			if ( !fine ) {
+
+				if ( owner.error == PAGER_FINE )
+					corrupt ( owner, "an interior page has no child", number );
+
+				return false;
+
+			}
+
+			number = child;
+
+		}
+
+		corrupt ( owner, "a tree is too deep", tree.root );
+
+		return false;
+
+	}
+
 	bool table_find ( btree& tree, int64_t rowid, base::text& payload, bool& found ) {
 
 		cursor at;

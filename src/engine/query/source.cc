@@ -829,28 +829,19 @@ namespace engine {
 
 	}
 
-	static bool decode_kept ( run_context& ctx, const table_info& table, int64_t rowid, storage::value*& values ) {
-
-		char* kept = ctx.scratch->keep ( ctx.row_bytes.value ( ), ctx.row_bytes.size );
-
-		if ( !kept )
-			return fail_run ( ctx, "out of memory" );
-
-		return decode_bytes ( ctx, table, rowid, reinterpret_cast < const uint8_t* > ( kept ), ctx.row_bytes.size, values );
-
-	}
-
 	bool read_row ( run_context& ctx, const table_info& table, int64_t rowid, storage::value*& values, bool& found ) {
 
 		storage::btree tree = { ctx.pages, table.root, false };
+		const uint8_t* data = nullptr;
+		size_t size = 0;
 
-		if ( !storage::table_find ( tree, rowid, ctx.row_bytes, found ) )
+		if ( !storage::table_lookup ( tree, rowid, *ctx.scratch, data, size, found ) )
 			return fail_storage ( ctx, "a row could not be read" );
 
 		if ( !found )
 			return true;
 
-		return decode_kept ( ctx, table, rowid, values );
+		return decode_bytes ( ctx, table, rowid, data, size, values );
 
 	}
 

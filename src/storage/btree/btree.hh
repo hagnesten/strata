@@ -143,6 +143,8 @@ namespace storage {
 
 	bool table_find ( btree& tree, int64_t rowid, base::text& payload, bool& found );
 
+	bool table_lookup ( btree& tree, int64_t rowid, base::arena& memory, const uint8_t*& data, size_t& size, bool& found );
+
 	bool table_last ( btree& tree, int64_t& rowid, bool& empty );
 
 	bool index_insert ( btree& tree, const uint8_t* key, size_t size, bool& existed );

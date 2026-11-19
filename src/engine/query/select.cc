@@ -209,12 +209,56 @@ namespace engine {
 
 	}
 
+	static bool reject_early ( run_context& ctx, query_state& scope, output_pipe& pipe, bool& rejected ) {
+
+		prepared_select* plan = scope.plan;
+
+		rejected = false;
+
+		if ( !pipe.sorting || pipe.bound <= 0 || pipe.distinct || !pipe.key_count || pipe.row_count < static_cast < uint64_t > ( pipe.bound ) )
+			return true;
+
+		storage::value* keys = static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * pipe.key_count ) );
+
+		if ( !keys )
+			return fail_run ( ctx, "out of memory" );
+
+		for ( uint32_t k = 0; k < pipe.key_count; k++ ) {
+
+			const sql::expression* source = plan->order_output && plan->order_output [ k ] >= 0 ? plan->outputs [ plan->order_output [ k ] ] : plan->order_values [ k ];
+
+			if ( !evaluate ( ctx, &scope, source, keys [ k ] ) )
+				return false;
+
+		}
+
+		sorted_row probe = { nullptr, keys, pipe.arrivals };
+
+		if ( compare_sorted ( &pipe, &probe, pipe.rows [ 0 ] ) >= 0 ) {
+
+			pipe.arrivals++;
+			rejected = true;
+
+		}
+
+		return true;
+
+	}
+
 	static bool output_row ( run_context& ctx, query_state& scope, output_pipe& pipe, const storage::value* given ) {
 
 		prepared_select* plan = scope.plan;
 		storage::value* values = const_cast < storage::value* > ( given );
 
 		if ( !values ) {
+
+			bool rejected = false;
+
+			if ( !reject_early ( ctx, scope, pipe, rejected ) )
+				return false;
+
+			if ( rejected )
+				return true;
 
 			values = ctx.scratch->make < storage::value > ( plan->output_count + 1 );
 
