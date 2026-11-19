@@ -1,6 +1,7 @@
 #include "studio/app/studio.hh"
 #include "sql/print/print.hh"
 #include "base/file/file.hh"
+#include "base/console/console.hh"
 
 #include <windows.h>
 #include <shellapi.h>
@@ -18,6 +19,26 @@ namespace studio {
 			out.decimal ( bytes * 10 / ( 1024 * 1024 ), 10, 1 ).add ( " MB" );
 		else
 			out.decimal ( bytes * 100 / ( 1024ull * 1024 * 1024 ), 100, 2 ).add ( " GB" );
+
+	}
+
+	void grouped ( base::text& out, uint64_t value ) {
+
+		char digits [ 32 ];
+		uint32_t count = 0;
+
+		do {
+
+			if ( count && count % 4 == 3 )
+				digits [ count++ ] = ',';
+
+			digits [ count++ ] = static_cast < char > ( '0' + value % 10 );
+			value /= 10;
+
+		} while ( value );
+
+		while ( count )
+			out.add ( digits [ --count ] );
 
 	}
 
@@ -193,6 +214,18 @@ namespace studio {
 		message.add ( "Opened " ).add ( app.file_name );
 		set_status ( app, message.value ( ), false );
 
+		if ( app.window ) {
+
+			base::text title;
+			wchar_t wide [ FILE_PATH_ROOM ];
+
+			title.add ( app.file_name ).add ( " \xE2\x80\x94 Strata Studio" );
+
+			if ( MultiByteToWideChar ( CP_UTF8, 0, title.value ( ), -1, wide, FILE_PATH_ROOM ) > 0 )
+				SetWindowTextW ( app.window, wide );
+
+		}
+
 		return true;
 
 	}
@@ -248,6 +281,8 @@ namespace studio {
 		sql.add ( body.value ( ), body.size );
 
 		uint32_t version = app.db->schema->version;
+		int64_t changes = app.db->total_changes;
+		bool was_open = app.db->in_transaction;
 		double started = now_ms ( app );
 		bool fine = false;
 
@@ -263,6 +298,10 @@ namespace studio {
 
 			clear_grid ( app.result_grid );
 			app.result_grid.id = id;
+			app.plan.memory.reset ( );
+			app.plan.rows = nullptr;
+			app.plan.count = 0;
+			app.plan.room = 0;
 
 			engine::query_sink sink = { &app.result_grid, grid_columns, grid_row };
 
@@ -339,7 +378,7 @@ namespace studio {
 
 		}
 
-		if ( version != app.db->schema->version || !explain ) {
+		if ( version != app.db->schema->version || changes != app.db->total_changes || app.db->in_transaction || was_open ) {
 
 			int32_t table = app.table;
 
@@ -605,13 +644,7 @@ namespace studio {
 
 	}
 
-	static void render ( studio_state& app ) {
-
-		if ( !ui::begin_frame ( app.draw ) )
-			return;
-
-		draw_frame ( app );
-		ui::end_frame ( app.draw );
+	static void finish_input ( studio_state& app ) {
 
 		input_state& input = app.input;
 
@@ -629,9 +662,22 @@ namespace studio {
 		if ( app.ui.redraw ) {
 
 			app.ui.redraw = false;
-			request_frame ( app );
+
+			if ( app.window )
+				request_frame ( app );
 
 		}
+
+	}
+
+	static void render ( studio_state& app ) {
+
+		if ( !ui::begin_frame ( app.draw ) )
+			return;
+
+		draw_frame ( app );
+		ui::end_frame ( app.draw );
+		finish_input ( app );
 
 	}
 
@@ -803,6 +849,17 @@ namespace studio {
 
 			case WM_ERASEBKGND:
 				return 1;
+
+			case WM_GETMINMAXINFO: {
+
+				MINMAXINFO* limits = reinterpret_cast < MINMAXINFO* > ( lparam );
+
+				limits->ptMinTrackSize.x = static_cast < LONG > ( 980 * scale );
+				limits->ptMinTrackSize.y = static_cast < LONG > ( 620 * scale );
+
+				return 0;
+
+			}
 
 			case WM_DROPFILES: {
 
@@ -1032,11 +1089,7 @@ namespace studio {
 
 			bool fine = ui::capture_frame ( app.draw, STUDIO_CAPTURE_WIDTH, STUDIO_CAPTURE_HEIGHT, path.value ( ), capture_draw, &app );
 
-			app.input.pressed = false;
-			app.input.released = false;
-			app.input.key_count = 0;
-			app.input.char_count = 0;
-			app.input.wheel = 0;
+			finish_input ( app );
 
 			if ( !fine )
 				return false;
@@ -1044,6 +1097,169 @@ namespace studio {
 		}
 
 		return true;
+
+	}
+
+	static void script_frame ( studio_state& app ) {
+
+		ui::capture_frame ( app.draw, STUDIO_CAPTURE_WIDTH, STUDIO_CAPTURE_HEIGHT, nullptr, capture_draw, &app );
+		finish_input ( app );
+
+	}
+
+	static void script_move ( studio_state& app, float x, float y ) {
+
+		app.input.x = x;
+		app.input.y = y;
+		script_frame ( app );
+
+	}
+
+	static void script_press ( studio_state& app, float x, float y ) {
+
+		app.input.x = x;
+		app.input.y = y;
+		app.input.pressed = true;
+		app.input.down = true;
+		script_frame ( app );
+
+	}
+
+	static void script_release ( studio_state& app ) {
+
+		app.input.released = true;
+		app.input.down = false;
+		script_frame ( app );
+
+	}
+
+	static void script_click ( studio_state& app, float x, float y ) {
+
+		script_press ( app, x, y );
+		script_release ( app );
+
+	}
+
+	static void script_key ( studio_state& app, uint32_t code, bool ctrl, bool shift = false ) {
+
+		app.input.ctrl = ctrl;
+		app.input.shift = shift;
+		app.input.keys [ 0 ] = code;
+		app.input.key_count = 1;
+		script_frame ( app );
+		app.input.ctrl = false;
+		app.input.shift = false;
+
+	}
+
+	static void script_type ( studio_state& app, const char* text ) {
+
+		for ( const char* at = text; *at; at++ ) {
+
+			app.input.chars [ app.input.char_count++ ] = static_cast < uint8_t > ( *at );
+
+			if ( app.input.char_count == INPUT_CHARS )
+				script_frame ( app );
+
+		}
+
+		script_frame ( app );
+
+	}
+
+	static void script_wheel ( studio_state& app, float x, float y, float amount ) {
+
+		app.input.x = x;
+		app.input.y = y;
+		app.input.wheel = amount;
+		script_frame ( app );
+
+	}
+
+	static bool script_shot ( studio_state& app, const char* folder, const char* name ) {
+
+		return capture_view ( app, folder, name );
+
+	}
+
+	static bool play_script ( studio_state& app, const char* folder ) {
+
+		bool fine = true;
+		auto step = [ & ] ( bool passed, const char* what ) {
+
+			if ( !passed && fine ) {
+
+				base::write ( what );
+				base::write ( " failed in the scripted session\n" );
+
+			}
+
+			fine = fine && passed;
+
+		};
+
+		app.input.x = -100;
+		app.input.y = -100;
+		script_click ( app, 373, 22 );
+		step ( app.view == VIEW_QUERY, "the Query tab opens" );
+		script_click ( app, 700, 200 );
+		script_key ( app, 'A', true );
+		script_type ( app, "SELECT city, count(*) AS people" );
+		script_key ( app, VK_RETURN, false );
+		script_type ( app, "FROM customers" );
+		script_key ( app, VK_RETURN, false );
+		script_type ( app, "GROUP BY city ORDER BY people DESC" );
+		script_key ( app, VK_RETURN, true );
+		step ( app.result == RESULT_GRID && app.result_grid.rows == 12, "typed SQL runs" );
+		fine = fine && script_shot ( app, folder, "script-query" );
+		script_key ( app, 'Z', true );
+		script_key ( app, 'Y', true );
+		script_key ( app, 'A', true );
+		script_type ( app, "SELEC broken FROM nowhere" );
+		script_key ( app, VK_F5, false );
+		step ( app.result == RESULT_MESSAGE && app.result_failed, "bad SQL reports an error" );
+		fine = fine && script_shot ( app, folder, "script-error" );
+		script_key ( app, 'A', true );
+		script_type ( app, "SELECT * FROM orders" );
+		script_key ( app, VK_RETURN, true );
+		step ( app.result_grid.rows == 4000, "all orders load" );
+		script_click ( app, 640, 420 );
+		script_key ( app, VK_DOWN, false );
+		script_key ( app, VK_DOWN, false );
+		script_wheel ( app, 700, 600, -6 );
+		script_press ( app, 700, 294 );
+		script_move ( app, 700, 220 );
+		script_release ( app );
+		fine = fine && script_shot ( app, folder, "script-grid" );
+		script_click ( app, 451, 22 );
+		script_click ( app, 1288, 22 );
+		script_press ( app, 400, 100 );
+		script_move ( app, 520, 520 );
+		script_move ( app, 640, 600 );
+		script_release ( app );
+		script_press ( app, 1000, 700 );
+		script_move ( app, 1040, 690 );
+		script_release ( app );
+		step ( app.map == MAP_SCHEMA, "the schema map shows" );
+		fine = fine && script_shot ( app, folder, "script-map" );
+		script_click ( app, 1380, 22 );
+		script_wheel ( app, 800, 500, -2 );
+		fine = fine && script_shot ( app, folder, "script-storage" );
+		script_click ( app, 529, 22 );
+		script_click ( app, 300, 100 );
+		script_wheel ( app, 1200, 600, -3 );
+		fine = fine && script_shot ( app, folder, "script-pages" );
+		script_click ( app, 295, 22 );
+		script_click ( app, 100, 124 );
+		script_press ( app, 248, 400 );
+		script_move ( app, 330, 400 );
+		script_release ( app );
+		script_key ( app, '2', true );
+		step ( app.view == VIEW_QUERY, "ctrl+2 switches views" );
+		script_key ( app, '1', true );
+		fine = fine && script_shot ( app, folder, "script-data" );
+
+		return fine;
 
 	}
 
@@ -1099,6 +1315,14 @@ namespace studio {
 		ensure_pages ( *app );
 		select_page ( *app, app->db->schema->tables [ app->table ].root );
 		fine = fine && capture_view ( *app, folder, "pages" );
+
+		if ( fine && !play_script ( *app, folder ) ) {
+
+			base::write ( "the scripted session failed\n" );
+			fine = false;
+
+		}
+
 		engine::close_database ( *app->db );
 		ui::stop_renderer ( app->draw );
 		base::erase_path ( path );

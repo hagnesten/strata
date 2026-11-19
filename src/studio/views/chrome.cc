@@ -149,7 +149,7 @@ namespace studio {
 			base::text rows;
 
 			if ( app.stats [ t ].known )
-				rows.number ( app.stats [ t ].rows );
+				grouped ( rows, app.stats [ t ].rows );
 
 			float rows_w = ui::measure ( draw, ui::FONT_SMALL, rows.value ( ), rows.size );
 
@@ -243,11 +243,11 @@ namespace studio {
 			uint32_t pages = app.db->pages.header.page_count;
 
 			if ( app.db->in_transaction )
-				right.add ( "transaction open   " );
+				right.add ( "transaction open    " );
 
-			right.number ( pages ).add ( pages == 1 ? " page   " : " pages   " );
+			grouped ( right, pages );
+			right.add ( pages == 1 ? " page    " : " pages    " );
 			size_text ( right, static_cast < uint64_t > ( pages ) * PAGE_SIZE );
-			right.add ( "   write-ahead log   format 1" );
 
 		}
 

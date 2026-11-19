@@ -2,26 +2,6 @@
 
 namespace studio {
 
-	static void grouped ( base::text& out, uint64_t value ) {
-
-		char digits [ 32 ];
-		uint32_t count = 0;
-
-		do {
-
-			if ( count && count % 4 == 3 )
-				digits [ count++ ] = ',';
-
-			digits [ count++ ] = static_cast < char > ( '0' + value % 10 );
-			value /= 10;
-
-		} while ( value );
-
-		while ( count )
-			out.add ( digits [ --count ] );
-
-	}
-
 	static float section ( ui_context& ui, float x, float y, float w, const char* label ) {
 
 		ui::line ( *ui.draw, x, y + 0.5f, x + w, y + 0.5f, ui::rgb ( THEME_DIVIDER ) );

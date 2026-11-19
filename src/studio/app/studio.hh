@@ -223,4 +223,6 @@ namespace studio {
 
 	void size_text ( base::text& out, uint64_t bytes );
 
+	void grouped ( base::text& out, uint64_t value );
+
 }
