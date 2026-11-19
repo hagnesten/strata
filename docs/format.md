@@ -42,6 +42,46 @@ The first byte of every page says what kind it is:
 | 48 | 4044 | reserved, zero |
 | 4092 | 4 | checksum |
 
+## Records
+
+A record is a row or an index key. It starts with a varint column count, then each value as a one-byte type and its data:
+
+| Type | Value | Data |
+| --- | --- | --- |
+| null | 0 | nothing |
+| integer | 1 | zigzag varint |
+| real | 2 | 8-byte IEEE double, little-endian bits |
+| text | 3 | varint byte length, then UTF-8 bytes |
+| blob | 4 | varint byte length, then bytes |
+
+Varints are little-endian base-128: 7 bits per byte, with the high bit set on every byte except the last. Records compare value by value: null is smallest, then numbers (integers and reals compare by value), then text bytewise, then blobs bytewise. When one record is a prefix of the other, the shorter one is smaller.
+
+## B-tree pages
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 1 | kind, 10 to 13 |
+| 1 | 1 | zero |
+| 2 | 2 | cell count |
+| 4 | 2 | start of cell content, the lowest byte used by cells |
+| 6 | 2 | zero |
+| 8 | 4 | interior pages: right-most child. Leaves: next leaf, or 0 |
+| 12 | 4 | leaves: previous leaf, or 0 |
+| 16 | 2 per cell | cell offsets, in key order |
+
+Cells are packed from the end of the usable area (byte 4092) downward. Every key in a child is less than or equal to the key of the cell that points at it, and the right-most child holds keys greater than the last cell.
+
+The four cell kinds:
+
+- **Table leaf:** varint row id, varint payload size, local payload, then a 4-byte first overflow page if the payload spilled.
+- **Table interior:** 4-byte child page, varint row id.
+- **Index leaf:** varint payload size, local payload, then a 4-byte first overflow page if it spilled.
+- **Index interior:** 4-byte child page, then the same as an index leaf.
+
+A payload of up to 995 bytes stays local. Anything larger keeps its first 240 bytes local and the rest goes to overflow pages. Each overflow page holds kind 20, the next page at offset 4, a 2-byte byte count at offset 8, and up to 4080 bytes of data from offset 12.
+
+An index key is the record of the indexed columns followed by the row id, so every index entry is unique.
+
 ## Free pages
 
 A free page has kind 2. The next free page number is at offset 4 (0 ends the list). Freed pages go to the front of the list, and new pages come from the front before the file grows.
