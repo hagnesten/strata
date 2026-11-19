@@ -328,7 +328,7 @@ namespace ui {
 		item.target = saved_target;
 		item.brush = saved_brush;
 
-		if ( fine ) {
+		if ( fine && path ) {
 
 			GdiFlush ( );
 
@@ -439,6 +439,30 @@ namespace ui {
 
 			sink->BeginFigure ( { x1, y1 }, D2D1_FIGURE_BEGIN_HOLLOW );
 			sink->AddBezier ( { { x1 + bend, y1 }, { x2 - bend, y2 }, { x2, y2 } } );
+			sink->EndFigure ( D2D1_FIGURE_END_OPEN );
+			sink->Close ( );
+			sink->Release ( );
+			item.brush->SetColor ( as_d2d ( shade ) );
+			item.target->DrawGeometry ( path, item.brush, width );
+
+		}
+
+		path->Release ( );
+
+	}
+
+	void loop_curve ( renderer& item, float x1, float y1, float x2, float y2, float offset, color shade, float width ) {
+
+		ID2D1PathGeometry* path = nullptr;
+		ID2D1GeometrySink* sink = nullptr;
+
+		if ( FAILED ( item.factory->CreatePathGeometry ( &path ) ) )
+			return;
+
+		if ( SUCCEEDED ( path->Open ( &sink ) ) ) {
+
+			sink->BeginFigure ( { x1, y1 }, D2D1_FIGURE_BEGIN_HOLLOW );
+			sink->AddBezier ( { { x1 + offset, y1 }, { x2 + offset, y2 }, { x2, y2 } } );
 			sink->EndFigure ( D2D1_FIGURE_END_OPEN );
 			sink->Close ( );
 			sink->Release ( );

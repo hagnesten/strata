@@ -110,6 +110,8 @@ namespace ui {
 
 	void curve ( renderer& item, float x1, float y1, float x2, float y2, color shade, float width = 1.0f );
 
+	void loop_curve ( renderer& item, float x1, float y1, float x2, float y2, float offset, color shade, float width = 1.0f );
+
 	void circle ( renderer& item, float x, float y, float radius, color shade );
 
 	void text ( renderer& item, font_kind font, const char* value, size_t size, const rect& area, color shade, align_kind align = ALIGN_LEFT );

@@ -35,16 +35,68 @@ namespace studio {
 
 		}
 
-		float heights [ 8 ] = { };
+		float order [ CATALOG_TABLES ] = { };
+		uint32_t placed [ CATALOG_TABLES ];
+		uint32_t placed_count = 0;
 
-		for ( uint32_t t = 0; t < schema.table_count; t++ ) {
+		for ( uint32_t level = 0; level < 8; level++ ) {
 
-			uint32_t level = levels [ t ] < 7 ? levels [ t ] : 7;
+			uint32_t first = placed_count;
 
-			app.cards [ t ].x = 48 + static_cast < float > ( level ) * ( STUDIO_CARD_WIDTH + 110 );
-			app.cards [ t ].y = 40 + heights [ level ];
-			app.cards [ t ].placed = true;
-			heights [ level ] += card_height ( schema.tables [ t ] ) + 36;
+			for ( uint32_t t = 0; t < schema.table_count; t++ ) {
+
+				if ( ( levels [ t ] < 7 ? levels [ t ] : 7 ) != level )
+					continue;
+
+				float sum = 0;
+				uint32_t parents = 0;
+
+				for ( uint32_t f = 0; f < schema.tables [ t ].foreign_count; f++ ) {
+
+					engine::table_info* parent = engine::find_table ( schema, schema.tables [ t ].foreign [ f ].parent );
+
+					if ( !parent || parent == &schema.tables [ t ] )
+						continue;
+
+					sum += order [ parent - schema.tables ];
+					parents++;
+
+				}
+
+				order [ t ] = parents ? sum / static_cast < float > ( parents ) : static_cast < float > ( t );
+				placed [ placed_count++ ] = t;
+
+			}
+
+			for ( uint32_t i = first + 1; i < placed_count; i++ ) {
+
+				uint32_t here = placed [ i ];
+				uint32_t k = i;
+
+				while ( k > first && order [ placed [ k - 1 ] ] > order [ here ] ) {
+
+					placed [ k ] = placed [ k - 1 ];
+					k--;
+
+				}
+
+				placed [ k ] = here;
+
+			}
+
+			float y = 40;
+
+			for ( uint32_t i = first; i < placed_count; i++ ) {
+
+				uint32_t t = placed [ i ];
+
+				app.cards [ t ].x = 48 + static_cast < float > ( level ) * ( STUDIO_CARD_WIDTH + 120 );
+				app.cards [ t ].y = y;
+				app.cards [ t ].placed = true;
+				order [ t ] = static_cast < float > ( i - first );
+				y += card_height ( schema.tables [ t ] ) + 40;
+
+			}
 
 		}
 
@@ -83,52 +135,68 @@ namespace studio {
 
 		float origin_x = area.x + app.map_x;
 		float origin_y = area.y + app.map_y;
-		float step = 24;
-		float start_x = area.x + ( app.map_x - static_cast < float > ( static_cast < int32_t > ( app.map_x / step ) ) * step );
-		float start_y = area.y + ( app.map_y - static_cast < float > ( static_cast < int32_t > ( app.map_y / step ) ) * step );
 
 		ui::push_clip ( draw, area );
 
-		for ( float y = start_y; y < area.y + area.h; y += step )
-			for ( float x = start_x; x < area.x + area.w; x += step )
-				ui::fill ( draw, { x, y, 1.5f, 1.5f }, ui::rgb ( 0x22272C ) );
+		for ( uint32_t pass = 0; pass < 2; pass++ ) {
 
-		for ( uint32_t t = 0; t < schema.table_count; t++ ) {
+			for ( uint32_t t = 0; t < schema.table_count; t++ ) {
 
-			const engine::table_info& child = schema.tables [ t ];
+				const engine::table_info& child = schema.tables [ t ];
 
-			for ( uint32_t f = 0; f < child.foreign_count; f++ ) {
+				for ( uint32_t f = 0; f < child.foreign_count; f++ ) {
 
-				const engine::foreign_key& key = child.foreign [ f ];
-				engine::table_info* parent = engine::find_table ( schema, key.parent );
+					const engine::foreign_key& key = child.foreign [ f ];
+					engine::table_info* parent = engine::find_table ( schema, key.parent );
 
-				if ( !parent )
-					continue;
+					if ( !parent )
+						continue;
 
-				uint32_t p = static_cast < uint32_t > ( parent - schema.tables );
-				int32_t row = parent_row ( *parent, key );
-				float child_x = origin_x + app.cards [ t ].x;
-				float parent_x = origin_x + app.cards [ p ].x;
-				float child_y = origin_y + app.cards [ t ].y + 36 + static_cast < float > ( key.columns [ 0 ] ) * STUDIO_CARD_ROW + STUDIO_CARD_ROW * 0.5f;
-				float parent_y = origin_y + app.cards [ p ].y + ( row >= 0 ? 36 + static_cast < float > ( row ) * STUDIO_CARD_ROW + STUDIO_CARD_ROW * 0.5f : 18 );
-				bool rightward = parent_x > child_x;
-				float from_x = rightward ? child_x + STUDIO_CARD_WIDTH : child_x;
-				float to_x = rightward ? parent_x : parent_x + STUDIO_CARD_WIDTH;
-				bool lit = app.table == static_cast < int32_t > ( t ) || app.table == static_cast < int32_t > ( p );
-				ui::color shade = lit ? ui::rgb ( THEME_ACCENT, 0.95f ) : ui::rgb ( THEME_ACCENT_DEEP, 0.9f );
+					uint32_t p = static_cast < uint32_t > ( parent - schema.tables );
+					bool lit = app.table == static_cast < int32_t > ( t ) || app.table == static_cast < int32_t > ( p );
 
-				if ( p == t ) {
+					if ( lit != ( pass == 1 ) )
+						continue;
 
-					from_x = child_x + STUDIO_CARD_WIDTH;
-					to_x = child_x + STUDIO_CARD_WIDTH;
-					ui::curve ( draw, from_x, child_y, to_x + 0.01f, parent_y, shade, lit ? 1.6f : 1.2f );
+					int32_t row = parent_row ( *parent, key );
+					float child_x = origin_x + app.cards [ t ].x;
+					float parent_x = origin_x + app.cards [ p ].x;
+					float child_y = origin_y + app.cards [ t ].y + 36 + static_cast < float > ( key.columns [ 0 ] ) * STUDIO_CARD_ROW + STUDIO_CARD_ROW * 0.5f + 2;
+					float parent_y = origin_y + app.cards [ p ].y + ( row >= 0 ? 36 + static_cast < float > ( row ) * STUDIO_CARD_ROW + STUDIO_CARD_ROW * 0.5f + 2 : 18 );
+					float gap = parent_x - child_x;
+					ui::color shade = lit ? ui::rgb ( THEME_ACCENT ) : ui::rgb ( 0x46505A );
+					float width = lit ? 1.6f : 1.2f;
+					float from_x = 0;
+					float to_x = 0;
 
-				} else
-					ui::curve ( draw, from_x, child_y, to_x, parent_y, shade, lit ? 1.6f : 1.2f );
+					if ( p == t ) {
 
-				ui::circle ( draw, from_x, child_y, 3, shade );
-				ui::circle ( draw, to_x, parent_y, 3.5f, ui::rgb ( THEME_BACKGROUND ) );
-				ui::circle ( draw, to_x, parent_y, 2.5f, shade );
+						from_x = child_x + STUDIO_CARD_WIDTH;
+						to_x = from_x;
+						ui::loop_curve ( draw, from_x, child_y, to_x, parent_y, 40, shade, width );
+
+					} else if ( gap > STUDIO_CARD_WIDTH + 24 || gap < -STUDIO_CARD_WIDTH - 24 ) {
+
+						from_x = gap > 0 ? child_x + STUDIO_CARD_WIDTH : child_x;
+						to_x = gap > 0 ? parent_x : parent_x + STUDIO_CARD_WIDTH;
+						ui::curve ( draw, from_x, child_y, to_x, parent_y, shade, width );
+
+					} else {
+
+						float rise = parent_y - child_y;
+						float reach = 36 + ( rise < 0 ? -rise : rise ) * 0.12f;
+
+						from_x = child_x;
+						to_x = parent_x;
+						ui::loop_curve ( draw, from_x, child_y, to_x, parent_y, -( reach < 110 ? reach : 110 ) - ( gap > 0 ? gap : 0 ), shade, width );
+
+					}
+
+					ui::circle ( draw, from_x, child_y, 2.5f, shade );
+					ui::circle ( draw, to_x, parent_y, 3.5f, ui::rgb ( THEME_BACKGROUND ) );
+					ui::circle ( draw, to_x, parent_y, 2.5f, shade );
+
+				}
 
 			}
 
@@ -171,6 +239,8 @@ namespace studio {
 
 			}
 
+			ui::fill_round ( draw, { card.x - 2, card.y + 1, card.w + 4, card.h + 6 }, 9, ui::rgb ( 0, 0.16f ) );
+			ui::fill_round ( draw, { card.x - 0.5f, card.y + 1, card.w + 1, card.h + 2.5f }, 7, ui::rgb ( 0, 0.3f ) );
 			ui::fill_round ( draw, card, 6, ui::rgb ( THEME_PANEL ) );
 			ui::fill_round ( draw, header, 6, ui::rgb ( THEME_CARD_HEADER ) );
 			ui::fill ( draw, { header.x, header.y + 28, header.w, 8 }, ui::rgb ( THEME_CARD_HEADER ) );
@@ -182,8 +252,12 @@ namespace studio {
 
 			ensure_stats ( app, static_cast < int32_t > ( t ) );
 
-			if ( app.stats [ t ].known )
-				rows.number ( app.stats [ t ].rows ).add ( app.stats [ t ].rows == 1 ? " row" : " rows" );
+			if ( app.stats [ t ].known ) {
+
+				grouped ( rows, app.stats [ t ].rows );
+				rows.add ( app.stats [ t ].rows == 1 ? " row" : " rows" );
+
+			}
 
 			ui::text ( draw, ui::FONT_STRONG, table.name, { header.x + 32, header.y, header.w - 110, 36 }, ui::rgb ( THEME_TEXT ) );
 			ui::text ( draw, ui::FONT_SMALL, rows.value ( ), rows.size, { header.x, header.y, header.w - 12, 36 }, ui::rgb ( THEME_DIM ), ui::ALIGN_RIGHT );
