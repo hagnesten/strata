@@ -22,6 +22,8 @@ namespace sql {
 
 	};
 
+	bool fail_here ( parser& item, const char* message );
+
 	template < typename type > struct grow_list {
 
 		type* items = nullptr;
@@ -56,8 +58,6 @@ namespace sql {
 		}
 
 	};
-
-	bool fail_here ( parser& item, const char* message );
 
 	bool parse_one ( base::arena& memory, const char* source, size_t& consumed, statement*& out, parse_error& error );
 
