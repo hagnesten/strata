@@ -8,4 +8,8 @@ namespace base {
 
 	int64_t local_offset_milliseconds ( );
 
+	uint64_t precise_ticks ( );
+
+	uint64_t tick_rate ( );
+
 }

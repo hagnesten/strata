@@ -184,6 +184,21 @@
     <Filter Include="src\app\main">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D07}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\bench">
+      <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F01}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\bench\harness">
+      <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F02}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\bench\drivers">
+      <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F03}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\bench\workloads">
+      <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F04}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\bench\profile">
+      <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F05}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\base\runtime\start.cc"><Filter>src\base\runtime</Filter></ClCompile>
@@ -331,6 +346,24 @@
     <ClInclude Include="src\studio\designer\designer.hh"><Filter>src\studio\designer</Filter></ClInclude>
     <ClInclude Include="src\engine\check\check.hh"><Filter>src\engine\check</Filter></ClInclude>
     <ClInclude Include="src\base\file\folder.hh"><Filter>src\base\file</Filter></ClInclude>
+    <ClInclude Include="src\bench\harness\bench.hh"><Filter>src\bench\harness</Filter></ClInclude>
+    <ClInclude Include="src\bench\drivers\drivers.hh"><Filter>src\bench\drivers</Filter></ClInclude>
+    <ClInclude Include="src\bench\drivers\sqlite_api.hh"><Filter>src\bench\drivers</Filter></ClInclude>
+    <ClInclude Include="src\bench\workloads\workloads.hh"><Filter>src\bench\workloads</Filter></ClInclude>
+    <ClCompile Include="src\bench\harness\bench.cc"><Filter>src\bench\harness</Filter></ClCompile>
+    <ClCompile Include="src\bench\harness\report.cc"><Filter>src\bench\harness</Filter></ClCompile>
+    <ClCompile Include="src\bench\harness\tally.cc"><Filter>src\bench\harness</Filter></ClCompile>
+    <ClCompile Include="src\bench\drivers\sqlite_api.cc"><Filter>src\bench\drivers</Filter></ClCompile>
+    <ClCompile Include="src\bench\drivers\sqlite_driver.cc"><Filter>src\bench\drivers</Filter></ClCompile>
+    <ClCompile Include="src\bench\drivers\strata_driver.cc"><Filter>src\bench\drivers</Filter></ClCompile>
+    <ClCompile Include="src\bench\workloads\data.cc"><Filter>src\bench\workloads</Filter></ClCompile>
+    <ClCompile Include="src\bench\workloads\cases.cc"><Filter>src\bench\workloads</Filter></ClCompile>
+    <ClCompile Include="src\bench\workloads\loads.cc"><Filter>src\bench\workloads</Filter></ClCompile>
+    <ClCompile Include="src\bench\workloads\lookups.cc"><Filter>src\bench\workloads</Filter></ClCompile>
+    <ClCompile Include="src\bench\workloads\queries.cc"><Filter>src\bench\workloads</Filter></ClCompile>
+    <ClCompile Include="src\bench\workloads\changes.cc"><Filter>src\bench\workloads</Filter></ClCompile>
+    <ClInclude Include="src\bench\profile\sampler.hh"><Filter>src\bench\profile</Filter></ClInclude>
+    <ClCompile Include="src\bench\profile\sampler.cc"><Filter>src\bench\profile</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="props\strata.props"><Filter>props</Filter></None>

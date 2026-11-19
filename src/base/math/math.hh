@@ -8,4 +8,6 @@ namespace base {
 
 	double natural_log ( double value );
 
+	double natural_exp ( double value );
+
 }

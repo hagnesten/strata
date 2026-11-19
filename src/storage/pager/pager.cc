@@ -120,7 +120,7 @@ namespace storage {
 
 	static page_frame* spare_frame ( pager& item ) {
 
-		if ( item.frame_count >= item.capacity ) {
+		if ( item.frame_count >= item.capacity && item.frame_count >= item.grow_until ) {
 
 			for ( uint32_t pass = 0; pass < item.frame_count * 2; pass++ ) {
 
@@ -145,6 +145,8 @@ namespace storage {
 				return frame;
 
 			}
+
+			item.grow_until = item.frame_count + base::max < uint32_t > ( 64, item.frame_count / 8 );
 
 		}
 
@@ -323,15 +325,6 @@ namespace storage {
 
 		if ( frame ) {
 
-			if ( item.marks.count ) {
-
-				if ( !frame->dirty )
-					frame->saved_epoch = item.marks.epoch;
-				else if ( frame->saved_epoch < item.marks.marks [ item.marks.count - 1 ].epoch && !save_for_mark ( item, frame ) )
-					return nullptr;
-
-			}
-
 			frame->pins++;
 			frame->recent = true;
 			item.stats.hits++;
@@ -377,7 +370,8 @@ namespace storage {
 		frame->pins = 1;
 		frame->dirty = false;
 		frame->recent = true;
-		frame->saved_epoch = item.marks.epoch;
+		frame->saved_epoch = 0;
+		frame->dirty_epoch = 0;
 		link_frame ( item, frame );
 
 		return frame;
@@ -406,6 +400,14 @@ namespace storage {
 
 			}
 
+			if ( !change_page ( item, frame ) ) {
+
+				release_page ( frame );
+
+				return nullptr;
+
+			}
+
 			item.header.free_head = base::read32 ( frame->data + 4 );
 			item.header.free_count--;
 
@@ -425,7 +427,9 @@ namespace storage {
 			frame->number = item.header.page_count;
 			frame->pins = 1;
 			frame->recent = true;
+			frame->dirty = true;
 			frame->saved_epoch = item.marks.epoch;
+			frame->dirty_epoch = item.marks.epoch;
 			link_frame ( item, frame );
 
 		}
@@ -465,6 +469,14 @@ namespace storage {
 
 		if ( !frame )
 			return false;
+
+		if ( !change_page ( item, frame ) ) {
+
+			release_page ( frame );
+
+			return false;
+
+		}
 
 		base::fill ( frame->data, 0, PAGE_SIZE );
 		frame->data [ 0 ] = PAGE_FREE;

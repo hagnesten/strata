@@ -31,4 +31,24 @@ namespace base {
 
 	}
 
+	uint64_t precise_ticks ( ) {
+
+		LARGE_INTEGER now;
+
+		QueryPerformanceCounter ( &now );
+
+		return static_cast < uint64_t > ( now.QuadPart );
+
+	}
+
+	uint64_t tick_rate ( ) {
+
+		LARGE_INTEGER rate;
+
+		QueryPerformanceFrequency ( &rate );
+
+		return static_cast < uint64_t > ( rate.QuadPart );
+
+	}
+
 }

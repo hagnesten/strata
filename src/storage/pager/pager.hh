@@ -61,6 +61,7 @@ namespace storage {
 		bool recent;
 		uint8_t marked;
 		uint32_t saved_epoch;
+		uint32_t dirty_epoch;
 		page_frame* chain;
 		uint8_t* data;
 
@@ -114,8 +115,6 @@ namespace storage {
 		page_copy* copies;
 		uint32_t copy_count;
 		uint32_t copy_room;
-		page_frame** dirty;
-		uint32_t dirty_count;
 
 	};
 
@@ -140,6 +139,7 @@ namespace storage {
 		page_frame* buckets [ PAGER_BUCKETS ];
 		uint32_t hand;
 		uint32_t capacity;
+		uint32_t grow_until;
 		pager_error error;
 		char problem [ PAGER_PROBLEM_ROOM ];
 		pager_stats stats;
@@ -152,6 +152,8 @@ namespace storage {
 	bool push_mark ( pager& item );
 
 	bool save_for_mark ( pager& item, page_frame* frame );
+
+	bool change_page ( pager& item, page_frame* frame );
 
 	bool release_mark ( pager& item, uint32_t depth );
 

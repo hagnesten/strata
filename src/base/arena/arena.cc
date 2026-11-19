@@ -65,6 +65,14 @@ namespace base {
 
 			arena_block* next = first->next;
 
+			if ( !to.block && !next ) {
+
+				first->used = ( sizeof ( arena_block ) + 15 ) & ~static_cast < size_t > ( 15 );
+
+				return;
+
+			}
+
 			total -= first->size;
 			release ( first );
 			first = next;

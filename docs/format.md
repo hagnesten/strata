@@ -64,12 +64,12 @@ Varints are little-endian base-128: 7 bits per byte, with the high bit set on ev
 | 1 | 1 | zero |
 | 2 | 2 | cell count |
 | 4 | 2 | start of cell content, the lowest byte used by cells |
-| 6 | 2 | zero |
+| 6 | 2 | bytes lost to gaps between cells |
 | 8 | 4 | interior pages: right-most child. Leaves: next leaf, or 0 |
 | 12 | 4 | leaves: previous leaf, or 0 |
 | 16 | 2 per cell | cell offsets, in key order |
 
-Cells are packed from the end of the usable area (byte 4092) downward. Every key in a child is less than or equal to the key of the cell that points at it, and the right-most child holds keys greater than the last cell.
+Cells are packed from the end of the usable area (byte 4092) downward. A new cell goes into the gap between the offsets and the content when it fits, and a deleted or shrunk cell leaves a gap that is counted at offset 6. The page is packed again when a cell no longer fits in the gap. Every key in a child is less than or equal to the key of the cell that points at it, and the right-most child holds keys greater than the last cell.
 
 The four cell kinds:
 

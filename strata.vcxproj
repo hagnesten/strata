@@ -177,6 +177,24 @@
     <ClInclude Include="src\engine\check\check.hh" />
     <ClInclude Include="src\base\file\folder.hh" />
     <ClInclude Include="src\app\main\main.hh" />
+    <ClInclude Include="src\bench\harness\bench.hh" />
+    <ClInclude Include="src\bench\drivers\drivers.hh" />
+    <ClInclude Include="src\bench\drivers\sqlite_api.hh" />
+    <ClInclude Include="src\bench\workloads\workloads.hh" />
+    <ClCompile Include="src\bench\harness\bench.cc" />
+    <ClCompile Include="src\bench\harness\report.cc" />
+    <ClCompile Include="src\bench\harness\tally.cc" />
+    <ClCompile Include="src\bench\drivers\sqlite_api.cc" />
+    <ClCompile Include="src\bench\drivers\sqlite_driver.cc" />
+    <ClCompile Include="src\bench\drivers\strata_driver.cc" />
+    <ClCompile Include="src\bench\workloads\data.cc" />
+    <ClCompile Include="src\bench\workloads\cases.cc" />
+    <ClCompile Include="src\bench\workloads\loads.cc" />
+    <ClCompile Include="src\bench\workloads\lookups.cc" />
+    <ClCompile Include="src\bench\workloads\queries.cc" />
+    <ClCompile Include="src\bench\workloads\changes.cc" />
+    <ClInclude Include="src\bench\profile\sampler.hh" />
+    <ClCompile Include="src\bench\profile\sampler.cc" />
   </ItemGroup>
   <ItemGroup>
     <None Include="props\strata.props" />

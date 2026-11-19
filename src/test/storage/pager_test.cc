@@ -1,5 +1,6 @@
 #include "test/harness/harness.hh"
 #include "storage/pager/pager.hh"
+#include "base/hash/crc32c.hh"
 
 namespace test {
 
@@ -20,9 +21,35 @@ namespace test {
 
 	}
 
+	static void checksum_tests ( ) {
+
+		uint8_t* data = base::make < uint8_t > ( 9000 );
+		test_random random = { 0xC0FFEEull };
+		bool same = data != nullptr;
+
+		for ( uint32_t i = 0; data && i < 9000; i++ )
+			data [ i ] = static_cast < uint8_t > ( random.next ( ) );
+
+		for ( uint32_t round = 0; data && round < 3000 && same; round++ ) {
+
+			uint32_t offset = random.below ( 64 );
+			uint32_t size = round < 1000 ? round : random.below ( 9000 - 64 );
+			uint32_t start = round & 1 ? static_cast < uint32_t > ( random.next ( ) ) : 0;
+
+			same = base::crc32c ( data + offset, size, start ) == base::crc32c_portable ( data + offset, size, start );
+
+		}
+
+		expect ( same, "the fast checksum matches the portable one for every length and start" );
+		expect ( base::crc32c ( "123456789", 9 ) == 0xE3069283u, "CRC-32C of 123456789 is E3069283" );
+		base::release ( data );
+
+	}
+
 	void pager_tests ( ) {
 
 		section ( "pager" );
+		checksum_tests ( );
 
 		char path [ FILE_PATH_ROOM ];
 

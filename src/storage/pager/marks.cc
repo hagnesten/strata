@@ -8,31 +8,7 @@ namespace storage {
 			base::release ( mark.copies [ i ].data );
 
 		base::release ( mark.copies );
-		base::release ( mark.dirty );
 		base::fill ( &mark, 0, sizeof ( mark ) );
-
-	}
-
-	static bool list_dirty ( pager& item, pager_mark& mark ) {
-
-		uint32_t count = 0;
-
-		for ( uint32_t i = 0; i < item.frame_count; i++ )
-			if ( item.frames [ i ]->number && item.frames [ i ]->dirty )
-				count++;
-
-		base::release ( mark.dirty );
-		mark.dirty = count ? base::make < page_frame* > ( count ) : nullptr;
-		mark.dirty_count = 0;
-
-		if ( count && !mark.dirty )
-			return false;
-
-		for ( uint32_t i = 0; i < item.frame_count; i++ )
-			if ( item.frames [ i ]->number && item.frames [ i ]->dirty )
-				mark.dirty [ mark.dirty_count++ ] = item.frames [ i ];
-
-		return true;
 
 	}
 
@@ -109,22 +85,9 @@ namespace storage {
 		pager_mark& mark = stack.marks [ stack.count ];
 
 		base::fill ( &mark, 0, sizeof ( mark ) );
-
-		if ( !list_dirty ( item, mark ) ) {
-
-			fail ( item, PAGER_MEMORY, "out of memory while marking the transaction", 0, nullptr );
-
-			return false;
-
-		}
-
 		mark.epoch = ++stack.epoch;
 		mark.header = item.header;
 		stack.count++;
-
-		for ( uint32_t i = 0; i < item.frame_count; i++ )
-			if ( !item.frames [ i ]->dirty )
-				item.frames [ i ]->saved_epoch = mark.epoch;
 
 		return true;
 
@@ -151,10 +114,28 @@ namespace storage {
 
 	}
 
-	static void clear_flags ( pager_mark& mark ) {
+	bool change_page ( pager& item, page_frame* frame ) {
 
-		for ( uint32_t i = 0; i < mark.dirty_count; i++ )
-			mark.dirty [ i ]->marked = 0;
+		mark_stack& stack = item.marks;
+
+		if ( !frame->dirty ) {
+
+			frame->dirty = true;
+			frame->dirty_epoch = stack.epoch;
+			frame->saved_epoch = stack.epoch;
+
+			return true;
+
+		}
+
+		if ( stack.count && frame->saved_epoch < stack.marks [ stack.count - 1 ].epoch )
+			return save_for_mark ( item, frame );
+
+		return true;
+
+	}
+
+	static void clear_flags ( pager_mark& mark ) {
 
 		for ( uint32_t i = 0; i < mark.copy_count; i++ )
 			mark.copies [ i ].frame->marked = 0;
@@ -177,16 +158,13 @@ namespace storage {
 
 		pager_mark& below = stack.marks [ stack.count - 2 ];
 
-		for ( uint32_t i = 0; i < below.dirty_count; i++ )
-			below.dirty [ i ]->marked |= 1;
-
 		for ( uint32_t i = 0; i < below.copy_count; i++ )
-			below.copies [ i ].frame->marked |= 2;
+			below.copies [ i ].frame->marked = 1;
 
 		uint32_t moving = 0;
 
 		for ( uint32_t i = 0; i < top.copy_count; i++ )
-			if ( top.copies [ i ].frame->marked == 1 )
+			if ( !top.copies [ i ].frame->marked && top.copies [ i ].frame->dirty_epoch < below.epoch )
 				moving++;
 
 		if ( !reserve_copies ( below, below.copy_count + moving ) ) {
@@ -202,10 +180,10 @@ namespace storage {
 
 			page_copy& copy = top.copies [ i ];
 
-			if ( copy.frame->marked == 1 ) {
+			if ( !copy.frame->marked && copy.frame->dirty_epoch < below.epoch ) {
 
 				below.copies [ below.copy_count++ ] = copy;
-				copy.frame->marked |= 2;
+				copy.frame->marked = 1;
 				copy.data = nullptr;
 
 			}
@@ -255,17 +233,12 @@ namespace storage {
 
 		pager_mark& target = stack.marks [ depth ];
 
-		for ( uint32_t i = 0; i < target.dirty_count; i++ )
-			target.dirty [ i ]->marked = 1;
-
 		for ( uint32_t i = 0; i < item.frame_count; i++ ) {
 
 			page_frame* frame = item.frames [ i ];
 
-			if ( frame->number && frame->dirty && !frame->marked )
+			if ( frame->number && frame->dirty && frame->dirty_epoch >= target.epoch )
 				discard_frame ( item, frame );
-
-			frame->marked = 0;
 
 		}
 
@@ -283,10 +256,6 @@ namespace storage {
 
 			target.copy_count = 0;
 			target.epoch = ++stack.epoch;
-
-			for ( uint32_t i = 0; i < item.frame_count; i++ )
-				if ( !item.frames [ i ]->dirty )
-					item.frames [ i ]->saved_epoch = target.epoch;
 
 		} else
 			forget_mark ( stack.marks [ --stack.count ] );

@@ -154,6 +154,105 @@ namespace storage {
 
 	}
 
+	static uint32_t gaps_of ( const uint8_t* page ) {
+
+		return base::read16 ( page + 6 );
+
+	}
+
+	static bool content_sane ( const uint8_t* page, uint32_t count, uint32_t& content ) {
+
+		content = base::read16 ( page + 4 );
+
+		return content && content <= PAGE_USABLE && content >= BTREE_HEADER + count * 2;
+
+	}
+
+	static uint32_t quick_used ( const uint8_t* page ) {
+
+		uint32_t count = count_of ( page );
+		uint32_t content = 0;
+
+		if ( !content_sane ( page, count, content ) || PAGE_USABLE - content < gaps_of ( page ) )
+			return used_bytes ( page );
+
+		return PAGE_USABLE - content - gaps_of ( page ) + count * 2;
+
+	}
+
+	static bool place_cell ( uint8_t* page, uint32_t slot, const uint8_t* cell, uint32_t size ) {
+
+		uint32_t count = count_of ( page );
+		uint32_t content = 0;
+
+		if ( count >= BTREE_CELLS || slot > count || !content_sane ( page, count, content ) || content - ( BTREE_HEADER + count * 2 ) < size + 2 )
+			return false;
+
+		uint8_t* slots = page + BTREE_HEADER;
+
+		content -= size;
+		base::copy ( page + content, cell, size );
+
+		if ( slot < count )
+			base::move ( slots + slot * 2 + 2, slots + slot * 2, ( count - slot ) * 2 );
+
+		base::write16 ( slots + slot * 2, content );
+		base::write16 ( page + 2, count + 1 );
+		base::write16 ( page + 4, content );
+
+		return true;
+
+	}
+
+	static bool swap_cell ( uint8_t* page, uint32_t slot, uint32_t old_size, const uint8_t* cell, uint32_t size ) {
+
+		uint32_t offset = offset_of ( page, slot );
+		uint32_t gaps = gaps_of ( page );
+
+		if ( size <= old_size ) {
+
+			base::copy ( page + offset, cell, size );
+			base::write16 ( page + 6, gaps + old_size - size );
+
+			return true;
+
+		}
+
+		uint32_t count = count_of ( page );
+		uint32_t content = 0;
+
+		if ( !content_sane ( page, count, content ) || content - ( BTREE_HEADER + count * 2 ) < size )
+			return false;
+
+		content -= size;
+		base::copy ( page + content, cell, size );
+		base::write16 ( page + BTREE_HEADER + slot * 2, content );
+		base::write16 ( page + 4, content );
+		base::write16 ( page + 6, gaps + old_size );
+
+		return true;
+
+	}
+
+	static void drop_cell ( uint8_t* page, uint32_t slot, uint32_t size ) {
+
+		uint32_t count = count_of ( page );
+		uint32_t offset = offset_of ( page, slot );
+		uint8_t* slots = page + BTREE_HEADER;
+
+		if ( slot + 1 < count )
+			base::move ( slots + slot * 2, slots + slot * 2 + 2, ( count - slot - 1 ) * 2 );
+
+		base::write16 ( slots + ( count - 1 ) * 2, 0 );
+		base::write16 ( page + 2, count - 1 );
+
+		if ( offset == base::read16 ( page + 4 ) )
+			base::write16 ( page + 4, offset + size );
+		else
+			base::write16 ( page + 6, gaps_of ( page ) + size );
+
+	}
+
 	static bool read_full ( pager& owner, const cell_info& info, base::text& out ) {
 
 		out.clear ( );
@@ -645,8 +744,9 @@ namespace storage {
 
 			page_frame* after = get_page ( owner, next );
 
-			if ( !after ) {
+			if ( !after || !change_page ( owner, after ) ) {
 
+				release_page ( after );
 				release_page ( right );
 
 				return false;
@@ -775,13 +875,13 @@ namespace storage {
 
 		}
 
-		uint8_t* scratch = base::make < uint8_t > ( PAGE_SIZE * 2 );
-		cell_span* cells = base::make < cell_span > ( BTREE_CELLS + 2 );
-		bool fine = scratch && cells;
+		uint8_t* scratch = nullptr;
+		cell_span* cells = nullptr;
+		bool fine = true;
 		uint32_t used = 0;
 		uint32_t count = 0;
 
-		if ( fine && leaf_kind ( kind ) ) {
+		if ( leaf_kind ( kind ) ) {
 
 			uint32_t slot = 0;
 			bool exact = false;
@@ -792,25 +892,33 @@ namespace storage {
 
 				job.existed = true;
 				release_page ( frame );
-				base::release ( scratch );
-				base::release ( cells );
 
 				return true;
 
 			}
 
-			if ( fine && exact ) {
+			cell_info old = { };
 
-				cell_info old;
+			if ( fine && exact ) {
 
 				job.existed = true;
 				fine = parse_cell ( frame->data, slot, old ) && ( !old.overflow || free_overflow ( owner, old.overflow ) );
 
 			}
 
-			fine = fine && gather ( owner, frame, scratch, used, cells, count );
+			fine = fine && change_page ( owner, frame );
 
-			if ( fine ) {
+			bool placed = fine && ( exact ? swap_cell ( frame->data, slot, old.size, job.cell, job.cell_size ) : place_cell ( frame->data, slot, job.cell, job.cell_size ) );
+
+			if ( fine && !placed ) {
+
+				scratch = base::make < uint8_t > ( PAGE_SIZE * 2 );
+				cells = base::make < cell_span > ( BTREE_CELLS + 2 );
+				fine = scratch && cells && gather ( owner, frame, scratch, used, cells, count );
+
+			}
+
+			if ( fine && !placed ) {
 
 				if ( exact )
 					cells [ slot ] = { job.cell, job.cell_size };
@@ -829,7 +937,7 @@ namespace storage {
 
 			}
 
-		} else if ( fine ) {
+		} else {
 
 			uint32_t position = 0;
 			uint32_t child = 0;
@@ -854,7 +962,26 @@ namespace storage {
 				else
 					made.add ( below.body.value ( ), below.body.size );
 
-				fine = gather ( owner, frame, scratch, used, cells, count );
+				fine = change_page ( owner, frame );
+
+				uint32_t before = count_of ( frame->data );
+
+				if ( fine && place_cell ( frame->data, position, reinterpret_cast < const uint8_t* > ( made.value ( ) ), static_cast < uint32_t > ( made.size ) ) ) {
+
+					if ( position < before )
+						base::write32 ( frame->data + offset_of ( frame->data, position + 1 ), below.right );
+					else
+						base::write32 ( frame->data + 8, below.right );
+
+					release_page ( frame );
+
+					return true;
+
+				}
+
+				scratch = fine ? base::make < uint8_t > ( PAGE_SIZE * 2 ) : nullptr;
+				cells = fine ? base::make < cell_span > ( BTREE_CELLS + 2 ) : nullptr;
+				fine = scratch && cells && gather ( owner, frame, scratch, used, cells, count );
 
 				uint32_t right_child = link_a ( frame->data );
 				bool appending = position == count;
@@ -897,6 +1024,14 @@ namespace storage {
 		if ( !root )
 			return false;
 
+		if ( !change_page ( owner, root ) ) {
+
+			release_page ( root );
+
+			return false;
+
+		}
+
 		uint8_t kind = root->data [ 0 ];
 		page_frame* left = new_page ( owner, static_cast < page_kind > ( kind ) );
 
@@ -914,7 +1049,9 @@ namespace storage {
 
 			page_frame* right = get_page ( owner, split.right );
 
-			if ( !right ) {
+			if ( !right || !change_page ( owner, right ) ) {
+
+				release_page ( right );
 
 				release_page ( left );
 				release_page ( root );
@@ -1085,7 +1222,7 @@ namespace storage {
 		bool leaf = leaf_kind ( kind );
 		uint32_t after = leaf ? link_a ( b->data ) : 0;
 
-		if ( fine && built && rebuild ( built, kind, joined, joined_count, leaf ? after : link_a ( b->data ), leaf ? link_b ( a->data ) : 0 ) ) {
+		if ( fine && built && rebuild ( built, kind, joined, joined_count, leaf ? after : link_a ( b->data ), leaf ? link_b ( a->data ) : 0 ) && ( fine = change_page ( owner, a ) ) ) {
 
 			base::copy ( a->data, built, PAGE_USABLE );
 			dirty_page ( a );
@@ -1094,6 +1231,13 @@ namespace storage {
 			if ( leaf && after ) {
 
 				page_frame* next = get_page ( owner, after );
+
+				if ( next && !change_page ( owner, next ) ) {
+
+					release_page ( next );
+					next = nullptr;
+
+				}
 
 				if ( next ) {
 
@@ -1170,13 +1314,13 @@ namespace storage {
 
 		}
 
-		uint8_t* scratch = base::make < uint8_t > ( PAGE_SIZE * 2 );
-		cell_span* cells = base::make < cell_span > ( BTREE_CELLS + 2 );
-		bool fine = scratch && cells;
+		uint8_t* scratch = nullptr;
+		cell_span* cells = nullptr;
+		bool fine = true;
 		uint32_t used = 0;
 		uint32_t count = 0;
 
-		if ( fine && leaf_kind ( kind ) ) {
+		if ( leaf_kind ( kind ) ) {
 
 			uint32_t slot = 0;
 			bool exact = false;
@@ -1187,13 +1331,11 @@ namespace storage {
 
 				cell_info old;
 
-				fine = parse_cell ( frame->data, slot, old ) && ( !old.overflow || free_overflow ( owner, old.overflow ) ) && gather ( owner, frame, scratch, used, cells, count );
+				fine = parse_cell ( frame->data, slot, old ) && ( !old.overflow || free_overflow ( owner, old.overflow ) ) && change_page ( owner, frame );
 
 				if ( fine ) {
 
-					base::move ( cells + slot, cells + slot + 1, sizeof ( cell_span ) * ( count - slot - 1 ) );
-					count--;
-					fine = rebuild ( frame->data, kind, cells, count, link_a ( frame->data ), link_b ( frame->data ) );
+					drop_cell ( frame->data, slot, old.size );
 					dirty_page ( frame );
 					out.found = true;
 
@@ -1201,7 +1343,7 @@ namespace storage {
 
 			}
 
-		} else if ( fine ) {
+		} else {
 
 			uint32_t position = 0;
 			uint32_t child = 0;
@@ -1218,13 +1360,15 @@ namespace storage {
 				uint32_t right_child = link_a ( frame->data );
 				bool merged = false;
 
-				fine = gather ( owner, frame, scratch, used, cells, count );
+				scratch = base::make < uint8_t > ( PAGE_SIZE * 2 );
+				cells = base::make < cell_span > ( BTREE_CELLS + 2 );
+				fine = scratch && cells && gather ( owner, frame, scratch, used, cells, count );
 
 				uint32_t a_slot = position < count ? position : count - 1;
 
 				fine = fine && merge_children ( tree, frame, a_slot, cells, count, right_child, scratch, used, merged );
 
-				if ( fine && merged ) {
+				if ( fine && merged && ( fine = change_page ( owner, frame ) ) ) {
 
 					fine = rebuild ( frame->data, kind, cells, count, right_child, 0 );
 					dirty_page ( frame );
@@ -1236,7 +1380,7 @@ namespace storage {
 		}
 
 		if ( fine )
-			out.underfull = used_bytes ( frame->data ) < BTREE_UNDERFULL;
+			out.underfull = quick_used ( frame->data ) < BTREE_UNDERFULL;
 
 		release_page ( frame );
 		base::release ( scratch );
@@ -1266,7 +1410,7 @@ namespace storage {
 			}
 
 			uint32_t only = link_a ( root->data );
-			page_frame* child = get_page ( owner, only );
+			page_frame* child = change_page ( owner, root ) ? get_page ( owner, only ) : nullptr;
 
 			if ( !child ) {
 

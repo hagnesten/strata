@@ -496,7 +496,40 @@ namespace engine {
 
 	}
 
-	static bool change_indexes ( run_context& ctx, table_info& table, const storage::value* values, int64_t rowid, bool adding ) {
+	static bool same_stored ( const storage::value& a, const storage::value& b ) {
+
+		if ( a.kind != b.kind )
+			return false;
+
+		switch ( a.kind ) {
+
+			case storage::VALUE_NULL:
+				return true;
+
+			case storage::VALUE_INTEGER:
+				return a.integer == b.integer;
+
+			case storage::VALUE_REAL:
+				return base::same_bytes ( &a.real, &b.real, sizeof ( a.real ) );
+
+			default:
+				return a.size == b.size && ( !a.size || base::same_bytes ( a.bytes, b.bytes, a.size ) );
+
+		}
+
+	}
+
+	static bool same_key ( const index_info& index, const storage::value* a, const storage::value* b ) {
+
+		for ( uint32_t k = 0; k < index.column_count; k++ )
+			if ( !same_stored ( a [ index.columns [ k ] ], b [ index.columns [ k ] ] ) )
+				return false;
+
+		return true;
+
+	}
+
+	static bool change_indexes ( run_context& ctx, table_info& table, const storage::value* values, int64_t rowid, bool adding, const storage::value* other = nullptr, int64_t other_rowid = 0 ) {
 
 		base::text key;
 
@@ -505,6 +538,9 @@ namespace engine {
 			index_info& index = ctx.schema->indexes [ i ];
 
 			if ( !base::same_folded ( index.table, table.name ) )
+				continue;
+
+			if ( other && other_rowid == rowid && same_key ( index, values, other ) )
 				continue;
 
 			if ( index.fulltext ) {
@@ -777,6 +813,9 @@ namespace engine {
 			if ( !index.unique || !base::same_folded ( index.table, table.name ) )
 				continue;
 
+			if ( new_rowid == old_rowid && same_key ( index, now, old ) )
+				continue;
+
 			int64_t other = 0;
 			bool found = false;
 
@@ -804,7 +843,7 @@ namespace engine {
 
 		}
 
-		if ( !change_indexes ( ctx, table, old, old_rowid, false ) )
+		if ( !change_indexes ( ctx, table, old, old_rowid, false, now, new_rowid ) )
 			return false;
 
 		if ( new_rowid != old_rowid ) {
@@ -817,7 +856,7 @@ namespace engine {
 
 		}
 
-		return store_row ( ctx, table, new_rowid, now, new_rowid == old_rowid ) && change_indexes ( ctx, table, now, new_rowid, true );
+		return store_row ( ctx, table, new_rowid, now, new_rowid == old_rowid ) && change_indexes ( ctx, table, now, new_rowid, true, old, old_rowid );
 
 	}
 

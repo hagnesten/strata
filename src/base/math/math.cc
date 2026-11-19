@@ -60,4 +60,51 @@ namespace base {
 
 	}
 
+	static double power_of_two ( int64_t exponent ) {
+
+		uint64_t bits = static_cast < uint64_t > ( exponent + 1023 ) << 52;
+		double out = 0;
+
+		copy ( &out, &bits, sizeof ( out ) );
+
+		return out;
+
+	}
+
+	double natural_exp ( double value ) {
+
+		if ( value != value )
+			return value;
+
+		if ( value > 709.782712893384 )
+			return 1.0 / 0.0;
+
+		if ( value < -745.1332191019412 )
+			return 0;
+
+		double scaled = value / MATH_LN2;
+		int64_t whole = static_cast < int64_t > ( scaled >= 0 ? scaled + 0.5 : scaled - 0.5 );
+		double rest = ( value - whole * 6.93147180369123816490e-01 ) - whole * 1.90821492927058770002e-10;
+		double term = 1;
+		double sum = 1;
+
+		for ( uint32_t k = 1; k < 40; k++ ) {
+
+			term *= rest / k;
+			sum += term;
+
+			if ( term < 1e-18 && term > -1e-18 )
+				break;
+
+		}
+
+		if ( whole >= -1022 && whole <= 1023 )
+			return sum * power_of_two ( whole );
+
+		int64_t half = whole / 2;
+
+		return sum * power_of_two ( half ) * power_of_two ( whole - half );
+
+	}
+
 }

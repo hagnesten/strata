@@ -3,6 +3,7 @@
 #include "test/harness/harness.hh"
 #include "app/shell/shell.hh"
 #include "studio/app/studio.hh"
+#include "bench/harness/bench.hh"
 
 #include <windows.h>
 #include <shellapi.h>
@@ -56,6 +57,9 @@ namespace app {
 		if ( argument_count > 1 && base::same ( arguments [ 1 ], "--test" ) )
 			return test::run_all ( argument_count > 2 ? arguments [ 2 ] : nullptr );
 
+		if ( argument_count > 1 && base::same ( arguments [ 1 ], "--bench" ) )
+			return bench::run_bench ( argument_count - 2, arguments + 2 );
+
 		if ( argument_count == 2 && arguments [ 1 ] [ 0 ] != '-' )
 			return run_shell ( arguments [ 1 ] );
 
@@ -68,6 +72,7 @@ namespace app {
 		base::write ( "  strata --studio [file]   open Strata Studio\n" );
 		base::write ( "  strata --capture <dir>   render every studio view to PNG files\n" );
 		base::write ( "  strata --test [part]     run the self test (pager, btree, crash, parser, engine)\n" );
+		base::write ( "  strata --bench [rows]    race Strata against SQLite (--sqlite <dll>, --out <file.md>)\n" );
 
 		return 0;
 
