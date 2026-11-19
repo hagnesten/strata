@@ -38,6 +38,9 @@
     <ClCompile Include="src\base\text\text.cc" />
     <ClCompile Include="src\base\file\file.cc" />
     <ClCompile Include="src\base\hash\crc32c.cc" />
+    <ClCompile Include="src\storage\pager\pager.cc" />
+    <ClCompile Include="src\test\harness\harness.cc" />
+    <ClCompile Include="src\test\storage\pager_test.cc" />
     <ClCompile Include="src\app\main\main.cc" />
   </ItemGroup>
   <ItemGroup>
@@ -46,11 +49,15 @@
     <ClInclude Include="src\base\text\text.hh" />
     <ClInclude Include="src\base\file\file.hh" />
     <ClInclude Include="src\base\hash\crc32c.hh" />
+    <ClInclude Include="src\base\bytes\bytes.hh" />
+    <ClInclude Include="src\storage\pager\pager.hh" />
+    <ClInclude Include="src\test\harness\harness.hh" />
     <ClInclude Include="src\app\main\main.hh" />
   </ItemGroup>
   <ItemGroup>
     <None Include="props\strata.props" />
     <None Include="README.md" />
+    <None Include="docs\format.md" />
     <None Include=".gitignore" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

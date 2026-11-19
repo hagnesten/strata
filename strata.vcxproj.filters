@@ -25,6 +25,27 @@
     <Filter Include="src\base\hash">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D0A}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\base\bytes">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D0B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\storage">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D0C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\storage\pager">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D0D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\test">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D0E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\test\harness">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D0F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\test\storage">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D10}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="docs">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D11}</UniqueIdentifier>
+    </Filter>
     <Filter Include="src\app">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D06}</UniqueIdentifier>
     </Filter>
@@ -39,6 +60,9 @@
     <ClCompile Include="src\base\text\text.cc"><Filter>src\base\text</Filter></ClCompile>
     <ClCompile Include="src\base\file\file.cc"><Filter>src\base\file</Filter></ClCompile>
     <ClCompile Include="src\base\hash\crc32c.cc"><Filter>src\base\hash</Filter></ClCompile>
+    <ClCompile Include="src\storage\pager\pager.cc"><Filter>src\storage\pager</Filter></ClCompile>
+    <ClCompile Include="src\test\harness\harness.cc"><Filter>src\test\harness</Filter></ClCompile>
+    <ClCompile Include="src\test\storage\pager_test.cc"><Filter>src\test\storage</Filter></ClCompile>
     <ClCompile Include="src\app\main\main.cc"><Filter>src\app\main</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -47,11 +71,15 @@
     <ClInclude Include="src\base\text\text.hh"><Filter>src\base\text</Filter></ClInclude>
     <ClInclude Include="src\base\file\file.hh"><Filter>src\base\file</Filter></ClInclude>
     <ClInclude Include="src\base\hash\crc32c.hh"><Filter>src\base\hash</Filter></ClInclude>
+    <ClInclude Include="src\base\bytes\bytes.hh"><Filter>src\base\bytes</Filter></ClInclude>
+    <ClInclude Include="src\storage\pager\pager.hh"><Filter>src\storage\pager</Filter></ClInclude>
+    <ClInclude Include="src\test\harness\harness.hh"><Filter>src\test\harness</Filter></ClInclude>
     <ClInclude Include="src\app\main\main.hh"><Filter>src\app\main</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="props\strata.props"><Filter>props</Filter></None>
     <None Include="README.md" />
+    <None Include="docs\format.md"><Filter>docs</Filter></None>
     <None Include=".gitignore" />
   </ItemGroup>
 </Project>
