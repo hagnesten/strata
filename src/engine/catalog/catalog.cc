@@ -115,8 +115,13 @@ namespace engine {
 			info.fallback = column.fallback;
 			info.check = column.check;
 
-			if ( column.primary )
+			if ( column.primary ) {
+
 				primary_columns++;
+				out.primary [ 0 ] = i;
+				out.primary_count = 1;
+
+			}
 
 			if ( column.primary && column.affinity == sql::AFFINITY_INTEGER && base::same_folded ( column.type, "integer" ) && !column.descending ) {
 
@@ -168,6 +173,8 @@ namespace engine {
 			if ( constraint.primary ) {
 
 				primary_columns++;
+				base::copy ( out.primary, columns, sizeof ( uint32_t ) * constraint.column_count );
+				out.primary_count = constraint.column_count;
 
 				if ( constraint.column_count == 1 && out.columns [ columns [ 0 ] ].affinity == sql::AFFINITY_INTEGER && base::same_folded ( out.columns [ columns [ 0 ] ].type, "integer" ) ) {
 

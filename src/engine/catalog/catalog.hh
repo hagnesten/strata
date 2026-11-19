@@ -57,6 +57,8 @@ namespace engine {
 		column_info* columns;
 		uint32_t column_count;
 		int32_t rowid_column;
+		uint32_t primary [ CATALOG_KEY_COLUMNS ];
+		uint32_t primary_count;
 		bool autoincrement;
 		sql::expression* checks [ CATALOG_CHECKS ];
 		uint32_t check_count;
