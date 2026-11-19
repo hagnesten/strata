@@ -22,6 +22,7 @@ namespace engine {
 		bool nocase;
 		sql::expression* fallback;
 		sql::expression* check;
+		sql::expression* generated;
 
 	};
 
@@ -63,6 +64,7 @@ namespace engine {
 		bool autoincrement;
 		sql::expression* checks [ CATALOG_CHECKS ];
 		uint32_t check_count;
+		uint32_t generated_count;
 		foreign_key foreign [ CATALOG_FOREIGN ];
 		uint32_t foreign_count;
 		sql::create_table_statement* definition;

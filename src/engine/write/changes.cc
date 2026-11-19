@@ -9,49 +9,6 @@ namespace engine {
 
 	}
 
-	static table_scope* scope_for ( run_context& ctx, table_info& table ) {
-
-		for ( table_scope* entry = ctx.scopes; entry; entry = entry->next )
-			if ( entry->table == &table )
-				return entry;
-
-		table_scope* entry = ctx.lasting->make < table_scope > ( 1 );
-		prepared_select* plan = prepare_table_scope ( ctx, &table, table.name, nullptr, nullptr );
-
-		if ( !entry || !plan ) {
-
-			fail_run ( ctx, "out of memory" );
-
-			return nullptr;
-
-		}
-
-		entry->table = &table;
-		entry->plan = plan;
-		entry->state.plan = plan;
-		entry->state.sources = ctx.lasting->make < source_state > ( 1 );
-
-		if ( !entry->state.sources ) {
-
-			fail_run ( ctx, "out of memory" );
-
-			return nullptr;
-
-		}
-
-		entry->state.sources [ 0 ].plan = &plan->sources [ 0 ];
-
-		for ( uint32_t i = 0; i < table.check_count; i++ )
-			if ( !bind_expression ( ctx, plan, table.checks [ i ], BIND_PLAIN ) )
-				return nullptr;
-
-		entry->next = ctx.scopes;
-		ctx.scopes = entry;
-
-		return entry;
-
-	}
-
 	static void column_names ( base::text& out, const table_info& table, const uint32_t* columns, uint32_t count ) {
 
 		for ( uint32_t k = 0; k < count; k++ ) {
@@ -68,6 +25,9 @@ namespace engine {
 	static bool check_row ( run_context& ctx, table_info& table, storage::value* values, int64_t rowid, sql::conflict_kind conflict, bool& skipped ) {
 
 		skipped = false;
+
+		if ( !compute_generated ( ctx, table, values, rowid, 0 ) )
+			return false;
 
 		for ( uint32_t i = 0; i < table.column_count; i++ ) {
 
@@ -1148,6 +1108,9 @@ namespace engine {
 			if ( column < 0 )
 				return fail_named ( ctx, "table ", table.name, " has no such column to update" );
 
+			if ( table.columns [ column ].generated )
+				return fail_named ( ctx, "cannot UPDATE the generated column ", item->updates [ i ].column, "" );
+
 			out.columns [ i ] = column;
 
 			if ( !bind_expression ( ctx, out.scope, item->updates [ i ].value, BIND_PLAIN ) )
@@ -1166,17 +1129,20 @@ namespace engine {
 		if ( !table )
 			return fail_named ( ctx, "no such table: ", item->table, "" );
 
-		uint32_t target_count = item->column_count ? item->column_count : table->column_count;
+		uint32_t target_count = item->column_count ? item->column_count : table->column_count - table->generated_count;
 		int32_t* targets = ctx.lasting->make < int32_t > ( target_count + 1 );
 
 		if ( !targets )
 			return fail_run ( ctx, "out of memory" );
 
-		for ( uint32_t k = 0; k < target_count; k++ ) {
+		for ( uint32_t k = 0, next = 0; k < target_count; k++ ) {
 
 			if ( !item->column_count ) {
 
-				targets [ k ] = static_cast < int32_t > ( k );
+				while ( table->columns [ next ].generated )
+					next++;
+
+				targets [ k ] = static_cast < int32_t > ( next++ );
 
 				continue;
 
@@ -1193,6 +1159,9 @@ namespace engine {
 				return fail_run ( ctx, message.value ( ) );
 
 			}
+
+			if ( column >= 0 && table->columns [ column ].generated )
+				return fail_named ( ctx, "cannot INSERT into the generated column ", item->columns [ k ], "" );
 
 			for ( uint32_t j = 0; j < k; j++ )
 				if ( targets [ j ] == column )
@@ -1408,6 +1377,9 @@ namespace engine {
 				return fail_run ( ctx, message.value ( ) );
 
 			}
+
+			if ( table->columns [ column ].generated )
+				return fail_named ( ctx, "cannot UPDATE the generated column ", item->assignments [ i ].column, "" );
 
 			columns [ i ] = column;
 

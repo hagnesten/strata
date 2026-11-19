@@ -27,6 +27,8 @@ namespace test {
 		rows ( db, "SELECT typeof ( -9223372036854775808 ), -9223372036854775808, CAST ( -9223372036854775808.0 AS INTEGER )", "integer|-9223372036854775808|-9223372036854775808" );
 		rows ( db, "\xEF\xBB\xBFSELECT 'after a byte order mark'", "after a byte order mark" );
 		rows ( db, "SELECT printf ( '%.3c|%5s|%-3s|', 'ab', 'x', 'y' )", "aaa|    x|y  |" );
+		rows ( db, "SELECT printf ( '%g|%g|%g|%g|%g|%.3g|%#g', 2.0, 0.0001, 0.00001, 1234567, 100000, 3.14159, 2.0 )", "2|0.0001|1e-05|1.23457e+06|100000|3.14|2.00000" );
+		rows ( db, "SELECT printf ( '%e|%.2e|%E|%+.1e|%10.3g|', 12345.678, 0.000123, 0, 5, -0.5 )", "1.234568e+04|1.23e-04|0.000000E+00|+5.0e+00|      -0.5|" );
 		rows ( db, "SELECT date ( '2024-03-15' ), datetime ( '2024-03-15 10:20:30', '+1 day', '-2 hours' ), date ( '2024-01-31', '+1 month' ), time ( '2024-03-15T07:08:09Z' )", "2024-03-15|2024-03-16 08:20:30|2024-03-02|07:08:09" );
 		rows ( db, "SELECT strftime ( '%Y/%m/%d %H:%M %j %w %u', '2024-02-29 13:05:00' ), julianday ( '2000-01-01 12:00:00' ), unixepoch ( '1970-01-02' )", "2024/02/29 13:05 060 4 4|2451545.0|86400" );
 		rows ( db, "SELECT datetime ( 1700000000, 'unixepoch' ), date ( '2024-03-15', 'start of month' ), date ( '2024-03-15', 'start of year' ), date ( '2024-03-15', 'weekday 0' ), date ( '2024-12-31', '+1 day' )", "2023-11-14 22:13:20|2024-03-01|2024-01-01|2024-03-17|2025-01-01" );
@@ -302,6 +304,31 @@ namespace test {
 		rows ( db, "SELECT count ( * ), group_concat ( c ) FROM wide", "4|one,three,cee" );
 		run ( db, "CREATE TABLE solo ( only_one )" );
 		fails ( db, "ALTER TABLE solo DROP COLUMN only_one", "only column" );
+		run ( db, "CREATE TABLE boxes ( id INTEGER PRIMARY KEY, w REAL, h REAL, area REAL GENERATED ALWAYS AS ( w * h ) STORED, label TEXT AS ( printf ( '%gx%g=%g', w, h, area ) ), big INT AS ( area > 10 ) )" );
+		run ( db, "INSERT INTO boxes ( w, h ) VALUES ( 2, 3 ), ( 4, 5 )" );
+		run ( db, "INSERT INTO boxes VALUES ( 10, 1.5, 2 )" );
+		rows ( db, "SELECT id, area, label, big FROM boxes ORDER BY id", "1|6.0|2x3=6|0\n2|20.0|4x5=20|1\n10|3.0|1.5x2=3|0" );
+		run ( db, "UPDATE boxes SET w = 10 WHERE id = 1" );
+		rows ( db, "SELECT area, label, big FROM boxes WHERE id = 1", "30.0|10x3=30|1" );
+		fails ( db, "INSERT INTO boxes ( w, h, area ) VALUES ( 1, 1, 5 )", "cannot INSERT into the generated column area" );
+		fails ( db, "UPDATE boxes SET area = 1", "cannot UPDATE the generated column area" );
+		fails ( db, "INSERT INTO boxes VALUES ( 11, 1, 1, 1 )", "takes 3 values" );
+		run ( db, "CREATE INDEX boxes_area ON boxes ( area )" );
+		rows ( db, "SELECT id FROM boxes WHERE area = 20", "2" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT id FROM boxes WHERE area = 20", "USING INDEX boxes_area" );
+		run ( db, "ALTER TABLE boxes ADD COLUMN perimeter REAL AS ( 2 * ( w + h ) )" );
+		rows ( db, "SELECT id, perimeter FROM boxes ORDER BY id", "1|26.0\n2|18.0\n10|7.0" );
+		run ( db, "UPDATE boxes SET h = 1 WHERE id = 2" );
+		rows ( db, "SELECT perimeter, area FROM boxes WHERE id = 2", "10.0|4.0" );
+		fails ( db, "ALTER TABLE boxes DROP COLUMN w", "used by a generated column" );
+		run ( db, "ALTER TABLE boxes RENAME COLUMN w TO width" );
+		run ( db, "INSERT INTO boxes ( width, h ) VALUES ( 3, 3 )" );
+		rows ( db, "SELECT area, perimeter FROM boxes WHERE id = 11", "9.0|12.0" );
+		fails ( db, "CREATE TABLE loop ( a AS ( b + 1 ), b AS ( a + 1 ) )", "depends on itself" );
+		fails ( db, "CREATE TABLE sub ( a, b AS ( ( SELECT 1 ) ) )", "cannot use a subquery" );
+		run ( db, "CREATE TABLE chain ( a INT, c AS ( b * 2 ), b AS ( a + 1 ) )" );
+		run ( db, "INSERT INTO chain VALUES ( 4 )" );
+		rows ( db, "SELECT a, b, c FROM chain", "4|5|10" );
 
 	}
 

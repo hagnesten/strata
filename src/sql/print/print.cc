@@ -517,6 +517,14 @@ namespace sql {
 
 		}
 
+		if ( column.generated ) {
+
+			out.add ( " GENERATED ALWAYS AS (" );
+			print_expression ( out, column.generated );
+			out.add ( column.stored ? ") STORED" : ")" );
+
+		}
+
 		if ( column.references ) {
 
 			out.add ( " REFERENCES " );

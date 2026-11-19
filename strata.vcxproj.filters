@@ -195,6 +195,7 @@
     <ClCompile Include="src\engine\functions\dates.cc"><Filter>src\engine\functions</Filter></ClCompile>
     <ClCompile Include="src\engine\functions\json.cc"><Filter>src\engine\functions</Filter></ClCompile>
     <ClCompile Include="src\engine\write\changes.cc"><Filter>src\engine\write</Filter></ClCompile>
+    <ClCompile Include="src\engine\write\generated.cc"><Filter>src\engine\write</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\schema.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\alter.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\base\clock\clock.cc"><Filter>src\base\clock</Filter></ClCompile>

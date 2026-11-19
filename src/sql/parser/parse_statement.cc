@@ -713,6 +713,31 @@ namespace sql {
 
 			}
 
+			if ( token_is ( item.current, "generated" ) || token_is ( item.current, "as" ) ) {
+
+				if ( accept_word ( item, "generated" ) && !expect_word ( item, "always" ) )
+					return false;
+
+				if ( out.generated )
+					return fail_here ( item, "a column can only be generated once" );
+
+				if ( !expect_word ( item, "as" ) || !expect_symbol ( item, "(" ) )
+					return false;
+
+				out.generated = parse_expression ( item );
+
+				if ( !out.generated || !expect_symbol ( item, ")" ) )
+					return false;
+
+				out.stored = accept_word ( item, "stored" );
+
+				if ( !out.stored )
+					accept_word ( item, "virtual" );
+
+				continue;
+
+			}
+
 			if ( accept_word ( item, "references" ) ) {
 
 				out.references = take_name ( item, "a table name" );

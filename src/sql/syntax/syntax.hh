@@ -287,6 +287,8 @@ namespace sql {
 		const char* references_column;
 		foreign_action on_delete;
 		bool nocase;
+		expression* generated;
+		bool stored;
 
 	};
 

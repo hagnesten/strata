@@ -118,6 +118,79 @@ namespace engine {
 
 	}
 
+	static bool visit_generated ( const table_info& info, uint32_t column, uint8_t* state );
+
+	static bool walk_generated ( const sql::expression* item, const table_info& info, uint8_t* state ) {
+
+		if ( !item )
+			return true;
+
+		if ( item->kind == sql::EXPRESSION_COLUMN && item->column >= 0 && static_cast < uint32_t > ( item->column ) < info.column_count && info.columns [ item->column ].generated && !visit_generated ( info, static_cast < uint32_t > ( item->column ), state ) )
+			return false;
+
+		if ( !walk_generated ( item->left, info, state ) || !walk_generated ( item->right, info, state ) || !walk_generated ( item->third, info, state ) )
+			return false;
+
+		for ( uint32_t i = 0; i < item->count; i++ )
+			if ( !walk_generated ( item->list [ i ], info, state ) )
+				return false;
+
+		return true;
+
+	}
+
+	static bool visit_generated ( const table_info& info, uint32_t column, uint8_t* state ) {
+
+		if ( state [ column ] == 2 )
+			return true;
+
+		if ( state [ column ] == 1 )
+			return false;
+
+		state [ column ] = 1;
+
+		if ( !walk_generated ( info.columns [ column ].generated, info, state ) )
+			return false;
+
+		state [ column ] = 2;
+
+		return true;
+
+	}
+
+	static bool check_generated ( run_context& ctx, sql::create_table_statement* definition, table_info& info, prepared_select* scope ) {
+
+		if ( !info.generated_count )
+			return true;
+
+		for ( uint32_t i = 0; i < definition->column_count; i++ ) {
+
+			sql::expression* generated = definition->columns [ i ].generated;
+
+			if ( !generated )
+				continue;
+
+			if ( uses_query ( generated ) )
+				return fail_run ( ctx, "a generated column cannot use a subquery" );
+
+			if ( !bind_expression ( ctx, scope, generated, BIND_PLAIN ) )
+				return false;
+
+		}
+
+		uint8_t* state = ctx.scratch->make < uint8_t > ( info.column_count );
+
+		if ( !state )
+			return fail_run ( ctx, "out of memory" );
+
+		for ( uint32_t i = 0; i < info.column_count; i++ )
+			if ( info.columns [ i ].generated && !visit_generated ( info, i, state ) )
+				return fail_named ( ctx, "the generated column ", info.columns [ i ].name, " depends on itself" );
+
+		return true;
+
+	}
+
 	bool validate_definition ( run_context& ctx, sql::create_table_statement* definition, table_info& info ) {
 
 		if ( !describe_table ( *ctx.lasting, definition, info, *ctx.problem ) )
@@ -150,7 +223,7 @@ namespace engine {
 
 		}
 
-		return true;
+		return check_generated ( ctx, definition, info, scope );
 
 	}
 

@@ -350,6 +350,8 @@ namespace engine {
 		table_info* table;
 		prepared_select* plan;
 		query_state state;
+		uint32_t* generated_order;
+		uint32_t generated_count;
 		table_scope* next;
 
 	};
@@ -615,6 +617,10 @@ namespace engine {
 	bool next_source ( run_context& ctx, query_state* scope, source_state& source, bool& found );
 
 	bool decode_row ( run_context& ctx, const table_info& table, const uint8_t* payload, size_t size, int64_t rowid, storage::value* values );
+
+	table_scope* scope_for ( run_context& ctx, table_info& table );
+
+	bool compute_generated ( run_context& ctx, const table_info& table, storage::value* values, int64_t rowid, uint32_t from );
 
 	bool read_row ( run_context& ctx, const table_info& table, int64_t rowid, storage::value*& values, bool& found );
 

@@ -400,6 +400,9 @@ namespace engine {
 		if ( table.rowid_column >= 0 )
 			values [ table.rowid_column ] = storage::integer_value ( rowid );
 
+		if ( count < table.column_count && !compute_generated ( ctx, table, values, rowid, count ) )
+			return false;
+
 		return true;
 
 	}

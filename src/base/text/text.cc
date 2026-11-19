@@ -332,27 +332,13 @@ namespace base {
 
 	}
 
-	text& text::real ( double value ) {
-
-		if ( value != value )
-			return add ( "NaN" );
-
-		if ( value < 0 ) {
-
-			add ( '-' );
-			value = -value;
-
-		}
-
-		if ( value > 1.7976931348623157e308 )
-			return add ( "Inf" );
-
-		if ( value == 0 )
-			return add ( "0.0" );
+	void significant_digits ( double value, uint32_t count, char* out, int32_t& exponent ) {
 
 		static const double up [ 9 ] = { 1e1, 1e2, 1e4, 1e8, 1e16, 1e32, 1e64, 1e128, 1e256 };
-		int32_t exponent = 0;
 		double scaled = value;
+
+		count = count < 1 ? 1 : count > 17 ? 17 : count;
+		exponent = 0;
 
 		if ( scaled >= 10 ) {
 
@@ -367,7 +353,7 @@ namespace base {
 
 			}
 
-		} else if ( scaled < 1 ) {
+		} else if ( scaled < 1 && scaled > 0 ) {
 
 			for ( int32_t i = 8; i >= 0; i-- ) {
 
@@ -389,24 +375,52 @@ namespace base {
 
 		}
 
-		uint64_t digits = static_cast < uint64_t > ( scaled * 1e14 + 0.5 );
+		uint64_t unit = 1;
 
-		if ( digits >= 1000000000000000ull ) {
+		for ( uint32_t i = 1; i < count; i++ )
+			unit *= 10;
+
+		uint64_t digits = static_cast < uint64_t > ( scaled * static_cast < double > ( unit ) + 0.5 );
+
+		if ( digits >= unit * 10 ) {
 
 			digits = ( digits + 5 ) / 10;
 			exponent++;
 
 		}
 
-		char written [ 16 ];
-		int32_t count = 15;
+		for ( uint32_t i = count; i-- > 0; ) {
 
-		for ( int32_t i = 14; i >= 0; i-- ) {
-
-			written [ i ] = static_cast < char > ( '0' + digits % 10 );
+			out [ i ] = static_cast < char > ( '0' + digits % 10 );
 			digits /= 10;
 
 		}
+
+	}
+
+	text& text::real ( double value ) {
+
+		if ( value != value )
+			return add ( "NaN" );
+
+		if ( value < 0 ) {
+
+			add ( '-' );
+			value = -value;
+
+		}
+
+		if ( value > 1.7976931348623157e308 )
+			return add ( "Inf" );
+
+		if ( value == 0 )
+			return add ( "0.0" );
+
+		int32_t exponent = 0;
+		char written [ 16 ];
+		int32_t count = 15;
+
+		significant_digits ( value, 15, written, exponent );
 
 		while ( count > 1 && written [ count - 1 ] == '0' )
 			count--;

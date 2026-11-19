@@ -35,6 +35,8 @@ namespace base {
 
 	double decimal_value ( const decimal_digits& item, int32_t exponent );
 
+	void significant_digits ( double value, uint32_t count, char* out, int32_t& exponent );
+
 	uint32_t next_code ( const uint8_t* bytes, size_t size, size_t& at );
 
 	size_t count_codes ( const uint8_t* bytes, size_t size );

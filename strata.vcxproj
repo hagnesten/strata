@@ -67,6 +67,7 @@
     <ClCompile Include="src\engine\functions\dates.cc" />
     <ClCompile Include="src\engine\functions\json.cc" />
     <ClCompile Include="src\engine\write\changes.cc" />
+    <ClCompile Include="src\engine\write\generated.cc" />
     <ClCompile Include="src\engine\schema\schema.cc" />
     <ClCompile Include="src\engine\schema\alter.cc" />
     <ClCompile Include="src\base\clock\clock.cc" />

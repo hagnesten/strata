@@ -172,6 +172,9 @@ namespace engine {
 		if ( !plain_value ( column.fallback ) )
 			return fail_run ( ctx, "the DEFAULT of an added column must be a plain value" );
 
+		if ( column.generated && column.not_null )
+			return fail_run ( ctx, "an added generated column cannot be NOT NULL" );
+
 		if ( column.not_null ) {
 
 			storage::value fallback = storage::null_value ( );
@@ -259,6 +262,7 @@ namespace engine {
 		for ( uint32_t c = 0; c < definition->column_count; c++ ) {
 
 			rename_in_expression ( definition->columns [ c ].check, table->name, old_name, item->new_name );
+			rename_in_expression ( definition->columns [ c ].generated, table->name, old_name, item->new_name );
 
 			if ( definition->columns [ c ].references && base::same_folded ( definition->columns [ c ].references, table->name ) && definition->columns [ c ].references_column && base::same_folded ( definition->columns [ c ].references_column, old_name ) )
 				definition->columns [ c ].references_column = item->new_name;
@@ -359,6 +363,9 @@ namespace engine {
 
 			if ( mentions_column ( definition->columns [ c ].check, table.name, name ) )
 				return fail_named ( ctx, "the column ", name, " is used by a CHECK constraint" );
+
+			if ( mentions_column ( definition->columns [ c ].generated, table.name, name ) )
+				return fail_named ( ctx, "the column ", name, " is used by a generated column" );
 
 		}
 

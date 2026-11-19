@@ -388,6 +388,126 @@ namespace engine {
 
 	}
 
+	static bool add_special ( base::text& out, double& value ) {
+
+		if ( value != value ) {
+
+			out.add ( "NaN" );
+
+			return true;
+
+		}
+
+		if ( value < 0 ) {
+
+			out.add ( '-' );
+			value = -value;
+
+		}
+
+		if ( value > 1.7976931348623157e308 ) {
+
+			out.add ( "Inf" );
+
+			return true;
+
+		}
+
+		return false;
+
+	}
+
+	static void add_exponent ( base::text& out, int32_t exponent, bool upper ) {
+
+		out.add ( upper ? 'E' : 'e' ).add ( exponent < 0 ? '-' : '+' );
+
+		uint32_t magnitude = static_cast < uint32_t > ( exponent < 0 ? -exponent : exponent );
+
+		if ( magnitude < 10 )
+			out.add ( '0' );
+
+		out.number ( magnitude );
+
+	}
+
+	static void add_scientific ( base::text& out, double value, uint32_t places, bool upper ) {
+
+		if ( add_special ( out, value ) )
+			return;
+
+		char digits [ 18 ];
+		int32_t exponent = 0;
+		uint32_t count = base::min < uint32_t > ( places + 1, 17 );
+
+		if ( value == 0 )
+			base::fill ( digits, '0', sizeof ( digits ) );
+		else
+			base::significant_digits ( value, count, digits, exponent );
+
+		out.add ( digits [ 0 ] );
+
+		if ( places ) {
+
+			out.add ( '.' ).add ( digits + 1, count - 1 );
+			out.repeat ( '0', places + 1 - count );
+
+		}
+
+		add_exponent ( out, exponent, upper );
+
+	}
+
+	static void add_general ( base::text& out, double value, int32_t precision, bool upper, bool alternate ) {
+
+		if ( add_special ( out, value ) )
+			return;
+
+		uint32_t significant = precision < 0 ? 6 : precision == 0 ? 1 : base::min < uint32_t > ( static_cast < uint32_t > ( precision ), 17 );
+		char digits [ 18 ];
+		int32_t exponent = 0;
+
+		if ( value == 0 )
+			base::fill ( digits, '0', sizeof ( digits ) );
+		else
+			base::significant_digits ( value, significant, digits, exponent );
+
+		uint32_t count = significant;
+
+		if ( !alternate )
+			while ( count > 1 && digits [ count - 1 ] == '0' )
+				count--;
+
+		if ( exponent < -4 || exponent >= static_cast < int32_t > ( significant ) ) {
+
+			out.add ( digits [ 0 ] );
+
+			if ( count > 1 )
+				out.add ( '.' ).add ( digits + 1, count - 1 );
+
+			add_exponent ( out, exponent, upper );
+
+			return;
+
+		}
+
+		if ( exponent < 0 ) {
+
+			out.add ( "0." ).repeat ( '0', static_cast < size_t > ( -exponent - 1 ) ).add ( digits, count );
+
+			return;
+
+		}
+
+		uint32_t whole = static_cast < uint32_t > ( exponent ) + 1;
+
+		for ( uint32_t i = 0; i < whole; i++ )
+			out.add ( i < count ? digits [ i ] : '0' );
+
+		if ( count > whole )
+			out.add ( '.' ).add ( digits + whole, count - whole );
+
+	}
+
 	static bool format_text ( run_context& ctx, const storage::value* args, uint32_t count, storage::value& out ) {
 
 		if ( args [ 0 ].kind == storage::VALUE_NULL ) {
@@ -420,6 +540,7 @@ namespace engine {
 			bool zero = false;
 			bool plus = false;
 			bool space = false;
+			bool alternate = false;
 
 			for ( ; i < pattern.size; i++ ) {
 
@@ -433,7 +554,9 @@ namespace engine {
 					plus = true;
 				else if ( flag == ' ' )
 					space = true;
-				else if ( flag != '#' && flag != ',' && flag != '!' )
+				else if ( flag == '#' )
+					alternate = true;
+				else if ( flag != ',' && flag != '!' )
 					break;
 
 			}
@@ -563,7 +686,17 @@ namespace engine {
 					double number = 0;
 
 					real_of ( argument, number );
-					body.real ( number );
+
+					if ( number >= 0 && plus )
+						body.add ( '+' );
+					else if ( number >= 0 && space )
+						body.add ( ' ' );
+
+					if ( kind == 'e' || kind == 'E' )
+						add_scientific ( body, number, precision < 0 ? 6 : static_cast < uint32_t > ( base::min < int32_t > ( precision, 16 ) ), kind == 'E' );
+					else
+						add_general ( body, number, precision, kind == 'G', alternate );
+
 					numeric = true;
 					break;
 

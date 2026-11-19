@@ -115,6 +115,21 @@ namespace engine {
 			info.nocase = column.nocase;
 			info.fallback = column.fallback;
 			info.check = column.check;
+			info.generated = column.generated;
+
+			if ( column.generated ) {
+
+				if ( column.primary || column.fallback ) {
+
+					problem.add ( "the generated column " ).add ( column.name ).add ( " cannot also be a PRIMARY KEY or have a DEFAULT" );
+
+					return false;
+
+				}
+
+				out.generated_count++;
+
+			}
 
 			if ( column.primary ) {
 
