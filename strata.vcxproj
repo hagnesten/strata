@@ -40,6 +40,7 @@
     <ClCompile Include="src\base\hash\crc32c.cc" />
     <ClCompile Include="src\storage\pager\pager.cc" />
     <ClCompile Include="src\storage\pager\wal.cc" />
+    <ClCompile Include="src\storage\pager\marks.cc" />
     <ClCompile Include="src\test\storage\crash_test.cc" />
     <ClCompile Include="src\storage\record\record.cc" />
     <ClCompile Include="src\storage\btree\btree.cc" />
@@ -69,7 +70,10 @@
     <ClCompile Include="src\engine\schema\schema.cc" />
     <ClCompile Include="src\base\clock\clock.cc" />
     <ClCompile Include="src\engine\database\database.cc" />
+    <ClCompile Include="src\engine\database\transaction.cc" />
     <ClCompile Include="src\test\engine\engine_test.cc" />
+    <ClCompile Include="src\test\engine\checks.cc" />
+    <ClCompile Include="src\test\engine\savepoint_test.cc" />
     <ClCompile Include="src\app\shell\shell.cc" />
     <ClCompile Include="src\base\png\png.cc" />
     <ClCompile Include="src\ui\render\render.cc" />
@@ -97,6 +101,7 @@
     <ClInclude Include="src\storage\record\record.hh" />
     <ClInclude Include="src\storage\btree\btree.hh" />
     <ClInclude Include="src\test\harness\harness.hh" />
+    <ClInclude Include="src\test\engine\checks.hh" />
     <ClInclude Include="src\base\arena\arena.hh" />
     <ClInclude Include="src\sql\lexer\lexer.hh" />
     <ClInclude Include="src\sql\syntax\syntax.hh" />

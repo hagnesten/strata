@@ -74,6 +74,7 @@ namespace engine {
 		if ( item.in_transaction )
 			storage::rollback_pager ( item.pages );
 
+		forget_savepoints ( item );
 		storage::close_pager ( item.pages );
 
 		if ( item.schema ) {
@@ -241,7 +242,7 @@ namespace engine {
 
 	}
 
-	static bool pager_problem ( database& item, const char* what ) {
+	bool pager_problem ( database& item, const char* what ) {
 
 		if ( !item.problem.size ) {
 
@@ -258,42 +259,13 @@ namespace engine {
 
 	static bool run_statement ( database& item, run_context& ctx, const sql::statement* statement, query_sink* sink ) {
 
+		bool handled = false;
+		bool controlled = control_statement ( item, ctx, statement, handled );
+
+		if ( handled )
+			return controlled;
+
 		switch ( statement->kind ) {
-
-			case sql::STATEMENT_BEGIN:
-				if ( item.in_transaction )
-					return fail_run ( ctx, "a transaction is already open" );
-
-				item.in_transaction = true;
-
-				return true;
-
-			case sql::STATEMENT_COMMIT:
-				if ( !item.in_transaction )
-					return fail_run ( ctx, "there is no open transaction to commit" );
-
-				item.in_transaction = false;
-
-				if ( !storage::commit_pager ( item.pages ) ) {
-
-					pager_problem ( item, "the transaction could not be committed and was rolled back" );
-					storage::rollback_pager ( item.pages );
-					reload_schema ( item );
-
-					return false;
-
-				}
-
-				return true;
-
-			case sql::STATEMENT_ROLLBACK:
-				if ( !item.in_transaction )
-					return fail_run ( ctx, "there is no open transaction to roll back" );
-
-				item.in_transaction = false;
-				storage::rollback_pager ( item.pages );
-
-				return item.schema->version == item.pages.header.schema_version || reload_schema ( item );
 
 			case sql::STATEMENT_ANALYZE:
 				return true;
@@ -312,8 +284,8 @@ namespace engine {
 
 		}
 
-		if ( item.in_transaction )
-			storage::begin_statement ( item.pages );
+		if ( item.in_transaction && !storage::begin_statement ( item.pages ) )
+			return pager_problem ( item, "the statement could not start" );
 
 		bool fine = run_body ( ctx, statement, sink );
 
@@ -324,12 +296,14 @@ namespace engine {
 
 		}
 
-		if ( fine ) {
+		if ( fine && item.in_transaction && !storage::end_statement ( item.pages ) ) {
 
-			if ( item.in_transaction )
-				storage::end_statement ( item.pages );
+			pager_problem ( item, "the statement could not finish" );
+			fine = false;
 
-		} else {
+		}
+
+		if ( !fine ) {
 
 			if ( item.in_transaction )
 				storage::undo_statement ( item.pages );

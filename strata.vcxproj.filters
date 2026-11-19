@@ -167,6 +167,7 @@
     <ClCompile Include="src\base\hash\crc32c.cc"><Filter>src\base\hash</Filter></ClCompile>
     <ClCompile Include="src\storage\pager\pager.cc"><Filter>src\storage\pager</Filter></ClCompile>
     <ClCompile Include="src\storage\pager\wal.cc"><Filter>src\storage\pager</Filter></ClCompile>
+    <ClCompile Include="src\storage\pager\marks.cc"><Filter>src\storage\pager</Filter></ClCompile>
     <ClCompile Include="src\test\storage\crash_test.cc"><Filter>src\test\storage</Filter></ClCompile>
     <ClCompile Include="src\storage\record\record.cc"><Filter>src\storage\record</Filter></ClCompile>
     <ClCompile Include="src\storage\btree\btree.cc"><Filter>src\storage\btree</Filter></ClCompile>
@@ -197,7 +198,10 @@
     <ClCompile Include="src\engine\schema\schema.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\base\clock\clock.cc"><Filter>src\base\clock</Filter></ClCompile>
     <ClCompile Include="src\engine\database\database.cc"><Filter>src\engine\database</Filter></ClCompile>
+    <ClCompile Include="src\engine\database\transaction.cc"><Filter>src\engine\database</Filter></ClCompile>
     <ClCompile Include="src\test\engine\engine_test.cc"><Filter>src\test\engine</Filter></ClCompile>
+    <ClCompile Include="src\test\engine\checks.cc"><Filter>src\test\engine</Filter></ClCompile>
+    <ClCompile Include="src\test\engine\savepoint_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\app\shell\shell.cc"><Filter>src\app\shell</Filter></ClCompile>
     <ClCompile Include="src\base\png\png.cc"><Filter>src\base\png</Filter></ClCompile>
     <ClCompile Include="src\ui\render\render.cc"><Filter>src\ui\render</Filter></ClCompile>
@@ -224,6 +228,7 @@
     <ClInclude Include="src\storage\record\record.hh"><Filter>src\storage\record</Filter></ClInclude>
     <ClInclude Include="src\storage\btree\btree.hh"><Filter>src\storage\btree</Filter></ClInclude>
     <ClInclude Include="src\test\harness\harness.hh"><Filter>src\test\harness</Filter></ClInclude>
+    <ClInclude Include="src\test\engine\checks.hh"><Filter>src\test\engine</Filter></ClInclude>
     <ClInclude Include="src\base\arena\arena.hh"><Filter>src\base\arena</Filter></ClInclude>
     <ClInclude Include="src\sql\lexer\lexer.hh"><Filter>src\sql\lexer</Filter></ClInclude>
     <ClInclude Include="src\sql\syntax\syntax.hh"><Filter>src\sql\syntax</Filter></ClInclude>

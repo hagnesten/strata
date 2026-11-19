@@ -12,12 +12,28 @@ namespace engine {
 
 	};
 
+	struct savepoint {
+
+		char* name;
+		bool opened;
+
+	};
+
+	struct savepoint_stack {
+
+		savepoint* items;
+		uint32_t count;
+		uint32_t room;
+
+	};
+
 	struct database {
 
 		storage::pager pages;
 		catalog* schema;
 		bool open;
 		bool in_transaction;
+		savepoint_stack savepoints;
 		int64_t last_rowid;
 		int64_t changes;
 		int64_t total_changes;
@@ -38,6 +54,12 @@ namespace engine {
 	bool execute ( database& item, const char* sql, const storage::value* parameters, uint32_t parameter_count, query_sink* sink );
 
 	bool reload_schema ( database& item );
+
+	bool pager_problem ( database& item, const char* what );
+
+	bool control_statement ( database& item, run_context& ctx, const sql::statement* statement, bool& handled );
+
+	void forget_savepoints ( database& item );
 
 	void describe_value ( base::text& out, const storage::value& item );
 

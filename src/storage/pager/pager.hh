@@ -59,7 +59,8 @@ namespace storage {
 		uint32_t pins;
 		bool dirty;
 		bool recent;
-		bool saved;
+		uint8_t marked;
+		uint32_t saved_epoch;
 		page_frame* chain;
 		uint8_t* data;
 
@@ -99,20 +100,31 @@ namespace storage {
 
 	};
 
-	struct statement_copy {
+	struct page_copy {
 
 		page_frame* frame;
 		uint8_t* data;
 
 	};
 
-	struct statement_state {
+	struct pager_mark {
 
-		bool active;
+		uint32_t epoch;
 		database_header header;
-		statement_copy* copies;
+		page_copy* copies;
+		uint32_t copy_count;
+		uint32_t copy_room;
+		page_frame** dirty;
+		uint32_t dirty_count;
+
+	};
+
+	struct mark_stack {
+
+		pager_mark* marks;
 		uint32_t count;
 		uint32_t room;
+		uint32_t epoch;
 
 	};
 
@@ -133,15 +145,25 @@ namespace storage {
 		pager_stats stats;
 		wal_state wal;
 		bool broken;
-		statement_state statement;
+		mark_stack marks;
 
 	};
 
-	void begin_statement ( pager& item );
+	bool push_mark ( pager& item );
 
-	bool save_for_statement ( pager& item, page_frame* frame );
+	bool save_for_mark ( pager& item, page_frame* frame );
 
-	void end_statement ( pager& item );
+	bool release_mark ( pager& item, uint32_t depth );
+
+	void undo_to_mark ( pager& item, uint32_t depth, bool keep );
+
+	void clear_marks ( pager& item );
+
+	bool begin_statement ( pager& item );
+
+	bool end_statement ( pager& item );
+
+	void discard_frame ( pager& item, page_frame* frame );
 
 	void undo_statement ( pager& item );
 
