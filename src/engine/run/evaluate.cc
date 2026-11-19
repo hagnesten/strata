@@ -453,6 +453,8 @@ namespace engine {
 
 				if ( number.kind == storage::VALUE_INTEGER )
 					out = number.integer == static_cast < int64_t > ( 0x8000000000000000ull ) ? storage::real_value ( 9223372036854775808.0 ) : storage::integer_value ( -number.integer );
+				else if ( number.real > 9223372036854774784.0 && number.real < 9223372036854777856.0 && item->left && item->left->kind == sql::EXPRESSION_LITERAL )
+					out = storage::integer_value ( static_cast < int64_t > ( 0x8000000000000000ull ) );
 				else
 					out = storage::real_value ( -number.real );
 

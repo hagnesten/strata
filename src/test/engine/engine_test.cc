@@ -180,6 +180,9 @@ namespace test {
 		rows ( db, "SELECT 5 BETWEEN 1 AND 10, 5 NOT BETWEEN 1 AND 4, 3 IN ( 1, 2, 3 ), 4 IN ( 1, 2, NULL ), NULL IN ( 1 ), 4 NOT IN ( 1, 2 )", "1|1|1|NULL|NULL|1" );
 		rows ( db, "SELECT CASE 2 WHEN 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END, CASE WHEN 0 THEN 'x' END, CASE WHEN 1 > 0 THEN 'yes' ELSE 'no' END", "b|NULL|yes" );
 		rows ( db, "SELECT zeroblob ( 3 ), length ( randomblob ( 8 ) ), typeof ( random ( ) ), strata_version ( )", "X'000000'|8|integer|" ENGINE_VERSION );
+		rows ( db, "SELECT typeof ( -9223372036854775808 ), -9223372036854775808, CAST ( -9223372036854775808.0 AS INTEGER )", "integer|-9223372036854775808|-9223372036854775808" );
+		rows ( db, "\xEF\xBB\xBFSELECT 'after a byte order mark'", "after a byte order mark" );
+		rows ( db, "SELECT printf ( '%.3c|%5s|%-3s|', 'ab', 'x', 'y' )", "aaa|    x|y  |" );
 		rows ( db, "VALUES ( 1, 'a' ), ( 2, 'b' )", "1|a\n2|b" );
 		rows ( db, "SELECT * FROM ( VALUES ( 3 ), ( 1 ), ( 2 ) ) AS v ORDER BY column1 DESC", "3\n2\n1" );
 		fails ( db, "SELECT nosuch ( 1 )", "no such function: nosuch" );
@@ -295,6 +298,14 @@ namespace test {
 		fails ( db, "CREATE TABLE people ( x INT )", "already used" );
 		run ( db, "CREATE TABLE IF NOT EXISTS people ( x INT )" );
 		fails ( db, "CREATE TABLE strata_mine ( x INT )", "kept for Strata" );
+		run ( db, "CREATE TABLE \"long rows\" ( \"the text\" TEXT, n INT )" );
+		run ( db, "CREATE INDEX long_text ON \"long rows\" ( \"the text\" )" );
+		run ( db, "INSERT INTO \"long rows\" VALUES ( 'short', 1 ), ( printf ( '%.20000c', 'z' ), 2 ), ( printf ( '%.9000c', 'a' ) || 'b', 3 )" );
+		rows ( db, "SELECT n, length ( \"the text\" ) FROM \"long rows\" WHERE \"the text\" > 'b' ORDER BY n", "1|5\n2|20000" );
+		rows ( db, "SELECT n FROM \"long rows\" WHERE \"the text\" = printf ( '%.20000c', 'z' )", "2" );
+		run ( db, "UPDATE \"long rows\" SET \"the text\" = substr ( \"the text\", 1, 3 ) WHERE n = 2" );
+		rows ( db, "SELECT n, \"the text\" FROM \"long rows\" AS r WHERE r.n = 2", "2|zzz" );
+		run ( db, "DROP TABLE \"long rows\"" );
 
 	}
 

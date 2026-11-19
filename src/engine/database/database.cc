@@ -394,6 +394,9 @@ namespace engine {
 
 		}
 
+		if ( static_cast < uint8_t > ( sql [ 0 ] ) == 0xEF && static_cast < uint8_t > ( sql [ 1 ] ) == 0xBB && static_cast < uint8_t > ( sql [ 2 ] ) == 0xBF )
+			sql += 3;
+
 		const char* at = sql;
 
 		for ( ;; ) {

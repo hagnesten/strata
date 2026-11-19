@@ -450,7 +450,7 @@ namespace engine {
 				} else {
 
 					while ( i < pattern.size && pattern.bytes [ i ] >= '0' && pattern.bytes [ i ] <= '9' )
-						precision = base::min < int32_t > ( precision * 10 + ( pattern.bytes [ i++ ] - '0' ), 10000 );
+						precision = base::min < int32_t > ( precision * 10 + ( pattern.bytes [ i++ ] - '0' ), 1000000 );
 
 				}
 
@@ -572,8 +572,11 @@ namespace engine {
 					if ( text.size ) {
 
 						size_t at = 0;
+						uint32_t code = base::next_code ( text.bytes, text.size, at );
+						int32_t times = precision > 0 ? base::min < int32_t > ( precision, 1000000 ) : 1;
 
-						body.code ( base::next_code ( text.bytes, text.size, at ) );
+						for ( int32_t k = 0; k < times; k++ )
+							body.code ( code );
 
 					}
 
