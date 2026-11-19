@@ -21,7 +21,7 @@ namespace storage {
 
 	}
 
-	static void fail ( pager& item, pager_error error, const char* first, uint64_t number, const char* rest ) {
+	void fail ( pager& item, pager_error error, const char* first, uint64_t number, const char* rest ) {
 
 		base::text line;
 
@@ -38,7 +38,7 @@ namespace storage {
 
 	}
 
-	static void encode_header ( const database_header& header, uint8_t* data ) {
+	void encode_header ( const database_header& header, uint8_t* data ) {
 
 		base::fill ( data, 0, PAGE_USABLE );
 		data [ 0 ] = PAGE_HEADER;
@@ -53,7 +53,7 @@ namespace storage {
 
 	}
 
-	static bool decode_header ( const uint8_t* data, database_header& out ) {
+	bool decode_header ( const uint8_t* data, database_header& out ) {
 
 		if ( data [ 0 ] != PAGE_HEADER || !base::same_bytes ( data + 1, HEADER_MAGIC, 15 ) )
 			return false;
@@ -201,6 +201,12 @@ namespace storage {
 
 		uint64_t size = base::file_size ( out.file );
 		bool fine = true;
+		base::text log_path;
+
+		log_path.add ( path ).add ( "-wal" );
+
+		if ( size < PAGE_SIZE && !base::path_exists ( log_path.value ( ) ) )
+			size = 0;
 
 		if ( !size ) {
 
@@ -213,22 +219,44 @@ namespace storage {
 			if ( !fine )
 				fail ( out, PAGER_IO, "the new database could not be written", 0, nullptr );
 
-		} else if ( size < PAGE_SIZE || !base::read_at ( out.file, 0, page, PAGE_SIZE ) ) {
+		}
 
-			fail ( out, PAGER_FORMAT, "this is not a Strata database, it is too short", 0, nullptr );
+		const char* header_problem = nullptr;
+		pager_error header_error = PAGER_FINE;
+
+		if ( fine && size ) {
+
+			if ( size < PAGE_SIZE || !base::read_at ( out.file, 0, page, PAGE_SIZE ) ) {
+
+				header_problem = "this is not a Strata database, it is too short";
+				header_error = PAGER_FORMAT;
+
+			} else if ( !page_intact ( page, 1 ) ) {
+
+				header_problem = "the database header failed its checksum";
+				header_error = PAGER_CORRUPT;
+
+			} else if ( !decode_header ( page, out.header ) ) {
+
+				header_problem = "this is not a Strata database, or it is from a newer version";
+				header_error = PAGER_FORMAT;
+
+			}
+
+		}
+
+		fine = fine && open_wal ( out, page );
+
+		uint64_t logged = 0;
+
+		if ( fine && header_problem && !wal_find ( out, 1, logged ) ) {
+
+			fail ( out, header_error, header_problem, 0, nullptr );
 			fine = false;
 
-		} else if ( !decode_header ( page, out.header ) ) {
+		}
 
-			fail ( out, PAGER_FORMAT, "this is not a Strata database, or it is from a newer version", 0, nullptr );
-			fine = false;
-
-		} else if ( !page_intact ( page, 1 ) ) {
-
-			fail ( out, PAGER_CORRUPT, "the database header failed its checksum", 0, nullptr );
-			fine = false;
-
-		} else if ( static_cast < uint64_t > ( out.header.page_count ) * PAGE_SIZE > size ) {
+		if ( fine && !out.wal.index_used && static_cast < uint64_t > ( out.header.page_count ) * PAGE_SIZE > base::file_size ( out.file ) ) {
 
 			fail ( out, PAGER_CORRUPT, "the database file is shorter than its header says, ", out.header.page_count, " pages expected" );
 			fine = false;
@@ -238,14 +266,23 @@ namespace storage {
 		base::release ( page );
 		out.committed = out.header;
 
-		if ( !fine )
+		if ( !fine ) {
+
+			close_wal ( out );
 			base::close_file ( out.file );
+
+		}
 
 		return fine;
 
 	}
 
 	void close_pager ( pager& item ) {
+
+		if ( item.file.handle && item.wal.file.handle && !item.broken && !has_changes ( item ) )
+			checkpoint ( item );
+
+		close_wal ( item );
 
 		for ( uint32_t i = 0; i < item.frame_count; i++ ) {
 
@@ -294,7 +331,11 @@ namespace storage {
 
 		}
 
-		if ( !base::read_at ( item.file, static_cast < uint64_t > ( number - 1 ) * PAGE_SIZE, frame->data, PAGE_SIZE ) ) {
+		uint64_t logged = 0;
+		bool from_log = wal_find ( item, number, logged );
+		bool read = from_log ? base::read_at ( item.wal.file, logged + WAL_FRAME_HEADER, frame->data, PAGE_SIZE ) : base::read_at ( item.file, static_cast < uint64_t > ( number - 1 ) * PAGE_SIZE, frame->data, PAGE_SIZE );
+
+		if ( !read ) {
 
 			fail ( item, PAGER_IO, "page ", number, " could not be read" );
 			frame->number = 0;
@@ -434,6 +475,14 @@ namespace storage {
 		if ( !has_changes ( item ) )
 			return true;
 
+		if ( item.broken ) {
+
+			fail ( item, PAGER_IO, "a disk error left the log unsure, reopen the database before writing again", 0, nullptr );
+
+			return false;
+
+		}
+
 		item.header.change++;
 
 		uint8_t* header = base::make < uint8_t > ( PAGE_SIZE );
@@ -446,38 +495,16 @@ namespace storage {
 
 		}
 
-		for ( uint32_t i = 0; i < item.frame_count; i++ ) {
-
-			page_frame* frame = item.frames [ i ];
-
-			if ( !frame->number || !frame->dirty )
-				continue;
-
-			seal_page ( frame->data, frame->number );
-
-			if ( !base::write_at ( item.file, static_cast < uint64_t > ( frame->number - 1 ) * PAGE_SIZE, frame->data, PAGE_SIZE ) ) {
-
-				fail ( item, PAGER_IO, "page ", frame->number, " could not be written" );
-				base::release ( header );
-
-				return false;
-
-			}
-
-			item.stats.writes++;
-
-		}
-
 		encode_header ( item.header, header );
 		seal_page ( header, 1 );
 
-		bool fine = base::write_at ( item.file, 0, header, PAGE_SIZE ) && base::sync_file ( item.file );
+		bool fine = wal_commit ( item, header );
 
 		base::release ( header );
 
 		if ( !fine ) {
 
-			fail ( item, PAGER_IO, "the commit could not be written to disk", 0, nullptr );
+			item.header.change--;
 
 			return false;
 
@@ -497,6 +524,9 @@ namespace storage {
 
 		item.committed = item.header;
 		item.stats.commits++;
+
+		if ( item.wal.frames >= item.wal.checkpoint_frames && !checkpoint ( item ) )
+			item.broken = true;
 
 		return true;
 

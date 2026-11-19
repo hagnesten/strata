@@ -11,6 +11,11 @@
 #define PAGER_BUCKETS 4096
 #define HEADER_MAGIC "Strata format 1"
 #define PAGER_PROBLEM_ROOM 160
+#define WAL_MAGIC "StrataWL"
+#define WAL_HEADER 32
+#define WAL_FRAME_HEADER 24
+#define WAL_FRAME ( WAL_FRAME_HEADER + PAGE_SIZE )
+#define WAL_CHECKPOINT_FRAMES 1000
 
 namespace storage {
 
@@ -65,6 +70,31 @@ namespace storage {
 		uint64_t writes;
 		uint64_t hits;
 		uint64_t commits;
+		uint64_t checkpoints;
+		uint64_t recovered_frames;
+
+	};
+
+	struct wal_entry {
+
+		uint32_t page;
+		uint64_t offset;
+
+	};
+
+	struct wal_state {
+
+		base::file_handle file;
+		char path [ FILE_PATH_ROOM ];
+		uint32_t salt [ 2 ];
+		uint32_t sequence;
+		uint32_t chain;
+		uint64_t end;
+		uint32_t frames;
+		wal_entry* index;
+		uint32_t index_room;
+		uint32_t index_used;
+		uint32_t checkpoint_frames;
 
 	};
 
@@ -83,8 +113,26 @@ namespace storage {
 		pager_error error;
 		char problem [ PAGER_PROBLEM_ROOM ];
 		pager_stats stats;
+		wal_state wal;
+		bool broken;
 
 	};
+
+	bool open_wal ( pager& item, uint8_t* page );
+
+	bool wal_find ( const pager& item, uint32_t number, uint64_t& offset );
+
+	bool wal_commit ( pager& item, const uint8_t* header_page );
+
+	bool checkpoint ( pager& item );
+
+	void close_wal ( pager& item );
+
+	void fail ( pager& item, pager_error error, const char* first, uint64_t number, const char* rest );
+
+	void encode_header ( const database_header& header, uint8_t* data );
+
+	bool decode_header ( const uint8_t* data, database_header& out );
 
 	bool open_pager ( pager& out, const char* path, uint32_t capacity = PAGER_CACHE );
 
