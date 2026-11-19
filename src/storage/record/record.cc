@@ -1,0 +1,254 @@
+#include "storage/record/record.hh"
+
+namespace storage {
+
+	value null_value ( ) {
+
+		value made = { };
+
+		made.kind = VALUE_NULL;
+
+		return made;
+
+	}
+
+	value integer_value ( int64_t number ) {
+
+		value made = { };
+
+		made.kind = VALUE_INTEGER;
+		made.integer = number;
+
+		return made;
+
+	}
+
+	value real_value ( double number ) {
+
+		value made = { };
+
+		made.kind = VALUE_REAL;
+		made.real = number;
+
+		return made;
+
+	}
+
+	value text_value ( const char* data, size_t size ) {
+
+		value made = { };
+
+		made.kind = VALUE_TEXT;
+		made.bytes = reinterpret_cast < const uint8_t* > ( data );
+		made.size = size;
+
+		return made;
+
+	}
+
+	value blob_value ( const uint8_t* data, size_t size ) {
+
+		value made = { };
+
+		made.kind = VALUE_BLOB;
+		made.bytes = data;
+		made.size = size;
+
+		return made;
+
+	}
+
+	static void add_varint ( base::text& out, uint64_t number ) {
+
+		uint8_t bytes [ 10 ];
+		size_t size = base::write_varint ( bytes, number );
+
+		out.add ( reinterpret_cast < const char* > ( bytes ), size );
+
+	}
+
+	void encode_record ( const value* values, uint32_t count, base::text& out ) {
+
+		add_varint ( out, count );
+
+		for ( uint32_t i = 0; i < count; i++ ) {
+
+			const value& item = values [ i ];
+
+			out.add ( static_cast < char > ( item.kind ) );
+
+			if ( item.kind == VALUE_INTEGER )
+				add_varint ( out, base::zigzag ( item.integer ) );
+			else if ( item.kind == VALUE_REAL ) {
+
+				uint8_t bytes [ 8 ];
+				uint64_t bits = 0;
+
+				base::copy ( &bits, &item.real, 8 );
+				base::write64 ( bytes, bits );
+				out.add ( reinterpret_cast < const char* > ( bytes ), 8 );
+
+			} else if ( item.kind == VALUE_TEXT || item.kind == VALUE_BLOB ) {
+
+				add_varint ( out, item.size );
+				out.add ( reinterpret_cast < const char* > ( item.bytes ), item.size );
+
+			}
+
+		}
+
+	}
+
+	static bool decode_one ( const uint8_t* data, size_t size, size_t& at, value& out ) {
+
+		if ( at >= size || data [ at ] > VALUE_BLOB )
+			return false;
+
+		out = { };
+		out.kind = static_cast < value_kind > ( data [ at++ ] );
+
+		if ( out.kind == VALUE_INTEGER ) {
+
+			uint64_t bits = 0;
+
+			if ( !base::read_varint ( data, size, at, bits ) )
+				return false;
+
+			out.integer = base::unzigzag ( bits );
+
+		} else if ( out.kind == VALUE_REAL ) {
+
+			if ( size - at < 8 )
+				return false;
+
+			uint64_t bits = base::read64 ( data + at );
+
+			base::copy ( &out.real, &bits, 8 );
+			at += 8;
+
+		} else if ( out.kind == VALUE_TEXT || out.kind == VALUE_BLOB ) {
+
+			uint64_t length = 0;
+
+			if ( !base::read_varint ( data, size, at, length ) || length > size - at )
+				return false;
+
+			out.bytes = data + at;
+			out.size = static_cast < size_t > ( length );
+			at += out.size;
+
+		}
+
+		return true;
+
+	}
+
+	bool decode_record ( const uint8_t* data, size_t size, value* out, uint32_t room, uint32_t& count ) {
+
+		size_t at = 0;
+		uint64_t columns = 0;
+
+		count = 0;
+
+		if ( !base::read_varint ( data, size, at, columns ) || columns > RECORD_COLUMNS )
+			return false;
+
+		for ( uint64_t i = 0; i < columns; i++ ) {
+
+			value item;
+
+			if ( !decode_one ( data, size, at, item ) )
+				return false;
+
+			if ( count < room )
+				out [ count++ ] = item;
+
+		}
+
+		return at == size;
+
+	}
+
+	static int32_t compare_bytes ( const value& a, const value& b ) {
+
+		size_t shorter = base::min ( a.size, b.size );
+
+		for ( size_t i = 0; i < shorter; i++ )
+			if ( a.bytes [ i ] != b.bytes [ i ] )
+				return a.bytes [ i ] < b.bytes [ i ] ? -1 : 1;
+
+		return a.size == b.size ? 0 : a.size < b.size ? -1 : 1;
+
+	}
+
+	static uint32_t rank ( value_kind kind ) {
+
+		return kind == VALUE_NULL ? 0 : kind == VALUE_INTEGER || kind == VALUE_REAL ? 1 : kind == VALUE_TEXT ? 2 : 3;
+
+	}
+
+	int32_t compare_values ( const value& a, const value& b ) {
+
+		uint32_t left = rank ( a.kind );
+		uint32_t right = rank ( b.kind );
+
+		if ( left != right )
+			return left < right ? -1 : 1;
+
+		if ( left == 0 )
+			return 0;
+
+		if ( left == 1 ) {
+
+			if ( a.kind == VALUE_INTEGER && b.kind == VALUE_INTEGER )
+				return a.integer == b.integer ? 0 : a.integer < b.integer ? -1 : 1;
+
+			double x = a.kind == VALUE_INTEGER ? static_cast < double > ( a.integer ) : a.real;
+			double y = b.kind == VALUE_INTEGER ? static_cast < double > ( b.integer ) : b.real;
+
+			return x == y ? 0 : x < y ? -1 : 1;
+
+		}
+
+		return compare_bytes ( a, b );
+
+	}
+
+	int32_t compare_records ( const uint8_t* a, size_t a_size, const uint8_t* b, size_t b_size, uint32_t columns ) {
+
+		size_t left_at = 0;
+		size_t right_at = 0;
+		uint64_t left_count = 0;
+		uint64_t right_count = 0;
+
+		if ( !base::read_varint ( a, a_size, left_at, left_count ) || !base::read_varint ( b, b_size, right_at, right_count ) )
+			return 0;
+
+		uint64_t shared = base::min ( left_count, right_count );
+
+		if ( columns && shared > columns )
+			shared = columns;
+
+		for ( uint64_t i = 0; i < shared; i++ ) {
+
+			value left;
+			value right;
+
+			if ( !decode_one ( a, a_size, left_at, left ) || !decode_one ( b, b_size, right_at, right ) )
+				return 0;
+
+			int32_t order = compare_values ( left, right );
+
+			if ( order )
+				return order;
+
+		}
+
+		if ( columns && shared == columns )
+			return 0;
+
+		return left_count == right_count ? 0 : left_count < right_count ? -1 : 1;
+
+	}
+
+}
