@@ -18,7 +18,7 @@ namespace engine {
 		size_t digits_start = at;
 		uint64_t integer = 0;
 		bool overflow = false;
-		double real = 0;
+		base::decimal_digits decimal = { };
 
 		while ( at < size && bytes [ at ] >= '0' && bytes [ at ] <= '9' ) {
 
@@ -29,7 +29,7 @@ namespace engine {
 			else
 				integer = integer * 10 + digit;
 
-			real = real * 10 + static_cast < double > ( digit );
+			base::add_digit ( decimal, static_cast < uint32_t > ( digit ), false );
 			at++;
 
 		}
@@ -39,21 +39,20 @@ namespace engine {
 
 		if ( at < size && bytes [ at ] == '.' ) {
 
-			double scale = 0.1;
-
 			fraction = true;
 			at++;
 
 			while ( at < size && bytes [ at ] >= '0' && bytes [ at ] <= '9' ) {
 
-				real += static_cast < double > ( bytes [ at ] - '0' ) * scale;
-				scale /= 10;
+				base::add_digit ( decimal, static_cast < uint32_t > ( bytes [ at ] - '0' ), true );
 				any = true;
 				at++;
 
 			}
 
 		}
+
+		double real = base::decimal_value ( decimal, 0 );
 
 		if ( !any ) {
 
@@ -79,12 +78,7 @@ namespace engine {
 				while ( at < size && bytes [ at ] >= '0' && bytes [ at ] <= '9' )
 					exponent = base::min ( exponent * 10 + ( bytes [ at++ ] - '0' ), 400 );
 
-				double power = 1;
-
-				for ( int32_t i = 0; i < exponent; i++ )
-					power *= 10;
-
-				real = down ? real / power : real * power;
+				real = base::decimal_value ( decimal, down ? -exponent : exponent );
 				fraction = true;
 
 			} else
@@ -231,7 +225,7 @@ namespace engine {
 				if ( affinity == sql::AFFINITY_REAL && number.kind == storage::VALUE_INTEGER )
 					return storage::real_value ( static_cast < double > ( number.integer ) );
 
-				if ( affinity != sql::AFFINITY_REAL && number.kind == storage::VALUE_REAL && number.real == static_cast < double > ( static_cast < int64_t > ( number.real ) ) && number.real > -9.2e18 && number.real < 9.2e18 )
+				if ( affinity != sql::AFFINITY_REAL && number.kind == storage::VALUE_REAL && number.real >= -9223372036854775808.0 && number.real < 9223372036854775808.0 && number.real == static_cast < double > ( static_cast < int64_t > ( number.real ) ) )
 					return storage::integer_value ( static_cast < int64_t > ( number.real ) );
 
 				return number;

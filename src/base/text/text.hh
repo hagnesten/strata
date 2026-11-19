@@ -22,6 +22,19 @@ namespace base {
 
 	char upper ( char value );
 
+	struct decimal_digits {
+
+		uint64_t digits;
+		int32_t exponent;
+		uint32_t count;
+		bool any;
+
+	};
+
+	void add_digit ( decimal_digits& item, uint32_t digit, bool fraction );
+
+	double decimal_value ( const decimal_digits& item, int32_t exponent );
+
 	uint32_t next_code ( const uint8_t* bytes, size_t size, size_t& at );
 
 	size_t count_codes ( const uint8_t* bytes, size_t size );

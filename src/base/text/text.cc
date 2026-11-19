@@ -41,6 +41,66 @@ namespace base {
 
 	}
 
+	void add_digit ( decimal_digits& item, uint32_t digit, bool fraction ) {
+
+		item.any = true;
+
+		if ( !item.count && !digit ) {
+
+			if ( fraction )
+				item.exponent--;
+
+			return;
+
+		}
+
+		if ( item.count < 19 ) {
+
+			item.digits = item.digits * 10 + digit;
+			item.count++;
+
+			if ( fraction )
+				item.exponent--;
+
+		} else if ( !fraction )
+			item.exponent++;
+
+	}
+
+	double decimal_value ( const decimal_digits& item, int32_t exponent ) {
+
+		static const double powers [ 23 ] = { 1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22 };
+
+		if ( !item.digits )
+			return 0;
+
+		int32_t total = item.exponent + exponent;
+		double value = static_cast < double > ( item.digits );
+
+		if ( total > 330 )
+			return 1.7976931348623157e308 * 10;
+
+		if ( total < -360 )
+			return 0;
+
+		while ( total > 22 ) {
+
+			value *= 1e22;
+			total -= 22;
+
+		}
+
+		while ( total < -22 ) {
+
+			value /= 1e22;
+			total += 22;
+
+		}
+
+		return total < 0 ? value / powers [ -total ] : value * powers [ total ];
+
+	}
+
 	uint32_t next_code ( const uint8_t* bytes, size_t size, size_t& at ) {
 
 		uint8_t first = bytes [ at++ ];

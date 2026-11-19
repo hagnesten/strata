@@ -170,32 +170,23 @@ namespace sql {
 
 	bool read_real ( const char* text, size_t size, double& out ) {
 
-		double whole = 0;
-		double scale = 1;
+		base::decimal_digits digits = { };
 		int32_t exponent = 0;
 		size_t at = 0;
-		bool any = false;
 
-		while ( at < size && text [ at ] >= '0' && text [ at ] <= '9' ) {
-
-			whole = whole * 10 + ( text [ at++ ] - '0' );
-			any = true;
-
-		}
+		while ( at < size && text [ at ] >= '0' && text [ at ] <= '9' )
+			base::add_digit ( digits, static_cast < uint32_t > ( text [ at++ ] - '0' ), false );
 
 		if ( at < size && text [ at ] == '.' ) {
 
 			at++;
 
-			while ( at < size && text [ at ] >= '0' && text [ at ] <= '9' ) {
-
-				scale /= 10;
-				whole += ( text [ at++ ] - '0' ) * scale;
-				any = true;
-
-			}
+			while ( at < size && text [ at ] >= '0' && text [ at ] <= '9' )
+				base::add_digit ( digits, static_cast < uint32_t > ( text [ at++ ] - '0' ), true );
 
 		}
+
+		bool any = digits.any;
 
 		if ( at < size && ( text [ at ] == 'e' || text [ at ] == 'E' ) ) {
 
@@ -217,12 +208,7 @@ namespace sql {
 
 		}
 
-		double power = 1;
-
-		for ( int32_t i = 0; i < ( exponent < 0 ? -exponent : exponent ); i++ )
-			power *= 10;
-
-		out = exponent < 0 ? whole / power : whole * power;
+		out = base::decimal_value ( digits, exponent );
 
 		return any && at == size;
 
