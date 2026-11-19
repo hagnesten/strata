@@ -588,6 +588,8 @@ namespace engine {
 
 	bool begin_writes ( run_context& ctx, bool risky );
 
+	bool exact_rowid ( const storage::value& item, int64_t& out );
+
 	prepared_select* prepare_select ( run_context& ctx, sql::select_statement* item, prepared_select* parent );
 
 	prepared_select* prepare_table_scope ( run_context& ctx, table_info* table, const char* alias, table_info* second, const char* second_alias );

@@ -526,12 +526,61 @@ namespace storage {
 
 	}
 
+	static bool cell_rowid ( const uint8_t* page, uint32_t slot, uint32_t count, bool leaf, int64_t& out ) {
+
+		uint32_t offset = offset_of ( page, slot );
+
+		if ( offset < BTREE_HEADER + count * 2 || offset >= PAGE_USABLE )
+			return false;
+
+		size_t at = leaf ? 0 : 4;
+		uint64_t number = 0;
+
+		if ( !base::read_varint ( page + offset, PAGE_USABLE - offset, at, number ) )
+			return false;
+
+		out = base::unzigzag ( number );
+
+		return true;
+
+	}
+
 	static bool find_slot ( pager& owner, const uint8_t* page, bool table, int64_t rowid, const uint8_t* key, size_t size, uint32_t columns, uint32_t& slot, bool& exact ) {
 
 		uint32_t low = 0;
 		uint32_t high = count_of ( page );
 
 		exact = false;
+
+		if ( table ) {
+
+			uint32_t count = high;
+			bool leaf = leaf_kind ( page [ 0 ] );
+
+			while ( low < high ) {
+
+				uint32_t middle = low + ( high - low ) / 2;
+				int64_t here = 0;
+
+				if ( !cell_rowid ( page, middle, count, leaf, here ) )
+					return false;
+
+				if ( here < rowid )
+					low = middle + 1;
+				else
+					high = middle;
+
+			}
+
+			slot = low;
+
+			int64_t here = 0;
+
+			exact = slot < count && cell_rowid ( page, slot, count, leaf, here ) && here == rowid;
+
+			return true;
+
+		}
 
 		while ( low < high ) {
 

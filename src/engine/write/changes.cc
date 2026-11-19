@@ -1408,6 +1408,21 @@ namespace engine {
 
 		source_state& source = state.sources [ 0 ];
 
+		if ( definition.path.kind == PATH_ROWID_EQUAL && definition.filter_count == 1 ) {
+
+			storage::value value;
+			int64_t rowid = 0;
+
+			if ( !evaluate ( ctx, &state, definition.path.equal [ 0 ], value ) )
+				return false;
+
+			if ( exact_rowid ( value, rowid ) && !base::push ( *ctx.memory, rowids, count, room, rowid ) )
+				return fail_run ( ctx, "out of memory" );
+
+			return true;
+
+		}
+
 		if ( !open_source ( ctx, &state, source ) )
 			return false;
 

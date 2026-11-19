@@ -582,7 +582,7 @@ namespace engine {
 
 	}
 
-	static bool exact_rowid ( const storage::value& item, int64_t& out ) {
+	bool exact_rowid ( const storage::value& item, int64_t& out ) {
 
 		storage::value number = number_from ( item );
 
