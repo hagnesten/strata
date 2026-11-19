@@ -1131,18 +1131,32 @@ namespace engine {
 
 	}
 
-	bool run_insert ( run_context& ctx, const sql::insert_statement* item ) {
+	static insert_plan* plan_insert ( run_context& ctx, const sql::insert_statement* item ) {
+
+		if ( item->prepared )
+			return static_cast < insert_plan* > ( item->prepared );
 
 		table_info* table = find_table ( *ctx.schema, item->table );
 
-		if ( !table )
-			return fail_named ( ctx, "no such table: ", item->table, "" );
+		if ( !table ) {
 
+			fail_named ( ctx, "no such table: ", item->table, "" );
+
+			return nullptr;
+
+		}
+
+		insert_plan* made = ctx.lasting->make < insert_plan > ( 1 );
 		uint32_t target_count = item->column_count ? item->column_count : table->column_count - table->generated_count;
 		int32_t* targets = ctx.lasting->make < int32_t > ( target_count + 1 );
 
-		if ( !targets )
-			return fail_run ( ctx, "out of memory" );
+		if ( !made || !targets ) {
+
+			fail_run ( ctx, "out of memory" );
+
+			return nullptr;
+
+		}
 
 		for ( uint32_t k = 0, next = 0; k < target_count; k++ ) {
 
@@ -1164,66 +1178,111 @@ namespace engine {
 				base::text message;
 
 				message.add ( "table " ).add ( table->name ).add ( " has no column named " ).add ( item->columns [ k ] );
+				fail_run ( ctx, message.value ( ) );
 
-				return fail_run ( ctx, message.value ( ) );
+				return nullptr;
 
 			}
 
-			if ( column >= 0 && table->columns [ column ].generated )
-				return fail_named ( ctx, "cannot INSERT into the generated column ", item->columns [ k ], "" );
+			if ( column >= 0 && table->columns [ column ].generated ) {
 
-			for ( uint32_t j = 0; j < k; j++ )
-				if ( targets [ j ] == column )
-					return fail_named ( ctx, "the column ", item->columns [ k ], " is named twice" );
+				fail_named ( ctx, "cannot INSERT into the generated column ", item->columns [ k ], "" );
+
+				return nullptr;
+
+			}
+
+			for ( uint32_t j = 0; j < k; j++ ) {
+
+				if ( targets [ j ] == column ) {
+
+					fail_named ( ctx, "the column ", item->columns [ k ], " is named twice" );
+
+					return nullptr;
+
+				}
+
+			}
 
 			targets [ k ] = column;
 
 		}
 
+		if ( item->query ) {
+
+			made->query = prepare_select ( ctx, item->query, nullptr );
+
+			if ( !made->query )
+				return nullptr;
+
+			if ( made->query->output_count != target_count ) {
+
+				base::text message;
+
+				message.add ( "table " ).add ( table->name ).add ( " takes " ).number ( target_count ).add ( " values here but " ).number ( made->query->output_count ).add ( " were given" );
+				fail_run ( ctx, message.value ( ) );
+
+				return nullptr;
+
+			}
+
+		} else
+			target_count = 0;
+
+		made->upserting = item->conflict == sql::CONFLICT_UPDATE || item->conflict == sql::CONFLICT_NOTHING;
+
+		if ( made->upserting && !prepare_upsert ( ctx, *table, item, made->upsert ) )
+			return nullptr;
+
+		made->targeted = ctx.lasting->make < bool > ( table->column_count + 1 );
+
+		if ( !made->targeted ) {
+
+			fail_run ( ctx, "out of memory" );
+
+			return nullptr;
+
+		}
+
+		for ( uint32_t k = 0; k < target_count; k++ )
+			if ( targets [ k ] >= 0 )
+				made->targeted [ targets [ k ] ] = true;
+
+		made->table = table;
+		made->targets = targets;
+		made->target_count = target_count;
+		item->prepared = made;
+
+		return made;
+
+	}
+
+	bool run_insert ( run_context& ctx, const sql::insert_statement* item ) {
+
+		insert_plan* plan = plan_insert ( ctx, item );
+
+		if ( !plan )
+			return false;
+
+		table_info* table = plan->table;
+		const int32_t* targets = plan->targets;
+		const bool* targeted = plan->targeted;
+		uint32_t target_count = plan->target_count;
+		bool upserting = plan->upserting;
+		upsert_plan& upsert = plan->upsert;
 		collected_rows rows = { };
 		uint32_t row_count = 1;
 
 		rows.memory = ctx.memory;
 
-		if ( item->query ) {
+		if ( plan->query ) {
 
-			prepared_select* plan = prepare_select ( ctx, item->query, nullptr );
-
-			if ( !plan )
-				return false;
-
-			if ( plan->output_count != target_count ) {
-
-				base::text message;
-
-				message.add ( "table " ).add ( table->name ).add ( " takes " ).number ( target_count ).add ( " values here but " ).number ( plan->output_count ).add ( " were given" );
-
-				return fail_run ( ctx, message.value ( ) );
-
-			}
-
-			if ( !collect_plan ( ctx, plan, nullptr, rows ) )
+			if ( !collect_plan ( ctx, plan->query, nullptr, rows ) )
 				return false;
 
 			row_count = rows.count;
 
-		} else
-			target_count = 0;
-
-		upsert_plan upsert;
-		bool upserting = item->conflict == sql::CONFLICT_UPDATE || item->conflict == sql::CONFLICT_NOTHING;
-
-		if ( upserting && !prepare_upsert ( ctx, *table, item, upsert ) )
-			return false;
-
-		bool* targeted = ctx.lasting->make < bool > ( table->column_count + 1 );
-
-		if ( !targeted )
-			return fail_run ( ctx, "out of memory" );
-
-		for ( uint32_t k = 0; k < target_count; k++ )
-			if ( targets [ k ] >= 0 )
-				targeted [ targets [ k ] ] = true;
+		}
 
 		for ( uint32_t r = 0; r < row_count; r++ ) {
 
@@ -1310,12 +1369,7 @@ namespace engine {
 
 	}
 
-	static bool target_scope ( run_context& ctx, table_info& table, sql::expression* where, prepared_select*& plan, query_state& state ) {
-
-		plan = prepare_table_scope ( ctx, &table, table.name, nullptr, nullptr );
-
-		if ( !plan )
-			return false;
+	static bool start_target ( run_context& ctx, prepared_select* plan, query_state& state ) {
 
 		state = { };
 		state.plan = plan;
@@ -1325,6 +1379,17 @@ namespace engine {
 			return fail_run ( ctx, "out of memory" );
 
 		state.sources [ 0 ].plan = &plan->sources [ 0 ];
+
+		return true;
+
+	}
+
+	static bool build_target ( run_context& ctx, table_info& table, sql::expression* where, prepared_select*& plan ) {
+
+		plan = prepare_table_scope ( ctx, &table, table.name, nullptr, nullptr );
+
+		if ( !plan )
+			return false;
 
 		if ( where ) {
 
@@ -1349,25 +1414,48 @@ namespace engine {
 		if ( !table )
 			return fail_named ( ctx, "no such table: ", name, "" );
 
-		query_state state;
-
-		return target_scope ( ctx, *table, where, plan, state );
+		return build_target ( ctx, *table, where, plan );
 
 	}
 
-	bool run_update ( run_context& ctx, const sql::update_statement* item ) {
+	static target_plan* plan_change ( run_context& ctx, const char* name, sql::expression* where, void*& cached ) {
 
-		table_info* table = find_table ( *ctx.schema, item->table );
+		if ( cached )
+			return static_cast < target_plan* > ( cached );
 
-		if ( !table )
-			return fail_named ( ctx, "no such table: ", item->table, "" );
+		table_info* table = find_table ( *ctx.schema, name );
+		target_plan* made = ctx.lasting->make < target_plan > ( 1 );
 
-		prepared_select* plan = nullptr;
-		query_state state;
+		if ( !table ) {
 
-		if ( !target_scope ( ctx, *table, item->where, plan, state ) )
-			return false;
+			fail_named ( ctx, "no such table: ", name, "" );
 
+			return nullptr;
+
+		}
+
+		if ( !made ) {
+
+			fail_run ( ctx, "out of memory" );
+
+			return nullptr;
+
+		}
+
+		made->table = table;
+
+		if ( !build_target ( ctx, *table, where, made->plan ) )
+			return nullptr;
+
+		cached = made;
+
+		return made;
+
+	}
+
+	static bool plan_assignments ( run_context& ctx, const sql::update_statement* item, target_plan& target ) {
+
+		table_info* table = target.table;
 		int32_t* columns = ctx.lasting->make < int32_t > ( item->assignment_count + 1 );
 
 		if ( !columns )
@@ -1392,10 +1480,40 @@ namespace engine {
 
 			columns [ i ] = column;
 
-			if ( !bind_expression ( ctx, plan, item->assignments [ i ].value, BIND_PLAIN ) )
+			if ( !bind_expression ( ctx, target.plan, item->assignments [ i ].value, BIND_PLAIN ) )
 				return false;
 
 		}
+
+		target.columns = columns;
+
+		return true;
+
+	}
+
+	bool run_update ( run_context& ctx, const sql::update_statement* item ) {
+
+		bool fresh = !item->prepared;
+		target_plan* target = plan_change ( ctx, item->table, item->where, item->prepared );
+
+		if ( !target )
+			return false;
+
+		if ( fresh && !plan_assignments ( ctx, item, *target ) ) {
+
+			item->prepared = nullptr;
+
+			return false;
+
+		}
+
+		table_info* table = target->table;
+		prepared_select* plan = target->plan;
+		const int32_t* columns = target->columns;
+		query_state state;
+
+		if ( !start_target ( ctx, plan, state ) )
+			return false;
 
 		int64_t* rowids = nullptr;
 		uint32_t count = 0;
@@ -1457,17 +1575,17 @@ namespace engine {
 
 	bool run_delete ( run_context& ctx, const sql::delete_statement* item ) {
 
-		table_info* table = find_table ( *ctx.schema, item->table );
+		target_plan* target = plan_change ( ctx, item->table, item->where, item->prepared );
 
-		if ( !table )
-			return fail_named ( ctx, "no such table: ", item->table, "" );
+		if ( !target )
+			return false;
 
-		prepared_select* plan = nullptr;
+		table_info* table = target->table;
 		query_state state;
 		int64_t* rowids = nullptr;
 		uint32_t count = 0;
 
-		if ( !target_scope ( ctx, *table, item->where, plan, state ) || !matching_rowids ( ctx, plan, state, rowids, count ) )
+		if ( !start_target ( ctx, target->plan, state ) || !matching_rowids ( ctx, target->plan, state, rowids, count ) )
 			return false;
 
 		for ( uint32_t r = 0; r < count; r++ ) {

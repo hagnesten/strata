@@ -260,7 +260,25 @@ namespace engine {
 
 	}
 
-	static bool run_statement ( database& item, run_context& ctx, const sql::statement* statement, query_sink* sink ) {
+	void start_context ( database& item, run_context& ctx, base::arena* lasting, base::arena* memory, base::arena* scratch, base::arena* results, const storage::value* parameters, uint32_t parameter_count ) {
+
+		ctx.pages = &item.pages;
+		ctx.schema = item.schema;
+		ctx.lasting = lasting;
+		ctx.memory = memory;
+		ctx.scratch = scratch;
+		ctx.results = results;
+		ctx.parameters = parameters;
+		ctx.parameter_count = parameter_count;
+		ctx.problem = &item.problem;
+		ctx.last_rowid = item.last_rowid;
+		ctx.previous_changes = item.changes;
+		ctx.total_changes = item.total_changes;
+		ctx.random = &item.random;
+
+	}
+
+	bool run_statement ( database& item, run_context& ctx, const sql::statement* statement, query_sink* sink ) {
 
 		bool handled = false;
 		bool controlled = control_statement ( item, ctx, statement, handled );
@@ -390,20 +408,10 @@ namespace engine {
 			if ( !statement )
 				return true;
 
+			base::arena results;
 			run_context ctx = { };
 
-			ctx.pages = &item.pages;
-			ctx.schema = item.schema;
-			ctx.lasting = &lasting;
-			ctx.memory = &memory;
-			ctx.scratch = &scratch;
-			ctx.parameters = parameters;
-			ctx.parameter_count = parameter_count;
-			ctx.problem = &item.problem;
-			ctx.last_rowid = item.last_rowid;
-			ctx.previous_changes = item.changes;
-			ctx.total_changes = item.total_changes;
-			ctx.random = &item.random;
+			start_context ( item, ctx, &lasting, &memory, &scratch, &results, parameters, parameter_count );
 
 			bool fine = run_statement ( item, ctx, statement, sink );
 

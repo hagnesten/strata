@@ -63,6 +63,10 @@ namespace engine {
 
 	bool run_vacuum ( database& item, run_context& ctx, const sql::statement* statement );
 
+	void start_context ( database& item, run_context& ctx, base::arena* lasting, base::arena* memory, base::arena* scratch, base::arena* results, const storage::value* parameters, uint32_t parameter_count );
+
+	bool run_statement ( database& item, run_context& ctx, const sql::statement* statement, query_sink* sink );
+
 	void describe_value ( base::text& out, const storage::value& item );
 
 }

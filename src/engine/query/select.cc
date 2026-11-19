@@ -1256,12 +1256,12 @@ namespace engine {
 
 		if ( item->kind == sql::EXPRESSION_IN ) {
 
-			cached_child* entry = ctx.lasting->make < cached_child > ( 1 );
+			cached_child* entry = ctx.results->make < cached_child > ( 1 );
 
 			if ( !entry )
 				return fail_run ( ctx, "out of memory" );
 
-			set_sink sink = { ctx.lasting, &entry->set, false };
+			set_sink sink = { ctx.results, &entry->set, false };
 			row_sink rows = { &sink, set_emit };
 
 			fine = run_plan ( ctx, child, scope, rows );
@@ -1303,13 +1303,13 @@ namespace engine {
 
 		if ( !child->correlated ) {
 
-			cached_child* entry = ctx.lasting->make < cached_child > ( 1 );
+			cached_child* entry = ctx.results->make < cached_child > ( 1 );
 
 			if ( !entry )
 				return fail_run ( ctx, "out of memory" );
 
 			entry->key = item;
-			entry->scalar = keep_value ( *ctx.lasting, sink.value );
+			entry->scalar = keep_value ( *ctx.results, sink.value );
 			entry->exists = sink.seen;
 			entry->next = ctx.cache;
 			ctx.cache = entry;

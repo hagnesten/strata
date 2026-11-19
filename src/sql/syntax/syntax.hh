@@ -352,6 +352,7 @@ namespace sql {
 		assignment* updates;
 		uint32_t update_count;
 		expression* update_where;
+		mutable void* prepared;
 
 	};
 
@@ -362,6 +363,7 @@ namespace sql {
 		uint32_t assignment_count;
 		expression* where;
 		conflict_kind conflict;
+		mutable void* prepared;
 
 	};
 
@@ -369,6 +371,7 @@ namespace sql {
 
 		const char* table;
 		expression* where;
+		mutable void* prepared;
 
 	};
 

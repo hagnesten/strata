@@ -472,7 +472,6 @@ namespace studio {
 
 	static void draw_storage_map ( studio_state& app, const ui::rect& area ) {
 
-		ui_context& ui = app.ui;
 		ui::renderer& draw = app.draw;
 
 		ensure_trees ( app );

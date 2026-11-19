@@ -373,6 +373,26 @@ namespace engine {
 
 	};
 
+	struct insert_plan {
+
+		table_info* table;
+		int32_t* targets;
+		uint32_t target_count;
+		bool* targeted;
+		prepared_select* query;
+		upsert_plan upsert;
+		bool upserting;
+
+	};
+
+	struct target_plan {
+
+		table_info* table;
+		prepared_select* plan;
+		int32_t* columns;
+
+	};
+
 	struct parent_link {
 
 		table_info* parent;
@@ -408,6 +428,7 @@ namespace engine {
 		base::arena* lasting;
 		base::arena* memory;
 		base::arena* scratch;
+		base::arena* results;
 		const storage::value* parameters;
 		uint32_t parameter_count;
 		base::text* problem;
