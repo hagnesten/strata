@@ -243,6 +243,10 @@ namespace engine {
 				item->source = hit_source;
 				item->column = hit_column;
 				item->cast = hit_column >= 0 ? source.affinities [ hit_column ] : sql::AFFINITY_INTEGER;
+
+				if ( hit_column >= 0 && source.nocase && source.nocase [ hit_column ] )
+					item->nocase = true;
+
 				found = true;
 
 				for ( prepared_select* inner = scope; inner != query; inner = inner->parent )
@@ -586,14 +590,16 @@ namespace engine {
 		out.names = ctx.lasting->make < const char* > ( out.width + 1 );
 		out.affinities = ctx.lasting->make < sql::affinity_kind > ( out.width + 1 );
 		out.hidden = ctx.lasting->make < bool > ( out.width + 1 );
+		out.nocase = ctx.lasting->make < bool > ( out.width + 1 );
 
-		if ( !out.names || !out.affinities || !out.hidden )
+		if ( !out.names || !out.affinities || !out.hidden || !out.nocase )
 			return fail_run ( ctx, "out of memory" );
 
 		for ( uint32_t c = 0; c < out.width; c++ ) {
 
 			out.names [ c ] = table->columns [ c ].name;
 			out.affinities [ c ] = table->columns [ c ].affinity;
+			out.nocase [ c ] = table->columns [ c ].nocase;
 
 		}
 
@@ -655,6 +661,8 @@ namespace engine {
 
 				if ( !value || !add_output ( ctx, plan, value, source.names [ c ], false, room ) )
 					return fail_run ( ctx, "out of memory" );
+
+				value->nocase = source.nocase && source.nocase [ c ];
 
 			}
 
@@ -1042,8 +1050,9 @@ namespace engine {
 		plan->order_values = ctx.lasting->make < sql::expression* > ( item->order_count );
 		plan->order_output = ctx.lasting->make < int32_t > ( item->order_count );
 		plan->order_desc = ctx.lasting->make < bool > ( item->order_count );
+		plan->order_nocase = ctx.lasting->make < bool > ( item->order_count );
 
-		if ( !plan->order_values || !plan->order_output || !plan->order_desc )
+		if ( !plan->order_values || !plan->order_output || !plan->order_desc || !plan->order_nocase )
 			return fail_run ( ctx, "out of memory" );
 
 		for ( uint32_t i = 0; i < item->order_count; i++ ) {
@@ -1114,6 +1123,14 @@ namespace engine {
 
 		}
 
+		for ( uint32_t i = 0; i < item->order_count; i++ ) {
+
+			const sql::expression* value = plan->order_values [ i ] ? plan->order_values [ i ] : plan->order_output [ i ] >= 0 ? plan->outputs [ plan->order_output [ i ] ] : nullptr;
+
+			plan->order_nocase [ i ] = item->order [ i ].value->nocase || ( value && value->nocase );
+
+		}
+
 		return true;
 
 	}
@@ -1169,7 +1186,7 @@ namespace engine {
 			return;
 
 		for ( uint32_t t = 0; t < plan->order_count; t++ )
-			if ( plan->order_desc [ t ] || order_column ( plan, t ) == -3 )
+			if ( plan->order_desc [ t ] || plan->order_nocase [ t ] || order_column ( plan, t ) == -3 )
 				return;
 
 		prepared_source& source = plan->sources [ 0 ];

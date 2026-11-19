@@ -112,6 +112,7 @@ namespace engine {
 			info.type = column.type;
 			info.affinity = column.affinity;
 			info.not_null = column.not_null || column.primary;
+			info.nocase = column.nocase;
 			info.fallback = column.fallback;
 			info.check = column.check;
 

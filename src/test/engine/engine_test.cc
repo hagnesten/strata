@@ -447,6 +447,28 @@ namespace test {
 
 	}
 
+	static void collation_tests ( engine::database& db ) {
+
+		rows ( db, "SELECT 'abc' = 'ABC', 'abc' = 'ABC' COLLATE NOCASE, 'abc' COLLATE NOCASE < 'ABD', 'b' COLLATE BINARY > 'A'", "0|1|1|1" );
+		run ( db, "CREATE TABLE tags ( id INTEGER PRIMARY KEY, label TEXT COLLATE NOCASE, raw TEXT )" );
+		run ( db, "INSERT INTO tags ( label, raw ) VALUES ( 'beta', 'beta' ), ( 'Alpha', 'Alpha' ), ( 'ALPHA', 'ALPHA' ), ( 'gamma', 'gamma' ), ( 'Beta', 'Beta' )" );
+		rows ( db, "SELECT count ( * ) FROM tags WHERE label = 'alpha'", "2" );
+		rows ( db, "SELECT count ( * ) FROM tags WHERE raw = 'alpha'", "0" );
+		rows ( db, "SELECT count ( * ) FROM tags WHERE raw = 'alpha' COLLATE NOCASE", "2" );
+		rows ( db, "SELECT raw FROM tags ORDER BY raw, id", "ALPHA\nAlpha\nBeta\nbeta\ngamma" );
+		rows ( db, "SELECT raw FROM tags ORDER BY raw COLLATE NOCASE, id", "Alpha\nALPHA\nbeta\nBeta\ngamma" );
+		rows ( db, "SELECT label FROM tags ORDER BY label, id", "Alpha\nALPHA\nbeta\nBeta\ngamma" );
+		rows ( db, "SELECT count ( * ) FROM ( SELECT DISTINCT label FROM tags ) AS d", "3" );
+		rows ( db, "SELECT count ( * ) FROM ( SELECT DISTINCT raw FROM tags ) AS d", "5" );
+		rows ( db, "SELECT count ( * ) FROM tags GROUP BY label ORDER BY 1", "1\n2\n2" );
+		rows ( db, "SELECT count ( * ) FROM tags GROUP BY raw COLLATE NOCASE ORDER BY 1", "1\n2\n2" );
+		run ( db, "CREATE INDEX tags_label ON tags ( label )" );
+		rows ( db, "SELECT count ( * ) FROM tags WHERE label = 'BETA'", "2" );
+		rows ( db, "SELECT raw FROM tags WHERE label > 'b' ORDER BY id", "beta\ngamma\nBeta" );
+		fails ( db, "SELECT 1 COLLATE klingon", "only the BINARY and NOCASE collations" );
+
+	}
+
 	static void persistence_tests ( engine::database& db, const char* path ) {
 
 		rows ( db, "SELECT count ( * ), sum ( age ) FROM people", "4|73" );
@@ -455,6 +477,7 @@ namespace test {
 		rows ( db, "SELECT count ( * ), sum ( age ) FROM people", "4|73" );
 		rows ( db, "SELECT name, town, email FROM people WHERE id = 2", "Linus|Helsinki|linus@example.org" );
 		rows ( db, "SELECT count ( * ) FROM uniq", "3" );
+		rows ( db, "SELECT count ( * ) FROM tags WHERE label = 'GAMMA'", "1" );
 		plan_has ( db, "EXPLAIN QUERY PLAN SELECT * FROM people WHERE town = 'x'", "people_city" );
 		rows ( db, "SELECT name FROM people ORDER BY town LIMIT 2", "Grace\nBarbara" );
 		plan_has ( db, "EXPLAIN QUERY PLAN SELECT name FROM people ORDER BY town LIMIT 2", "USING INDEX people_city" );
@@ -729,6 +752,7 @@ namespace test {
 		index_tests ( *db );
 		transaction_tests ( *db );
 		alter_tests ( *db );
+		collation_tests ( *db );
 		persistence_tests ( *db, path );
 		fuzz_tests ( *db );
 		engine::close_database ( *db );

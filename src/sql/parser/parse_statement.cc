@@ -36,12 +36,15 @@ namespace sql {
 		grow_list < table_source > sources;
 
 		join_kind next = JOIN_FIRST;
+		bool natural = false;
 
 		for ( ;; ) {
 
 			table_source source = { };
 
 			source.join = next;
+			source.natural = natural;
+			natural = false;
 
 			if ( accept_symbol ( item, "(" ) ) {
 
@@ -66,7 +69,7 @@ namespace sql {
 				if ( !source.alias )
 					return false;
 
-			} else if ( item.current.kind == TOKEN_NAME && !reserved_word ( item.current ) && !token_is ( item.current, "natural" ) )
+			} else if ( item.current.kind == TOKEN_NAME && !reserved_word ( item.current ) && !token_is ( item.current, "natural" ) && !token_is ( item.current, "right" ) && !token_is ( item.current, "full" ) )
 				source.alias = take_name ( item, "an alias" );
 
 			if ( source.query && !source.alias )
@@ -101,14 +104,19 @@ namespace sql {
 
 			}
 
-			if ( accept_word ( item, "left" ) ) {
+			natural = accept_word ( item, "natural" );
 
+			join_kind side = token_is ( item.current, "left" ) ? JOIN_LEFT : token_is ( item.current, "right" ) ? JOIN_RIGHT : token_is ( item.current, "full" ) ? JOIN_FULL : JOIN_FIRST;
+
+			if ( side != JOIN_FIRST ) {
+
+				advance ( item );
 				accept_word ( item, "outer" );
 
 				if ( !expect_word ( item, "join" ) )
 					return false;
 
-				next = JOIN_LEFT;
+				next = side;
 
 				continue;
 
@@ -144,8 +152,8 @@ namespace sql {
 
 			}
 
-			if ( token_is ( item.current, "right" ) || token_is ( item.current, "full" ) || token_is ( item.current, "natural" ) )
-				return fail_here ( item, "this join is not supported yet, use LEFT JOIN or JOIN" );
+			if ( natural )
+				return fail_here ( item, "expected JOIN after NATURAL" );
 
 			break;
 
@@ -730,8 +738,15 @@ namespace sql {
 
 			if ( accept_word ( item, "collate" ) ) {
 
-				if ( !take_name ( item, "a collation name" ) )
+				const char* collation = take_name ( item, "a collation name" );
+
+				if ( !collation )
 					return false;
+
+				if ( base::same_folded ( collation, "nocase" ) )
+					out.nocase = true;
+				else if ( !base::same_folded ( collation, "binary" ) && !base::same_folded ( collation, "rtrim" ) )
+					return fail_here ( item, "only the BINARY and NOCASE collations are known" );
 
 				continue;
 
@@ -1170,6 +1185,16 @@ namespace sql {
 
 			}
 
+			if ( accept_word ( item, "drop" ) ) {
+
+				accept_word ( item, "column" );
+				made->kind = ALTER_DROP_COLUMN;
+				made->old_name = take_name ( item, "a column name" );
+
+				return made->old_name != nullptr;
+
+			}
+
 			if ( !expect_word ( item, "rename" ) )
 				return false;
 
@@ -1219,15 +1244,37 @@ namespace sql {
 			out.kind = STATEMENT_ROLLBACK;
 			accept_word ( item, "transaction" );
 
-			if ( token_is ( item.current, "to" ) )
-				return fail_here ( item, "savepoints are not supported yet" );
+			if ( accept_word ( item, "to" ) ) {
+
+				accept_word ( item, "savepoint" );
+				out.savepoint = take_name ( item, "a savepoint name" );
+
+				return out.savepoint != nullptr;
+
+			}
 
 			return true;
 
 		}
 
-		if ( token_is ( item.current, "savepoint" ) || token_is ( item.current, "release" ) )
-			return fail_here ( item, "savepoints are not supported yet" );
+		if ( accept_word ( item, "savepoint" ) ) {
+
+			out.kind = STATEMENT_SAVEPOINT;
+			out.savepoint = take_name ( item, "a savepoint name" );
+
+			return out.savepoint != nullptr;
+
+		}
+
+		if ( accept_word ( item, "release" ) ) {
+
+			out.kind = STATEMENT_RELEASE;
+			accept_word ( item, "savepoint" );
+			out.savepoint = take_name ( item, "a savepoint name" );
+
+			return out.savepoint != nullptr;
+
+		}
 
 		if ( accept_word ( item, "analyze" ) ) {
 

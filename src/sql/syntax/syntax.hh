@@ -73,6 +73,8 @@ namespace sql {
 		STATEMENT_EXPLAIN,
 		STATEMENT_ANALYZE,
 		STATEMENT_VACUUM,
+		STATEMENT_SAVEPOINT,
+		STATEMENT_RELEASE,
 
 	};
 
@@ -82,6 +84,8 @@ namespace sql {
 		JOIN_INNER,
 		JOIN_LEFT,
 		JOIN_CROSS,
+		JOIN_RIGHT,
+		JOIN_FULL,
 
 	};
 
@@ -121,6 +125,7 @@ namespace sql {
 		ALTER_ADD_COLUMN,
 		ALTER_RENAME_TABLE,
 		ALTER_RENAME_COLUMN,
+		ALTER_DROP_COLUMN,
 
 	};
 
@@ -204,6 +209,7 @@ namespace sql {
 		uint32_t offset;
 		window_spec* window;
 		int32_t window_index;
+		bool nocase;
 
 	};
 
@@ -226,6 +232,7 @@ namespace sql {
 		expression* on;
 		const char** using_names;
 		uint32_t using_count;
+		bool natural;
 
 	};
 
@@ -279,6 +286,7 @@ namespace sql {
 		const char* references;
 		const char* references_column;
 		foreign_action on_delete;
+		bool nocase;
 
 	};
 
@@ -388,6 +396,7 @@ namespace sql {
 		alter_statement* alter;
 		statement* inner;
 		bool query_plan;
+		const char* savepoint;
 		const char* text;
 		uint32_t text_size;
 		uint32_t parameter_count;

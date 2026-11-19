@@ -881,8 +881,22 @@ namespace sql {
 		} else
 			result = parse_primary ( item );
 
-		if ( result && accept_word ( item, "collate" ) && !take_name ( item, "a collation name" ) )
-			result = nullptr;
+		if ( result && accept_word ( item, "collate" ) ) {
+
+			const char* collation = take_name ( item, "a collation name" );
+
+			if ( !collation )
+				result = nullptr;
+			else if ( base::same_folded ( collation, "nocase" ) )
+				result->nocase = true;
+			else if ( !base::same_folded ( collation, "binary" ) && !base::same_folded ( collation, "rtrim" ) ) {
+
+				fail_here ( item, "only the BINARY and NOCASE collations are known" );
+				result = nullptr;
+
+			}
+
+		}
 
 		item.depth--;
 

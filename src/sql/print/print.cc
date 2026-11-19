@@ -479,6 +479,9 @@ namespace sql {
 		if ( column.unique )
 			out.add ( " UNIQUE" );
 
+		if ( column.nocase )
+			out.add ( " COLLATE NOCASE" );
+
 		if ( column.fallback ) {
 
 			out.add ( " DEFAULT " );

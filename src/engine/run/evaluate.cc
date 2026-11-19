@@ -92,7 +92,7 @@ namespace engine {
 
 		comparison_affinity ( *ctx.scratch, expression_affinity ( left ), expression_affinity ( right ), a, b );
 
-		return compare_with ( op, a, b );
+		return compare_with ( op, a, b, ( left && left->nocase ) || ( right && right->nocase ) );
 
 	}
 

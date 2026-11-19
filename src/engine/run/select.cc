@@ -8,8 +8,30 @@ namespace engine {
 		if ( pipe.distinct ) {
 
 			bool added = false;
+			storage::value* folded = nullptr;
 
-			if ( !set_add ( *ctx.memory, pipe.unique, values, pipe.width, added ) )
+			for ( uint32_t c = 0; pipe.outputs && c < pipe.width; c++ ) {
+
+				if ( !pipe.outputs [ c ] || !pipe.outputs [ c ]->nocase || values [ c ].kind != storage::VALUE_TEXT )
+					continue;
+
+				if ( !folded ) {
+
+					folded = ctx.scratch->make < storage::value > ( pipe.width );
+
+					if ( !folded )
+						return fail_run ( ctx, "out of memory" );
+
+					for ( uint32_t i = 0; i < pipe.width; i++ )
+						folded [ i ] = values [ i ];
+
+				}
+
+				folded [ c ] = folded_value ( *ctx.scratch, values [ c ] );
+
+			}
+
+			if ( !set_add ( *ctx.memory, pipe.unique, folded ? folded : values, pipe.width, added ) )
 				return fail_run ( ctx, "out of memory" );
 
 			if ( !added )
@@ -76,7 +98,7 @@ namespace engine {
 
 		for ( uint32_t k = 0; k < pipe.key_count; k++ ) {
 
-			int32_t order = order_values ( x.keys [ k ], y.keys [ k ] );
+			int32_t order = pipe.nocase && pipe.nocase [ k ] ? order_folded ( x.keys [ k ], y.keys [ k ] ) : order_values ( x.keys [ k ], y.keys [ k ] );
 
 			if ( order )
 				return pipe.descending [ k ] ? -order : order;
@@ -303,6 +325,9 @@ namespace engine {
 
 			if ( keys [ i ].kind == storage::VALUE_REAL && keys [ i ].real == static_cast < double > ( static_cast < int64_t > ( keys [ i ].real ) ) && keys [ i ].real > -9.2e18 && keys [ i ].real < 9.2e18 )
 				keys [ i ] = storage::integer_value ( static_cast < int64_t > ( keys [ i ].real ) );
+
+			if ( plan->group [ i ]->nocase )
+				keys [ i ] = folded_value ( *ctx.scratch, keys [ i ] );
 
 		}
 
@@ -684,6 +709,8 @@ namespace engine {
 		pipe.width = plan->output_count;
 		pipe.key_count = plan->order_by_index ? 0 : plan->order_count;
 		pipe.descending = plan->order_desc;
+		pipe.nocase = plan->order_nocase;
+		pipe.outputs = plan->outputs;
 		pipe.sorting = plan->order_count > 0 && !plan->order_by_index;
 		pipe.sink = sink;
 		pipe.skip = skip > 0 ? skip : 0;

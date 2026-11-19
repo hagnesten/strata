@@ -204,8 +204,10 @@ namespace engine {
 		const char** names;
 		sql::affinity_kind* affinities;
 		bool* hidden;
+		bool* nocase;
 		uint32_t width;
 		bool left;
+		bool right;
 		sql::expression** on_terms;
 		uint32_t on_count;
 		sql::expression** filters;
@@ -250,6 +252,7 @@ namespace engine {
 		sql::expression** order_values;
 		int32_t* order_output;
 		bool* order_desc;
+		bool* order_nocase;
 		uint32_t order_count;
 		sql::expression* limit;
 		sql::expression* offset;
@@ -432,6 +435,8 @@ namespace engine {
 		uint32_t width;
 		uint32_t key_count;
 		const bool* descending;
+		const bool* nocase;
+		sql::expression* const* outputs;
 		bool distinct;
 		bool sorting;
 		value_set unique;

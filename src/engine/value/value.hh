@@ -35,11 +35,15 @@ namespace engine {
 
 	int32_t order_values ( const storage::value& a, const storage::value& b );
 
-	truth_kind compare_with ( sql::operator_kind op, const storage::value& a, const storage::value& b );
+	int32_t order_folded ( const storage::value& a, const storage::value& b );
+
+	truth_kind compare_with ( sql::operator_kind op, const storage::value& a, const storage::value& b, bool folded = false );
 
 	bool like_match ( const uint8_t* pattern, size_t pattern_size, const uint8_t* text, size_t text_size, uint32_t escape, bool glob );
 
 	uint32_t hash_value ( const storage::value& item, uint32_t seed );
+
+	storage::value folded_value ( base::arena& memory, const storage::value& item );
 
 	bool same_value ( const storage::value& a, const storage::value& b );
 

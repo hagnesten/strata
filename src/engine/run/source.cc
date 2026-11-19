@@ -67,6 +67,9 @@ namespace engine {
 
 			sql::expression* term = terms [ t ];
 
+			if ( ( term->left && term->left->nocase ) || ( term->right && term->right->nocase ) || ( term->third && term->third->nocase ) )
+				continue;
+
 			if ( term->kind == sql::EXPRESSION_BINARY ) {
 
 				sql::operator_kind op = term->op;

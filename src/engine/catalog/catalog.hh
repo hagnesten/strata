@@ -19,6 +19,7 @@ namespace engine {
 		sql::affinity_kind affinity;
 		bool not_null;
 		bool rowid;
+		bool nocase;
 		sql::expression* fallback;
 		sql::expression* check;
 

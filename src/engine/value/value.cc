@@ -385,11 +385,32 @@ namespace engine {
 
 	}
 
-	truth_kind compare_with ( sql::operator_kind op, const storage::value& a, const storage::value& b ) {
+	int32_t order_folded ( const storage::value& a, const storage::value& b ) {
+
+		if ( a.kind != storage::VALUE_TEXT || b.kind != storage::VALUE_TEXT )
+			return order_values ( a, b );
+
+		size_t shared = a.size < b.size ? a.size : b.size;
+
+		for ( size_t i = 0; i < shared; i++ ) {
+
+			char x = base::lower ( static_cast < char > ( a.bytes [ i ] ) );
+			char y = base::lower ( static_cast < char > ( b.bytes [ i ] ) );
+
+			if ( x != y )
+				return static_cast < uint8_t > ( x ) < static_cast < uint8_t > ( y ) ? -1 : 1;
+
+		}
+
+		return a.size == b.size ? 0 : a.size < b.size ? -1 : 1;
+
+	}
+
+	truth_kind compare_with ( sql::operator_kind op, const storage::value& a, const storage::value& b, bool folded ) {
 
 		if ( op == sql::OPERATOR_IS || op == sql::OPERATOR_IS_NOT ) {
 
-			bool equal = ( a.kind == storage::VALUE_NULL && b.kind == storage::VALUE_NULL ) || ( a.kind != storage::VALUE_NULL && b.kind != storage::VALUE_NULL && order_values ( a, b ) == 0 );
+			bool equal = ( a.kind == storage::VALUE_NULL && b.kind == storage::VALUE_NULL ) || ( a.kind != storage::VALUE_NULL && b.kind != storage::VALUE_NULL && ( folded ? order_folded ( a, b ) : order_values ( a, b ) ) == 0 );
 
 			return ( op == sql::OPERATOR_IS ) == equal ? TRUTH_TRUE : TRUTH_FALSE;
 
@@ -398,7 +419,7 @@ namespace engine {
 		if ( a.kind == storage::VALUE_NULL || b.kind == storage::VALUE_NULL )
 			return TRUTH_NULL;
 
-		int32_t order = order_values ( a, b );
+		int32_t order = folded ? order_folded ( a, b ) : order_values ( a, b );
 		bool result = false;
 
 		switch ( op ) {
@@ -585,6 +606,23 @@ namespace engine {
 			return base::crc32c ( item.bytes, item.size, seed );
 
 		return seed;
+
+	}
+
+	storage::value folded_value ( base::arena& memory, const storage::value& item ) {
+
+		if ( item.kind != storage::VALUE_TEXT || !item.size )
+			return item;
+
+		char* folded = memory.make < char > ( item.size );
+
+		if ( !folded )
+			return item;
+
+		for ( size_t i = 0; i < item.size; i++ )
+			folded [ i ] = base::lower ( static_cast < char > ( item.bytes [ i ] ) );
+
+		return storage::text_value ( folded, item.size );
 
 	}
 
