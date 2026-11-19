@@ -660,6 +660,11 @@ namespace test {
 		base::release ( db );
 		forget_database ( path );
 
+		char shared [ FILE_PATH_ROOM ];
+
+		if ( expect ( scratch_path ( shared, sizeof ( shared ), "strata-test-shared.sdb" ), "a scratch path exists" ) )
+			concurrency_tests ( shared );
+
 	}
 
 }

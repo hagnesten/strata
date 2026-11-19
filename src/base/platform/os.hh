@@ -42,6 +42,16 @@ namespace base {
 
 		void close_file ( void* file );
 
+		void* map_file ( void* file, uint64_t offset, size_t size, void*& mapping );
+
+		void unmap_file ( void* view, size_t size, void* mapping );
+
+		bool lock_range ( void* file, uint64_t offset, uint64_t size, bool exclusive, bool wait );
+
+		void unlock_range ( void* file, uint64_t offset, uint64_t size );
+
+		void sleep_milliseconds ( uint32_t milliseconds );
+
 		bool erase_path ( const char* path );
 
 		bool replace_path ( const char* from, const char* to );

@@ -74,6 +74,8 @@
     <ClCompile Include="src\storage\pager\pager.cc" />
     <ClCompile Include="src\storage\pager\wal.cc" />
     <ClCompile Include="src\storage\pager\marks.cc" />
+    <ClCompile Include="src\storage\shared\index.cc" />
+    <ClInclude Include="src\storage\shared\shared.hh" />
     <ClCompile Include="src\storage\record\record.cc" />
     <ClCompile Include="src\storage\btree\btree.cc" />
     <ClCompile Include="src\storage\btree\estimate.cc" />

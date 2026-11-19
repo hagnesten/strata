@@ -5,10 +5,13 @@ namespace engine {
 	static void erase_database_files ( const char* path ) {
 
 		base::text log;
+		base::text index;
 
 		base::erase_path ( path );
 		log.add ( path ).add ( "-wal" );
+		index.add ( path ).add ( "-shm" );
 		base::erase_path ( log.value ( ) );
+		base::erase_path ( index.value ( ) );
 
 	}
 
@@ -125,9 +128,12 @@ namespace engine {
 		base::release ( fresh );
 
 		base::text log;
+		base::text index;
 
 		log.add ( path ).add ( "-wal" );
+		index.add ( path ).add ( "-shm" );
 		base::erase_path ( log.value ( ) );
+		base::erase_path ( index.value ( ) );
 
 		if ( !fine )
 			base::erase_path ( path );
@@ -140,6 +146,9 @@ namespace engine {
 
 		if ( item.in_transaction )
 			return fail_run ( ctx, "VACUUM cannot run inside a transaction" );
+
+		if ( !statement->into && !storage::pager_alone ( item.pages ) )
+			return fail_run ( ctx, "VACUUM needs every other connection to this database closed first" );
 
 		base::text target;
 

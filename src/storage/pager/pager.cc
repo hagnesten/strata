@@ -263,18 +263,18 @@ namespace storage {
 
 		}
 
-		fine = fine && open_wal ( out, page );
+		bool recovered = false;
 
-		uint64_t logged = 0;
+		fine = fine && open_wal ( out, page, recovered );
 
-		if ( fine && header_problem && !wal_find ( out, 1, logged ) ) {
+		if ( fine && header_problem && !recovered ) {
 
 			fail ( out, header_error, header_problem, 0, nullptr );
 			fine = false;
 
 		}
 
-		if ( fine && !out.wal.index_used && static_cast < uint64_t > ( out.header.page_count ) * PAGE_SIZE > base::file_size ( out.file ) ) {
+		if ( fine && !out.wal.snapshot.frames && static_cast < uint64_t > ( out.header.page_count ) * PAGE_SIZE > base::file_size ( out.file ) ) {
 
 			fail ( out, PAGER_CORRUPT, "the database file is shorter than its header says, ", out.header.page_count, " pages expected" );
 			fine = false;
@@ -297,8 +297,19 @@ namespace storage {
 
 	void close_pager ( pager& item ) {
 
-		if ( item.file.handle && item.wal.file.handle && !item.broken && !has_changes ( item ) )
-			checkpoint ( item );
+		if ( item.file.handle && item.wal.file.handle && item.wal.shared.header && !item.broken && !has_changes ( item ) && pager_alone ( item ) ) {
+
+			uint32_t busy = item.wal.busy_milliseconds;
+
+			item.wal.busy_milliseconds = 0;
+
+			if ( begin_write ( item ) )
+				checkpoint ( item );
+
+			item.wal.busy_milliseconds = busy;
+			end_write ( item );
+
+		}
 
 		close_wal ( item );
 		clear_marks ( item );
@@ -334,6 +345,8 @@ namespace storage {
 
 		page_frame* frame = find_frame ( item, number );
 
+		item.wal.read_any = true;
+
 		if ( frame ) {
 
 			frame->pins++;
@@ -357,6 +370,9 @@ namespace storage {
 		uint64_t logged = 0;
 		bool from_log = wal_find ( item, number, logged );
 		bool read = from_log ? base::read_at ( item.wal.file, logged + WAL_FRAME_HEADER, frame->data, PAGE_SIZE ) : base::read_at ( item.file, static_cast < uint64_t > ( number - 1 ) * PAGE_SIZE, frame->data, PAGE_SIZE );
+
+		if ( from_log && !wal_still_valid ( item ) )
+			read = base::read_at ( item.file, static_cast < uint64_t > ( number - 1 ) * PAGE_SIZE, frame->data, PAGE_SIZE );
 
 		if ( !read ) {
 
@@ -394,6 +410,9 @@ namespace storage {
 		page_frame* frame = nullptr;
 
 		item.shape++;
+
+		if ( !item.wal.writing && !begin_write ( item ) )
+			return nullptr;
 
 		if ( item.header.free_head ) {
 
@@ -522,8 +541,13 @@ namespace storage {
 
 		clear_marks ( item );
 
-		if ( !has_changes ( item ) )
+		if ( !has_changes ( item ) ) {
+
+			end_write ( item );
+
 			return true;
+
+		}
 
 		if ( item.broken ) {
 
@@ -575,8 +599,10 @@ namespace storage {
 		item.committed = item.header;
 		item.stats.commits++;
 
-		if ( item.wal.frames >= item.wal.checkpoint_frames && !checkpoint ( item ) )
+		if ( item.wal.snapshot.frames >= item.wal.checkpoint_frames && !checkpoint ( item ) )
 			item.broken = true;
+
+		end_write ( item );
 
 		return true;
 
@@ -585,6 +611,7 @@ namespace storage {
 	void rollback_pager ( pager& item ) {
 
 		item.shape++;
+		end_write ( item );
 
 		for ( uint32_t i = 0; i < item.frame_count; i++ ) {
 

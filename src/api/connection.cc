@@ -26,6 +26,9 @@ namespace api {
 		if ( item.parse_failed )
 			return STRATA_ERROR;
 
+		if ( item.pages.error == storage::PAGER_BUSY || contains ( problem, "the database is busy" ) || contains ( problem, "the database changed after" ) )
+			return STRATA_BUSY;
+
 		if ( item.pages.error == storage::PAGER_IO )
 			return STRATA_IOERR;
 

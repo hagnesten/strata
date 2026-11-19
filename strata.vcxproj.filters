@@ -187,6 +187,9 @@
     <Filter Include="src\base\platform">
       <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F10}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\storage\shared">
+      <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F16}</UniqueIdentifier>
+    </Filter>
     <Filter Include="include">
       <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F13}</UniqueIdentifier>
     </Filter>
@@ -249,6 +252,8 @@
     <ClCompile Include="src\storage\pager\pager.cc"><Filter>src\storage\pager</Filter></ClCompile>
     <ClCompile Include="src\storage\pager\wal.cc"><Filter>src\storage\pager</Filter></ClCompile>
     <ClCompile Include="src\storage\pager\marks.cc"><Filter>src\storage\pager</Filter></ClCompile>
+    <ClCompile Include="src\storage\shared\index.cc"><Filter>src\storage\shared</Filter></ClCompile>
+    <ClInclude Include="src\storage\shared\shared.hh"><Filter>src\storage\shared</Filter></ClInclude>
     <ClCompile Include="src\test\storage\crash_test.cc"><Filter>src\test\storage</Filter></ClCompile>
     <ClCompile Include="src\storage\record\record.cc"><Filter>src\storage\record</Filter></ClCompile>
     <ClCompile Include="src\storage\btree\btree.cc"><Filter>src\storage\btree</Filter></ClCompile>
@@ -278,6 +283,7 @@
     <ClCompile Include="src\test\engine\check_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\test\engine\prepared_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\test\engine\limit_test.cc"><Filter>src\test\engine</Filter></ClCompile>
+    <ClCompile Include="src\test\engine\concurrency_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\engine\catalog\statistics.cc"><Filter>src\engine\catalog</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\analyze.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\storage\btree\estimate.cc"><Filter>src\storage\btree</Filter></ClCompile>

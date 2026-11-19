@@ -52,7 +52,7 @@ namespace base {
 			if ( !wide_path ( path, wide, FILE_PATH_ROOM ) )
 				return false;
 
-			HANDLE handle = write ? CreateFileW ( wide, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr, create ? OPEN_ALWAYS : OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS, nullptr ) : CreateFileW ( wide, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr );
+			HANDLE handle = write ? CreateFileW ( wide, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, create ? OPEN_ALWAYS : OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS, nullptr ) : CreateFileW ( wide, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr );
 
 			if ( handle == INVALID_HANDLE_VALUE )
 				return false;
@@ -130,6 +130,63 @@ namespace base {
 		void close_file ( void* file ) {
 
 			CloseHandle ( file );
+
+		}
+
+		void* map_file ( void* file, uint64_t offset, size_t size, void*& mapping ) {
+
+			uint64_t end = offset + size;
+
+			mapping = CreateFileMappingW ( file, nullptr, PAGE_READWRITE, static_cast < DWORD > ( end >> 32 ), static_cast < DWORD > ( end ), nullptr );
+
+			if ( !mapping )
+				return nullptr;
+
+			void* view = MapViewOfFile ( mapping, FILE_MAP_READ | FILE_MAP_WRITE, static_cast < DWORD > ( offset >> 32 ), static_cast < DWORD > ( offset ), size );
+
+			if ( !view ) {
+
+				CloseHandle ( mapping );
+				mapping = nullptr;
+
+			}
+
+			return view;
+
+		}
+
+		void unmap_file ( void* view, size_t size, void* mapping ) {
+
+			( void ) size;
+
+			if ( view )
+				UnmapViewOfFile ( view );
+
+			if ( mapping )
+				CloseHandle ( mapping );
+
+		}
+
+		bool lock_range ( void* file, uint64_t offset, uint64_t size, bool exclusive, bool wait ) {
+
+			OVERLAPPED place = at_offset ( offset );
+			DWORD flags = ( exclusive ? LOCKFILE_EXCLUSIVE_LOCK : 0 ) | ( wait ? 0 : LOCKFILE_FAIL_IMMEDIATELY );
+
+			return LockFileEx ( file, flags, 0, static_cast < DWORD > ( size ), static_cast < DWORD > ( size >> 32 ), &place ) != 0;
+
+		}
+
+		void unlock_range ( void* file, uint64_t offset, uint64_t size ) {
+
+			OVERLAPPED place = at_offset ( offset );
+
+			UnlockFileEx ( file, 0, static_cast < DWORD > ( size ), static_cast < DWORD > ( size >> 32 ), &place );
+
+		}
+
+		void sleep_milliseconds ( uint32_t milliseconds ) {
+
+			Sleep ( milliseconds );
 
 		}
 

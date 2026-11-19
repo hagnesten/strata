@@ -62,6 +62,8 @@
     <ClCompile Include="src\storage\pager\pager.cc" />
     <ClCompile Include="src\storage\pager\wal.cc" />
     <ClCompile Include="src\storage\pager\marks.cc" />
+    <ClCompile Include="src\storage\shared\index.cc" />
+    <ClInclude Include="src\storage\shared\shared.hh" />
     <ClCompile Include="src\test\storage\crash_test.cc" />
     <ClCompile Include="src\storage\record\record.cc" />
     <ClCompile Include="src\storage\btree\btree.cc" />
@@ -90,6 +92,7 @@
     <ClCompile Include="src\test\engine\check_test.cc" />
     <ClCompile Include="src\test\engine\prepared_test.cc" />
     <ClCompile Include="src\test\engine\limit_test.cc" />
+    <ClCompile Include="src\test\engine\concurrency_test.cc" />
     <ClCompile Include="src\engine\catalog\statistics.cc" />
     <ClCompile Include="src\engine\schema\analyze.cc" />
     <ClCompile Include="src\storage\btree\estimate.cc" />

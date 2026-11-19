@@ -118,6 +118,9 @@ namespace storage {
 
 		mark_stack& stack = item.marks;
 
+		if ( !item.wal.writing && !begin_write ( item ) )
+			return false;
+
 		if ( !frame->dirty ) {
 
 			frame->dirty = true;

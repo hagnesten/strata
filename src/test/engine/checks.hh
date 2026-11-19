@@ -37,4 +37,6 @@ namespace test {
 
 	void limit_tests ( engine::database& db );
 
+	void concurrency_tests ( const char* path );
+
 }

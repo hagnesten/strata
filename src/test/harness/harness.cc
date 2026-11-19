@@ -57,10 +57,13 @@ namespace test {
 	void forget_database ( const char* path ) {
 
 		base::text log;
+		base::text index;
 
 		base::erase_path ( path );
 		log.add ( path ).add ( "-wal" );
+		index.add ( path ).add ( "-shm" );
 		base::erase_path ( log.value ( ) );
+		base::erase_path ( index.value ( ) );
 
 	}
 

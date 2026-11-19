@@ -58,6 +58,9 @@
     <Filter Include="src\storage\btree">
       <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B13}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\storage\shared">
+      <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B24}</UniqueIdentifier>
+    </Filter>
     <Filter Include="src\sql">
       <UniqueIdentifier>{9D4F2B61-5C3E-4A87-B1D0-6E2F8A9C3B14}</UniqueIdentifier>
     </Filter>
@@ -139,6 +142,8 @@
     <ClCompile Include="src\storage\pager\pager.cc"><Filter>src\storage\pager</Filter></ClCompile>
     <ClCompile Include="src\storage\pager\wal.cc"><Filter>src\storage\pager</Filter></ClCompile>
     <ClCompile Include="src\storage\pager\marks.cc"><Filter>src\storage\pager</Filter></ClCompile>
+    <ClCompile Include="src\storage\shared\index.cc"><Filter>src\storage\shared</Filter></ClCompile>
+    <ClInclude Include="src\storage\shared\shared.hh"><Filter>src\storage\shared</Filter></ClInclude>
     <ClCompile Include="src\storage\record\record.cc"><Filter>src\storage\record</Filter></ClCompile>
     <ClCompile Include="src\storage\btree\btree.cc"><Filter>src\storage\btree</Filter></ClCompile>
     <ClCompile Include="src\storage\btree\estimate.cc"><Filter>src\storage\btree</Filter></ClCompile>

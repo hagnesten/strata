@@ -72,7 +72,7 @@ namespace base {
 
 		}
 
-		linux_calls::call3 ( 10, reinterpret_cast < long > ( item->stack ), 4096, 0 );
+		linux_calls::call3 ( LINUX_MPROTECT, reinterpret_cast < long > ( item->stack ), 4096, LINUX_PROT_NONE );
 
 		uint64_t* top = reinterpret_cast < uint64_t* > ( static_cast < uint8_t* > ( item->stack ) + item->stack_size );
 

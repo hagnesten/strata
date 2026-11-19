@@ -4,115 +4,60 @@
 
 namespace storage {
 
-	static uint32_t slot_for ( uint32_t page, uint32_t room ) {
+	static uint64_t frame_offset ( uint32_t frame ) {
 
-		return page * 2654435761u & ( room - 1 );
-
-	}
-
-	static bool index_put ( wal_state& wal, uint32_t page, uint64_t offset ) {
-
-		if ( ( wal.index_used + 1 ) * 10 > wal.index_room * 7 ) {
-
-			uint32_t room = wal.index_room ? wal.index_room * 2 : 1024;
-			wal_entry* grown = base::make < wal_entry > ( room );
-
-			if ( !grown )
-				return false;
-
-			for ( uint32_t i = 0; i < wal.index_room; i++ ) {
-
-				if ( !wal.index [ i ].page )
-					continue;
-
-				uint32_t at = slot_for ( wal.index [ i ].page, room );
-
-				while ( grown [ at ].page )
-					at = ( at + 1 ) & ( room - 1 );
-
-				grown [ at ] = wal.index [ i ];
-
-			}
-
-			base::release ( wal.index );
-			wal.index = grown;
-			wal.index_room = room;
-
-		}
-
-		uint32_t at = slot_for ( page, wal.index_room );
-
-		while ( wal.index [ at ].page && wal.index [ at ].page != page )
-			at = ( at + 1 ) & ( wal.index_room - 1 );
-
-		if ( !wal.index [ at ].page )
-			wal.index_used++;
-
-		wal.index [ at ] = { page, offset };
-
-		return true;
+		return WAL_HEADER + static_cast < uint64_t > ( frame ) * WAL_FRAME;
 
 	}
 
-	bool wal_find ( const pager& item, uint32_t number, uint64_t& offset ) {
+	static void to_state ( const database_header& header, shared_state_header& out ) {
 
-		const wal_state& wal = item.wal;
-
-		if ( !wal.index_used )
-			return false;
-
-		uint32_t at = slot_for ( number, wal.index_room );
-
-		while ( wal.index [ at ].page ) {
-
-			if ( wal.index [ at ].page == number ) {
-
-				offset = wal.index [ at ].offset;
-
-				return true;
-
-			}
-
-			at = ( at + 1 ) & ( wal.index_room - 1 );
-
-		}
-
-		return false;
+		out.page_size = header.page_size;
+		out.page_count = header.page_count;
+		out.free_head = header.free_head;
+		out.free_count = header.free_count;
+		out.schema_root = header.schema_root;
+		out.schema_version = header.schema_version;
+		out.change = header.change;
 
 	}
 
-	static void index_clear ( wal_state& wal ) {
+	static void from_state ( const shared_state_header& state, database_header& out ) {
 
-		if ( wal.index )
-			base::fill ( wal.index, 0, sizeof ( wal_entry ) * wal.index_room );
-
-		wal.index_used = 0;
+		out.page_size = state.page_size;
+		out.page_count = state.page_count;
+		out.free_head = state.free_head;
+		out.free_count = state.free_count;
+		out.schema_root = state.schema_root;
+		out.schema_version = state.schema_version;
+		out.change = state.change;
 
 	}
 
-	static void encode_wal_header ( wal_state& wal, uint8_t* out ) {
+	static void encode_wal_header ( const shared_snapshot& snapshot, uint8_t* out, uint32_t& chain ) {
 
 		base::fill ( out, 0, WAL_HEADER );
 		base::copy ( out, WAL_MAGIC, 8 );
 		base::write32 ( out + 8, 1 );
 		base::write32 ( out + 12, PAGE_SIZE );
-		base::write32 ( out + 16, wal.salt [ 0 ] );
-		base::write32 ( out + 20, wal.salt [ 1 ] );
-		base::write32 ( out + 24, wal.sequence );
+		base::write32 ( out + 16, snapshot.salt [ 0 ] );
+		base::write32 ( out + 20, snapshot.salt [ 1 ] );
+		base::write32 ( out + 24, snapshot.wal_sequence );
 		base::write32 ( out + 28, base::crc32c ( out, 28 ) );
-		wal.chain = base::read32 ( out + 28 );
+		chain = base::read32 ( out + 28 );
 
 	}
 
-	static bool fresh_log ( pager& item, bool flush = true ) {
+	static bool fresh_log ( pager& item, shared_snapshot& snapshot, bool flush ) {
 
 		wal_state& wal = item.wal;
 		uint8_t header [ WAL_HEADER ];
+		uint32_t chain = 0;
 
-		wal.salt [ 0 ]++;
-		wal.salt [ 1 ] = static_cast < uint32_t > ( base::os::ticks ( ) ) ^ wal.salt [ 1 ] * 2654435761u ^ base::os::process_id ( );
-		wal.sequence++;
-		encode_wal_header ( wal, header );
+		snapshot.salt [ 0 ]++;
+		snapshot.salt [ 1 ] = static_cast < uint32_t > ( base::os::ticks ( ) ) ^ snapshot.salt [ 1 ] * 2654435761u ^ base::os::process_id ( );
+		snapshot.wal_sequence++;
+		encode_wal_header ( snapshot, header, chain );
 
 		bool shrink = base::file_size ( wal.file ) > WAL_KEEP_BYTES;
 
@@ -124,125 +69,110 @@ namespace storage {
 
 		}
 
-		wal.end = WAL_HEADER;
-		wal.frames = 0;
-		index_clear ( wal );
+		snapshot.chain = chain;
+		snapshot.wal_end = WAL_HEADER;
+		snapshot.frames = 0;
+		snapshot.backfilled = 0;
 
 		return true;
 
 	}
 
-	static bool recover ( pager& item ) {
+	static bool recover ( pager& item, shared_snapshot& snapshot ) {
 
 		wal_state& wal = item.wal;
 		uint8_t header [ WAL_HEADER ];
 		uint64_t size = base::file_size ( wal.file );
 
 		if ( size < WAL_HEADER || !base::read_at ( wal.file, 0, header, WAL_HEADER ) || !base::same_bytes ( header, WAL_MAGIC, 8 ) || base::read32 ( header + 8 ) != 1 || base::read32 ( header + 12 ) != PAGE_SIZE || base::read32 ( header + 28 ) != base::crc32c ( header, 28 ) )
-			return fresh_log ( item );
+			return fresh_log ( item, snapshot, true );
 
-		wal.salt [ 0 ] = base::read32 ( header + 16 );
-		wal.salt [ 1 ] = base::read32 ( header + 20 );
-		wal.sequence = base::read32 ( header + 24 );
-		wal.chain = base::read32 ( header + 28 );
+		snapshot.salt [ 0 ] = base::read32 ( header + 16 );
+		snapshot.salt [ 1 ] = base::read32 ( header + 20 );
+		snapshot.wal_sequence = base::read32 ( header + 24 );
+		snapshot.chain = base::read32 ( header + 28 );
+		snapshot.wal_end = WAL_HEADER;
+		snapshot.frames = 0;
 
 		uint8_t* frame = base::make < uint8_t > ( WAL_FRAME );
-		uint32_t pending_room = 1024;
-		wal_entry* pending = base::make < wal_entry > ( pending_room );
+		uint32_t possible = static_cast < uint32_t > ( ( size - WAL_HEADER ) / WAL_FRAME );
 
-		if ( !frame || !pending ) {
+		if ( !frame || !shared_clear ( wal.shared, possible ) ) {
 
 			base::release ( frame );
-			base::release ( pending );
 			fail ( item, PAGER_MEMORY, "out of memory while reading the log", 0, nullptr );
 
 			return false;
 
 		}
 
-		uint64_t offset = WAL_HEADER;
-		uint64_t committed_end = WAL_HEADER;
-		uint32_t committed_chain = wal.chain;
-		uint32_t chain = wal.chain;
-		uint32_t waiting = 0;
-		uint32_t kept = 0;
+		uint32_t chain = snapshot.chain;
+		uint32_t index = 0;
 		bool fine = true;
 
-		while ( fine && offset + WAL_FRAME <= size && base::read_at ( wal.file, offset, frame, WAL_FRAME ) ) {
+		while ( fine && frame_offset ( index ) + WAL_FRAME <= size && base::read_at ( wal.file, frame_offset ( index ), frame, WAL_FRAME ) ) {
 
 			uint32_t page = base::read32 ( frame );
 			uint32_t commit = base::read32 ( frame + 4 );
 			uint32_t check = base::crc32c ( frame + WAL_FRAME_HEADER, PAGE_SIZE, base::crc32c ( frame, 16, chain ) );
 
-			if ( base::read32 ( frame + 8 ) != wal.salt [ 0 ] || base::read32 ( frame + 12 ) != wal.salt [ 1 ] || base::read32 ( frame + 16 ) != check || !page )
+			if ( base::read32 ( frame + 8 ) != snapshot.salt [ 0 ] || base::read32 ( frame + 12 ) != snapshot.salt [ 1 ] || base::read32 ( frame + 16 ) != check || !page )
 				break;
 
-			if ( waiting == pending_room ) {
+			if ( !shared_append ( wal.shared, index, page ) ) {
 
-				wal_entry* grown = base::make < wal_entry > ( pending_room * 2 );
+				fine = false;
 
-				if ( !grown ) {
-
-					fine = false;
-
-					break;
-
-				}
-
-				base::copy ( grown, pending, sizeof ( wal_entry ) * waiting );
-				base::release ( pending );
-				pending = grown;
-				pending_room *= 2;
+				break;
 
 			}
 
-			pending [ waiting++ ] = { page, offset };
 			chain = check;
-			offset += WAL_FRAME;
+			index++;
 
 			if ( commit ) {
 
-				for ( uint32_t i = 0; i < waiting && fine; i++ )
-					fine = index_put ( wal, pending [ i ].page, pending [ i ].offset );
+				database_header decoded = { };
 
-				kept += waiting;
-				waiting = 0;
-				committed_end = offset;
-				committed_chain = chain;
+				if ( page == 1 && page_intact ( frame + WAL_FRAME_HEADER, 1 ) && decode_header ( frame + WAL_FRAME_HEADER, decoded ) )
+					to_state ( decoded, snapshot.state );
+
+				snapshot.frames = index;
+				snapshot.wal_end = frame_offset ( index );
+				snapshot.chain = chain;
 
 			}
 
 		}
 
 		base::release ( frame );
-		base::release ( pending );
 
 		if ( !fine ) {
 
-			fail ( item, PAGER_MEMORY, "out of memory while reading the log", 0, nullptr );
+			fail ( item, PAGER_MEMORY, "the shared log index is full", 0, nullptr );
 
 			return false;
 
 		}
 
-		wal.end = committed_end;
-		wal.chain = committed_chain;
-		wal.frames = kept;
-		item.stats.recovered_frames = kept;
+		item.stats.recovered_frames = snapshot.frames;
 
 		return true;
 
 	}
 
-	bool open_wal ( pager& item, uint8_t* page ) {
+	bool open_wal ( pager& item, uint8_t* page, bool& recovered ) {
 
 		wal_state& wal = item.wal;
-
 		base::text path;
+		bool first = false;
 
+		( void ) page;
+		recovered = false;
 		path.add ( item.path ).add ( "-wal" );
 		base::copy_text ( wal.path, sizeof ( wal.path ), path.value ( ) );
 		wal.checkpoint_frames = WAL_CHECKPOINT_FRAMES;
+		wal.busy_milliseconds = SHARED_BUSY_MILLISECONDS;
 
 		if ( !base::open_file ( wal.file, wal.path, true ) ) {
 
@@ -252,23 +182,239 @@ namespace storage {
 
 		}
 
-		if ( !recover ( item ) )
-			return false;
+		if ( !open_shared ( wal.shared, item.path, first ) ) {
 
-		uint64_t offset = 0;
-
-		if ( !wal_find ( item, 1, offset ) )
-			return true;
-
-		if ( !base::read_at ( wal.file, offset + WAL_FRAME_HEADER, page, PAGE_SIZE ) || !page_intact ( page, 1 ) || !decode_header ( page, item.header ) ) {
-
-			fail ( item, PAGER_CORRUPT, "the newest header in the log is damaged", 0, nullptr );
+			fail ( item, PAGER_IO, "the shared log index could not be opened", 0, nullptr );
 
 			return false;
 
 		}
 
+		if ( first ) {
+
+			shared_snapshot snapshot = { };
+
+			snapshot.generation = wal.shared.header->magic == SHARED_MAGIC ? wal.shared.header->generation + 1 : 1;
+			snapshot.salt [ 0 ] = wal.shared.header->magic == SHARED_MAGIC ? wal.shared.header->salt [ 0 ] : 0;
+			to_state ( item.header, snapshot.state );
+
+			if ( !recover ( item, snapshot ) )
+				return false;
+
+			snapshot.backfilled = 0;
+			wal.shared.header->checkpointing = 0;
+			publish_snapshot ( wal.shared, snapshot );
+			share_presence ( wal.shared );
+
+		} else if ( wal.shared.header->magic != SHARED_MAGIC ) {
+
+			fail ( item, PAGER_FORMAT, "the shared log index is not ready", 0, nullptr );
+
+			return false;
+
+		}
+
+		read_snapshot ( wal.shared, wal.snapshot );
+
+		if ( wal.snapshot.frames ) {
+
+			from_state ( wal.snapshot.state, item.header );
+			recovered = true;
+
+		}
+
 		return true;
+
+	}
+
+	bool wal_still_valid ( pager& item ) {
+
+		return __atomic_load_n ( &item.wal.shared.header->generation, __ATOMIC_ACQUIRE ) == item.wal.snapshot.generation;
+
+	}
+
+	bool wal_find ( pager& item, uint32_t number, uint64_t& offset ) {
+
+		if ( !item.wal.shared.header )
+			return false;
+
+		if ( !item.wal.reading && !begin_read ( item ) )
+			return false;
+
+		item.wal.read_any = true;
+
+		uint32_t frame = 0;
+
+		if ( !shared_find ( item.wal.shared, number, item.wal.snapshot.frames, frame ) )
+			return false;
+
+		offset = frame_offset ( frame );
+
+		return true;
+
+	}
+
+	static void forget_cached ( pager& item, const shared_snapshot& latest ) {
+
+		const shared_snapshot& mine = item.wal.snapshot;
+
+		if ( latest.generation == mine.generation && latest.frames == mine.frames )
+			return;
+
+		bool everything = latest.generation != mine.generation || latest.frames < mine.frames || latest.frames - mine.frames > item.frame_count;
+
+		if ( !everything ) {
+
+			for ( uint32_t f = mine.frames; f < latest.frames; f++ ) {
+
+				shared_segment* segment = nullptr;
+
+				if ( !shared_segment_at ( item.wal.shared, f / SHARED_SEGMENT_FRAMES, segment ) ) {
+
+					everything = true;
+
+					break;
+
+				}
+
+				uint32_t number = segment->pages [ f % SHARED_SEGMENT_FRAMES ];
+
+				for ( page_frame* frame = item.buckets [ number * 2654435761u >> 20 & ( PAGER_BUCKETS - 1 ) ]; frame; frame = frame->chain ) {
+
+					if ( frame->number == number && !frame->dirty && !frame->pins ) {
+
+						discard_frame ( item, frame );
+
+						break;
+
+					}
+
+				}
+
+			}
+
+		}
+
+		if ( everything )
+			for ( uint32_t i = 0; i < item.frame_count; i++ )
+				if ( item.frames [ i ]->number && !item.frames [ i ]->dirty && !item.frames [ i ]->pins )
+					discard_frame ( item, item.frames [ i ] );
+
+		item.shape++;
+
+	}
+
+	static void adopt ( pager& item, const shared_snapshot& latest ) {
+
+		forget_cached ( item, latest );
+		item.wal.snapshot = latest;
+		from_state ( latest.state, item.header );
+		item.committed = item.header;
+
+	}
+
+	bool begin_read ( pager& item ) {
+
+		if ( item.wal.reading || !item.wal.shared.header )
+			return true;
+
+		shared_snapshot latest;
+
+		register_reader ( item.wal.shared, latest );
+
+		if ( !item.wal.writing )
+			adopt ( item, latest );
+
+		item.wal.reading = true;
+		item.wal.read_any = false;
+
+		return true;
+
+	}
+
+	void end_read ( pager& item ) {
+
+		if ( !item.wal.reading || item.wal.writing )
+			return;
+
+		release_reader ( item.wal.shared );
+		item.wal.reading = false;
+		item.wal.read_any = false;
+
+	}
+
+	bool begin_write ( pager& item ) {
+
+		wal_state& wal = item.wal;
+
+		if ( wal.writing || !wal.shared.header )
+			return true;
+
+		if ( !wal.reading ) {
+
+			if ( !take_write_lock ( wal.shared, wal.busy_milliseconds ) ) {
+
+				fail ( item, PAGER_BUSY, "the database is busy, another connection is writing", 0, nullptr );
+
+				return false;
+
+			}
+
+			begin_read ( item );
+			wal.writing = true;
+
+			return true;
+
+		}
+
+		if ( !take_write_lock ( wal.shared, wal.busy_milliseconds ) ) {
+
+			fail ( item, PAGER_BUSY, "the database is busy, another connection is writing", 0, nullptr );
+
+			return false;
+
+		}
+
+		shared_snapshot latest;
+
+		read_snapshot ( wal.shared, latest );
+
+		if ( latest.generation != wal.snapshot.generation || latest.frames != wal.snapshot.frames ) {
+
+			if ( wal.read_any || has_changes ( item ) ) {
+
+				drop_write_lock ( wal.shared );
+				fail ( item, PAGER_BUSY, "the database changed after this transaction read it, start the transaction again", 0, nullptr );
+
+				return false;
+
+			}
+
+			adopt ( item, latest );
+			__atomic_store_n ( &wal.shared.header->reader_generations [ wal.shared.slot ], latest.generation, __ATOMIC_RELAXED );
+			__atomic_store_n ( &wal.shared.header->readers [ wal.shared.slot ], latest.frames, __ATOMIC_RELEASE );
+
+		}
+
+		wal.writing = true;
+
+		return true;
+
+	}
+
+	void end_write ( pager& item ) {
+
+		if ( !item.wal.writing )
+			return;
+
+		drop_write_lock ( item.wal.shared );
+		item.wal.writing = false;
+
+	}
+
+	bool pager_alone ( pager& item ) {
+
+		return !item.wal.shared.header || alone ( item.wal.shared );
 
 	}
 
@@ -289,14 +435,15 @@ namespace storage {
 	bool wal_commit ( pager& item, const uint8_t* header_page ) {
 
 		wal_state& wal = item.wal;
+		shared_snapshot& snapshot = wal.snapshot;
 
-		if ( !ready_batch ( item ) )
+		if ( !begin_write ( item ) || !ready_batch ( item ) )
 			return false;
 
-		uint32_t chain = wal.chain;
+		uint32_t chain = snapshot.chain;
 		uint32_t written = 0;
 		uint32_t pending = 0;
-		uint64_t at_offset = wal.end;
+		uint64_t at_offset = snapshot.wal_end;
 		bool fine = true;
 
 		for ( uint32_t i = 0; i <= item.frame_count && fine; i++ ) {
@@ -326,8 +473,8 @@ namespace storage {
 
 			base::write32 ( at, number );
 			base::write32 ( at + 4, number == 1 ? item.header.page_count : 0 );
-			base::write32 ( at + 8, wal.salt [ 0 ] );
-			base::write32 ( at + 12, wal.salt [ 1 ] );
+			base::write32 ( at + 8, snapshot.salt [ 0 ] );
+			base::write32 ( at + 12, snapshot.salt [ 1 ] );
 			base::write32 ( at + 20, 0 );
 			base::copy ( at + WAL_FRAME_HEADER, data, PAGE_SIZE );
 			chain = base::crc32c ( at + WAL_FRAME_HEADER, PAGE_SIZE, base::crc32c ( at, 16, chain ) );
@@ -357,7 +504,7 @@ namespace storage {
 
 		}
 
-		uint64_t offset = wal.end;
+		uint32_t next = snapshot.frames;
 
 		for ( uint32_t i = 0; i < item.frame_count && fine; i++ ) {
 
@@ -366,21 +513,37 @@ namespace storage {
 			if ( frame->number <= 1 || !frame->dirty )
 				continue;
 
-			fine = index_put ( wal, frame->number, offset );
-			offset += WAL_FRAME;
+			fine = shared_append ( wal.shared, next++, frame->number );
 
 		}
 
-		fine = fine && index_put ( wal, 1, offset );
-		wal.end = at_offset;
-		wal.chain = chain;
-		wal.frames += written;
+		fine = fine && shared_append ( wal.shared, next++, 1 );
+
+		if ( !fine ) {
+
+			item.broken = true;
+			fail ( item, PAGER_MEMORY, "the shared log index is full, reopen the database", 0, nullptr );
+
+			return false;
+
+		}
+
+		snapshot.frames = next;
+		snapshot.wal_end = at_offset;
+		snapshot.chain = chain;
+		to_state ( item.header, snapshot.state );
+		publish_snapshot ( wal.shared, snapshot );
+
+		if ( wal.reading ) {
+
+			__atomic_store_n ( &wal.shared.header->reader_generations [ wal.shared.slot ], snapshot.generation, __ATOMIC_RELAXED );
+			__atomic_store_n ( &wal.shared.header->readers [ wal.shared.slot ], snapshot.frames, __ATOMIC_RELEASE );
+
+		}
+
 		item.stats.writes += written;
 
-		if ( !fine )
-			fail ( item, PAGER_MEMORY, "out of memory while indexing the log", 0, nullptr );
-
-		return fine;
+		return true;
 
 	}
 
@@ -392,7 +555,7 @@ namespace storage {
 				wal_entry held = items [ i ];
 				uint32_t k = i;
 
-				while ( k >= gap && items [ k - gap ].page > held.page ) {
+				while ( k >= gap && ( items [ k - gap ].page > held.page || ( items [ k - gap ].page == held.page && items [ k - gap ].frame > held.frame ) ) ) {
 
 					items [ k ] = items [ k - gap ];
 					k -= gap;
@@ -405,14 +568,11 @@ namespace storage {
 
 	}
 
-	bool checkpoint ( pager& item ) {
+	static bool backfill ( pager& item, uint32_t from, uint32_t to, bool latest ) {
 
 		wal_state& wal = item.wal;
-
-		if ( !wal.index_used )
-			return true;
-
-		wal_entry* entries = base::make < wal_entry > ( wal.index_used + 1 );
+		uint32_t count = to - from;
+		wal_entry* entries = base::make < wal_entry > ( count + 1 );
 
 		if ( !entries || !ready_batch ( item ) ) {
 
@@ -423,23 +583,44 @@ namespace storage {
 
 		}
 
-		uint32_t count = 0;
+		for ( uint32_t f = from; f < to; f++ ) {
 
-		for ( uint32_t i = 0; i < wal.index_room; i++ )
-			if ( wal.index [ i ].page && wal.index [ i ].page <= item.committed.page_count )
-				entries [ count++ ] = wal.index [ i ];
+			shared_segment* segment = nullptr;
+
+			if ( !shared_segment_at ( wal.shared, f / SHARED_SEGMENT_FRAMES, segment ) ) {
+
+				base::release ( entries );
+				fail ( item, PAGER_IO, "the shared log index could not be read", 0, nullptr );
+
+				return false;
+
+			}
+
+			entries [ f - from ] = { segment->pages [ f % SHARED_SEGMENT_FRAMES ], f };
+
+		}
 
 		sort_entries ( entries, count );
+
+		uint32_t kept = 0;
+
+		for ( uint32_t i = 0; i < count; i++ )
+			if ( i + 1 == count || entries [ i + 1 ].page != entries [ i ].page )
+				entries [ kept++ ] = entries [ i ];
 
 		bool fine = true;
 		uint32_t run = 0;
 		uint32_t first = 0;
 
-		for ( uint32_t i = 0; i < count && fine; i++ ) {
+		for ( uint32_t i = 0; i < kept && fine; i++ ) {
 
 			const wal_entry& entry = entries [ i ];
+
+			if ( !entry.page || entry.page > item.committed.page_count )
+				continue;
+
 			uint8_t* slot = wal.batch + static_cast < size_t > ( run ) * PAGE_SIZE;
-			page_frame* frame = cached_frame ( item, entry.page );
+			page_frame* frame = latest ? cached_frame ( item, entry.page ) : nullptr;
 
 			if ( !run )
 				first = entry.page;
@@ -447,11 +628,11 @@ namespace storage {
 			if ( frame && !frame->dirty && frame->number != 1 )
 				base::copy ( slot, frame->data, PAGE_SIZE );
 			else
-				fine = base::read_at ( wal.file, entry.offset + WAL_FRAME_HEADER, slot, PAGE_SIZE );
+				fine = base::read_at ( wal.file, frame_offset ( entry.frame ) + WAL_FRAME_HEADER, slot, PAGE_SIZE );
 
 			run++;
 
-			bool last = i + 1 == count || entries [ i + 1 ].page != entry.page + 1 || run == WAL_BATCH;
+			bool last = i + 1 == kept || entries [ i + 1 ].page != entry.page + 1 || run == WAL_BATCH;
 
 			if ( fine && last ) {
 
@@ -466,34 +647,89 @@ namespace storage {
 
 		uint64_t wanted = static_cast < uint64_t > ( item.committed.page_count ) * PAGE_SIZE;
 
-		fine = fine && ( base::file_size ( item.file ) == wanted || base::truncate_file ( item.file, wanted ) ) && base::sync_file ( item.file );
+		fine = fine && ( base::file_size ( item.file ) >= wanted || base::truncate_file ( item.file, wanted ) ) && base::sync_file ( item.file );
 
-		if ( !fine ) {
-
+		if ( !fine )
 			fail ( item, PAGER_IO, "the checkpoint could not write the database file", 0, nullptr );
 
-			return false;
+		return fine;
+
+	}
+
+	bool checkpoint ( pager& item ) {
+
+		wal_state& wal = item.wal;
+		shared_snapshot& snapshot = wal.snapshot;
+
+		if ( !wal.shared.header || !wal.writing || !snapshot.frames )
+			return true;
+
+		if ( !base::os::lock_range ( wal.shared.file, SHARED_LOCK_CHECKPOINT, 1, true, false ) )
+			return true;
+
+		begin_checkpointing ( wal.shared );
+
+		bool others = false;
+		uint32_t oldest = oldest_reader ( wal.shared, snapshot.generation, snapshot.frames, others );
+		uint32_t target = oldest < snapshot.frames ? oldest : snapshot.frames;
+		bool fine = true;
+
+		if ( target > snapshot.backfilled ) {
+
+			fine = backfill ( item, snapshot.backfilled, target, target == snapshot.frames );
+
+			if ( fine ) {
+
+				snapshot.backfilled = target;
+				publish_snapshot ( wal.shared, snapshot );
+
+			}
 
 		}
 
-		if ( !fresh_log ( item, false ) )
-			return false;
+		if ( fine && snapshot.backfilled == snapshot.frames && oldest >= snapshot.frames ) {
 
-		item.stats.checkpoints++;
+			uint32_t used = snapshot.frames;
 
-		return true;
+			snapshot.generation++;
+			fine = fresh_log ( item, snapshot, false ) && shared_clear ( wal.shared, used );
+
+			if ( fine ) {
+
+				publish_snapshot ( wal.shared, snapshot );
+
+				if ( wal.reading ) {
+
+					__atomic_store_n ( &wal.shared.header->reader_generations [ wal.shared.slot ], snapshot.generation, __ATOMIC_RELAXED );
+					__atomic_store_n ( &wal.shared.header->readers [ wal.shared.slot ], snapshot.frames, __ATOMIC_RELEASE );
+
+				}
+
+				item.stats.checkpoints++;
+
+			}
+
+		}
+
+		end_checkpointing ( wal.shared );
+		base::os::unlock_range ( wal.shared.file, SHARED_LOCK_CHECKPOINT, 1 );
+
+		return fine;
 
 	}
 
 	void close_wal ( pager& item ) {
 
+		end_write ( item );
+
+		if ( item.wal.reading )
+			release_reader ( item.wal.shared );
+
+		item.wal.reading = false;
+		close_shared ( item.wal.shared );
 		base::close_file ( item.wal.file );
-		base::release ( item.wal.index );
 		base::release ( item.wal.batch );
 		item.wal.batch = nullptr;
-		item.wal.index = nullptr;
-		item.wal.index_room = 0;
-		item.wal.index_used = 0;
 
 	}
 

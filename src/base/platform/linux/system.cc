@@ -116,6 +116,61 @@ namespace base {
 
 		}
 
+		void* map_file ( void* file, uint64_t offset, size_t size, void*& mapping ) {
+
+			uint64_t current = 0;
+
+			mapping = nullptr;
+
+			if ( !file_size ( file, current ) || ( current < offset + size && !truncate_file ( file, offset + size ) ) )
+				return nullptr;
+
+			long made = call6 ( LINUX_MMAP, 0, static_cast < long > ( size ), LINUX_PROT_READ_WRITE, LINUX_MAP_SHARED, descriptor ( file ), static_cast < long > ( offset ) );
+
+			return failed ( made ) ? nullptr : reinterpret_cast < void* > ( made );
+
+		}
+
+		void unmap_file ( void* view, size_t size, void* mapping ) {
+
+			( void ) mapping;
+
+			if ( view )
+				call2 ( LINUX_MUNMAP, reinterpret_cast < long > ( view ), static_cast < long > ( size ) );
+
+		}
+
+		bool lock_range ( void* file, uint64_t offset, uint64_t size, bool exclusive, bool wait ) {
+
+			lock_value request = { };
+
+			request.type = exclusive ? LINUX_LOCK_WRITE : LINUX_LOCK_READ;
+			request.start = static_cast < int64_t > ( offset );
+			request.length = static_cast < int64_t > ( size );
+
+			return !failed ( call3 ( LINUX_FCNTL, descriptor ( file ), wait ? LINUX_LOCK_WAIT : LINUX_LOCK_SET, reinterpret_cast < long > ( &request ) ) );
+
+		}
+
+		void unlock_range ( void* file, uint64_t offset, uint64_t size ) {
+
+			lock_value request = { };
+
+			request.type = LINUX_LOCK_NONE;
+			request.start = static_cast < int64_t > ( offset );
+			request.length = static_cast < int64_t > ( size );
+			call3 ( LINUX_FCNTL, descriptor ( file ), LINUX_LOCK_SET, reinterpret_cast < long > ( &request ) );
+
+		}
+
+		void sleep_milliseconds ( uint32_t milliseconds ) {
+
+			timespec_value wait = { milliseconds / 1000, static_cast < int64_t > ( milliseconds % 1000 ) * 1000000 };
+
+			call2 ( LINUX_NANOSLEEP, reinterpret_cast < long > ( &wait ), 0 );
+
+		}
+
 		bool erase_path ( const char* path ) {
 
 			return !failed ( call1 ( LINUX_UNLINK, reinterpret_cast < long > ( path ) ) );

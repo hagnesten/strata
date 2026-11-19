@@ -13,6 +13,15 @@
 #define LINUX_PWRITE 18
 #define LINUX_ACCESS 21
 #define LINUX_YIELD 24
+#define LINUX_NANOSLEEP 35
+#define LINUX_LOCK_SET 37
+#define LINUX_LOCK_WAIT 38
+#define LINUX_LOCK_READ 0
+#define LINUX_LOCK_WRITE 1
+#define LINUX_LOCK_NONE 2
+#define LINUX_PROT_NONE 0
+#define LINUX_MPROTECT 10
+#define LINUX_MAP_SHARED 1
 #define LINUX_GETPID 39
 #define LINUX_FCNTL 72
 #define LINUX_FSYNC 74
@@ -71,6 +80,18 @@ namespace base {
 			int64_t blocks;
 			uint64_t times [ 6 ];
 			int64_t reserved [ 3 ];
+
+		};
+
+		struct lock_value {
+
+			int16_t type;
+			int16_t whence;
+			int32_t padding;
+			int64_t start;
+			int64_t length;
+			int32_t process;
+			int32_t tail;
 
 		};
 

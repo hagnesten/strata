@@ -92,11 +92,17 @@ namespace engine {
 		item.in_transaction = false;
 		forget_savepoints ( item );
 
-		if ( storage::commit_pager ( item.pages ) )
+		if ( storage::commit_pager ( item.pages ) ) {
+
+			storage::end_read ( item.pages );
+
 			return true;
+
+		}
 
 		pager_problem ( item, "the transaction could not be committed and was rolled back" );
 		storage::rollback_pager ( item.pages );
+		storage::end_read ( item.pages );
 		reload_schema ( item );
 
 		return false;
@@ -112,6 +118,14 @@ namespace engine {
 			case sql::STATEMENT_BEGIN:
 				if ( item.in_transaction )
 					return fail_run ( ctx, "a transaction is already open" );
+
+				if ( !storage::begin_read ( item.pages ) || ( statement->immediate && !storage::begin_write ( item.pages ) ) ) {
+
+					storage::end_read ( item.pages );
+
+					return pager_problem ( item, "the transaction could not start" );
+
+				}
 
 				item.in_transaction = true;
 
@@ -133,6 +147,7 @@ namespace engine {
 					item.in_transaction = false;
 					forget_savepoints ( item );
 					storage::rollback_pager ( item.pages );
+					storage::end_read ( item.pages );
 
 					return item.schema->version == item.pages.header.schema_version || reload_schema ( item );
 
@@ -153,6 +168,9 @@ namespace engine {
 			case sql::STATEMENT_SAVEPOINT: {
 
 				bool opened = !item.in_transaction;
+
+				if ( opened && !storage::begin_read ( item.pages ) )
+					return pager_problem ( item, "the transaction could not start" );
 
 				if ( !push_savepoint ( item, ctx, statement->savepoint, opened ) )
 					return false;

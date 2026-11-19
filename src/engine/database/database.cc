@@ -280,7 +280,92 @@ namespace engine {
 
 	}
 
+	static bool writes ( sql::statement_kind kind ) {
+
+		switch ( kind ) {
+
+			case sql::STATEMENT_INSERT:
+			case sql::STATEMENT_UPDATE:
+			case sql::STATEMENT_DELETE:
+			case sql::STATEMENT_CREATE_TABLE:
+			case sql::STATEMENT_CREATE_INDEX:
+			case sql::STATEMENT_DROP_TABLE:
+			case sql::STATEMENT_DROP_INDEX:
+			case sql::STATEMENT_ALTER_TABLE:
+			case sql::STATEMENT_ANALYZE:
+			case sql::STATEMENT_VACUUM:
+				return true;
+
+			default:
+				return false;
+
+		}
+
+	}
+
+	static bool current_schema ( database& item ) {
+
+		return item.schema->version == item.pages.header.schema_version || reload_schema ( item );
+
+	}
+
+	static bool run_inside ( database& item, run_context& ctx, const sql::statement* statement, query_sink* sink );
+
 	bool run_statement ( database& item, run_context& ctx, const sql::statement* statement, query_sink* sink ) {
+
+		sql::statement_kind kind = statement->kind;
+		bool control = kind == sql::STATEMENT_BEGIN || kind == sql::STATEMENT_COMMIT || kind == sql::STATEMENT_ROLLBACK || kind == sql::STATEMENT_SAVEPOINT || kind == sql::STATEMENT_RELEASE;
+
+		if ( writes ( kind ) && !item.in_transaction && !storage::begin_write ( item.pages ) ) {
+
+			storage::end_read ( item.pages );
+
+			return pager_problem ( item, "the statement could not start" );
+
+		}
+
+		if ( !control || kind == sql::STATEMENT_BEGIN || kind == sql::STATEMENT_SAVEPOINT ) {
+
+			if ( !storage::begin_read ( item.pages ) || !current_schema ( item ) ) {
+
+				if ( !item.in_transaction )
+					storage::end_read ( item.pages );
+
+				return pager_problem ( item, "the statement could not start" );
+
+			}
+
+		}
+
+		if ( writes ( kind ) && ( !storage::begin_write ( item.pages ) || !current_schema ( item ) ) ) {
+
+			if ( !item.in_transaction ) {
+
+				storage::end_write ( item.pages );
+				storage::end_read ( item.pages );
+
+			}
+
+			return pager_problem ( item, "the statement could not start" );
+
+		}
+
+		ctx.schema = item.schema;
+
+		bool fine = run_inside ( item, ctx, statement, sink );
+
+		if ( !item.in_transaction ) {
+
+			storage::end_write ( item.pages );
+			storage::end_read ( item.pages );
+
+		}
+
+		return fine;
+
+	}
+
+	static bool run_inside ( database& item, run_context& ctx, const sql::statement* statement, query_sink* sink ) {
 
 		bool handled = false;
 		bool controlled = control_statement ( item, ctx, statement, handled );

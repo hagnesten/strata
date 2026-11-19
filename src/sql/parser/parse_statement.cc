@@ -1306,7 +1306,10 @@ namespace sql {
 		if ( accept_word ( item, "begin" ) ) {
 
 			out.kind = STATEMENT_BEGIN;
-			accept_word ( item, "deferred" ) || accept_word ( item, "immediate" ) || accept_word ( item, "exclusive" );
+
+			if ( !accept_word ( item, "deferred" ) )
+				out.immediate = accept_word ( item, "immediate" ) || accept_word ( item, "exclusive" );
+
 			accept_word ( item, "transaction" );
 
 			return true;

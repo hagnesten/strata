@@ -43,6 +43,7 @@ STORAGE := \
 	src/storage/pager/pager.cc \
 	src/storage/pager/wal.cc \
 	src/storage/pager/marks.cc \
+	src/storage/shared/index.cc \
 	src/storage/record/record.cc \
 	src/storage/btree/btree.cc \
 	src/storage/btree/estimate.cc \
@@ -99,6 +100,7 @@ TESTS := \
 	src/test/engine/check_test.cc \
 	src/test/engine/prepared_test.cc \
 	src/test/engine/limit_test.cc \
+	src/test/engine/concurrency_test.cc \
 	src/test/api/api_test.cc
 
 APP := \

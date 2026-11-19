@@ -2,6 +2,7 @@
 
 #include "base/file/file.hh"
 #include "base/bytes/bytes.hh"
+#include "storage/shared/shared.hh"
 
 #define PAGE_SIZE 4096
 #define PAGE_CHECK 4
@@ -41,6 +42,7 @@ namespace storage {
 		PAGER_CORRUPT,
 		PAGER_MEMORY,
 		PAGER_FORMAT,
+		PAGER_BUSY,
 
 	};
 
@@ -84,7 +86,7 @@ namespace storage {
 	struct wal_entry {
 
 		uint32_t page;
-		uint64_t offset;
+		uint32_t frame;
 
 	};
 
@@ -92,16 +94,14 @@ namespace storage {
 
 		base::file_handle file;
 		char path [ FILE_PATH_ROOM ];
-		uint32_t salt [ 2 ];
-		uint32_t sequence;
-		uint32_t chain;
-		uint64_t end;
-		uint32_t frames;
-		wal_entry* index;
-		uint32_t index_room;
-		uint32_t index_used;
 		uint32_t checkpoint_frames;
 		uint8_t* batch;
+		shared_view shared;
+		shared_snapshot snapshot;
+		bool reading;
+		bool writing;
+		bool read_any;
+		uint32_t busy_milliseconds;
 
 	};
 
@@ -185,9 +185,21 @@ namespace storage {
 
 	void undo_statement ( pager& item );
 
-	bool open_wal ( pager& item, uint8_t* page );
+	bool open_wal ( pager& item, uint8_t* page, bool& recovered );
 
-	bool wal_find ( const pager& item, uint32_t number, uint64_t& offset );
+	bool wal_find ( pager& item, uint32_t number, uint64_t& offset );
+
+	bool wal_still_valid ( pager& item );
+
+	bool begin_read ( pager& item );
+
+	void end_read ( pager& item );
+
+	bool begin_write ( pager& item );
+
+	void end_write ( pager& item );
+
+	bool pager_alone ( pager& item );
 
 	bool wal_commit ( pager& item, const uint8_t* header_page );
 

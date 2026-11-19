@@ -405,6 +405,7 @@ namespace sql {
 		alter_statement* alter;
 		statement* inner;
 		bool query_plan;
+		bool immediate;
 		const char* savepoint;
 		expression* into;
 		const char* text;
