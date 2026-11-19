@@ -67,6 +67,8 @@
     <ClCompile Include="src\base\file\file.cc"><Filter>src\base\file</Filter></ClCompile>
     <ClCompile Include="src\base\hash\crc32c.cc"><Filter>src\base\hash</Filter></ClCompile>
     <ClCompile Include="src\storage\pager\pager.cc"><Filter>src\storage\pager</Filter></ClCompile>
+    <ClCompile Include="src\storage\pager\wal.cc"><Filter>src\storage\pager</Filter></ClCompile>
+    <ClCompile Include="src\test\storage\crash_test.cc"><Filter>src\test\storage</Filter></ClCompile>
     <ClCompile Include="src\storage\record\record.cc"><Filter>src\storage\record</Filter></ClCompile>
     <ClCompile Include="src\storage\btree\btree.cc"><Filter>src\storage\btree</Filter></ClCompile>
     <ClCompile Include="src\test\storage\btree_test.cc"><Filter>src\test\storage</Filter></ClCompile>

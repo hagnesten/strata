@@ -40,4 +40,6 @@ namespace test {
 
 	void btree_tests ( );
 
+	void crash_tests ( );
+
 }
