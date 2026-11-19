@@ -213,6 +213,148 @@ namespace test {
 
 	}
 
+	static bool tree_matches ( storage::btree& tree, const uint32_t* sizes, const uint64_t* seeds, uint32_t keys ) {
+
+		storage::cursor at;
+		base::text found;
+		base::text payload;
+		uint32_t expected = 0;
+
+		if ( !storage::cursor_first ( at, tree ) )
+			return false;
+
+		while ( at.valid ) {
+
+			int64_t rowid = 0;
+
+			while ( expected < keys && !sizes [ expected ] )
+				expected++;
+
+			if ( !storage::cursor_rowid ( at, rowid ) || rowid != expected || !storage::cursor_payload ( at, found ) )
+				return false;
+
+			fill_payload ( payload, seeds [ expected ], sizes [ expected ] - 1 );
+
+			if ( found.size != payload.size || !base::same_bytes ( found.value ( ), payload.value ( ), payload.size ) )
+				return false;
+
+			expected++;
+
+			if ( !storage::cursor_next ( at ) )
+				return false;
+
+		}
+
+		while ( expected < keys && !sizes [ expected ] )
+			expected++;
+
+		return expected == keys;
+
+	}
+
+	static void statement_undo_test ( const char* path ) {
+
+		static const uint32_t keys = 3000;
+		static const uint32_t statements = 3000;
+		uint32_t* sizes = base::make < uint32_t > ( keys * 3 );
+		uint64_t* seeds = base::make < uint64_t > ( keys * 3 );
+		test_random random = { 0x2545F4914F6CDD1Dull };
+		storage::pager item;
+		uint32_t root = 0;
+		bool fine = sizes && seeds && storage::open_pager ( item, path, 64 ) && storage::create_btree ( item, false, root ) && storage::commit_pager ( item );
+		storage::btree tree = { &item, root, false };
+		base::text payload;
+		uint32_t undone = 0;
+		uint32_t* statement_sizes = sizes + keys;
+		uint32_t* committed_sizes = sizes + keys * 2;
+		uint64_t* statement_seeds = seeds + keys;
+		uint64_t* committed_seeds = seeds + keys * 2;
+
+		for ( uint32_t round = 0; round < statements && fine; round++ ) {
+
+			base::copy ( statement_sizes, sizes, sizeof ( uint32_t ) * keys );
+			base::copy ( statement_seeds, seeds, sizeof ( uint64_t ) * keys );
+			storage::begin_statement ( item );
+
+			uint32_t changes = 1 + random.below ( 40 );
+
+			for ( uint32_t i = 0; i < changes && fine; i++ ) {
+
+				uint32_t key = random.below ( keys );
+
+				if ( random.below ( 3 ) ) {
+
+					uint32_t size = random.below ( 10 ) == 0 ? 1000 + random.below ( 4000 ) : random.below ( 200 );
+					uint64_t seed = random.next ( );
+					bool existed = false;
+
+					fill_payload ( payload, seed, size );
+					fine = storage::table_insert ( tree, key, reinterpret_cast < const uint8_t* > ( payload.value ( ) ), payload.size, true, existed );
+					sizes [ key ] = size + 1;
+					seeds [ key ] = seed;
+
+				} else {
+
+					bool gone = false;
+
+					fine = storage::table_delete ( tree, key, gone );
+					sizes [ key ] = 0;
+
+				}
+
+			}
+
+			if ( random.below ( 3 ) == 0 ) {
+
+				storage::undo_statement ( item );
+				base::copy ( sizes, statement_sizes, sizeof ( uint32_t ) * keys );
+				base::copy ( seeds, statement_seeds, sizeof ( uint64_t ) * keys );
+				undone++;
+
+			} else
+				storage::end_statement ( item );
+
+			if ( fine && round % 100 == 99 ) {
+
+				if ( random.below ( 4 ) == 0 ) {
+
+					storage::rollback_pager ( item );
+					base::copy ( sizes, committed_sizes, sizeof ( uint32_t ) * keys );
+					base::copy ( seeds, committed_seeds, sizeof ( uint64_t ) * keys );
+
+				} else {
+
+					fine = storage::commit_pager ( item );
+					base::copy ( committed_sizes, sizes, sizeof ( uint32_t ) * keys );
+					base::copy ( committed_seeds, seeds, sizeof ( uint64_t ) * keys );
+
+				}
+
+			}
+
+			if ( fine && round % 250 == 249 ) {
+
+				uint64_t live = 0;
+
+				for ( uint32_t k = 0; k < keys; k++ )
+					live += sizes [ k ] != 0;
+
+				fine = check_tree ( item, root, false, live, "after undoing statements" ) && expect ( tree_matches ( tree, sizes, seeds, keys ), "the tree matches the model after undoing statements" );
+
+			}
+
+		}
+
+		if ( !fine && item.problem [ 0 ] )
+			expect ( false, item.problem );
+
+		expect ( fine && undone > 500, "3000 statements, a third of them undone, match the model" );
+		storage::close_pager ( item );
+		base::release ( sizes );
+		base::release ( seeds );
+
+	}
+
 	static void make_key ( base::text& out, uint32_t number, uint32_t rowid ) {
 
 		base::text name;
@@ -349,6 +491,8 @@ namespace test {
 		table_model_test ( path );
 		forget_database ( path );
 		index_test ( path );
+		forget_database ( path );
+		statement_undo_test ( path );
 		forget_database ( path );
 
 	}

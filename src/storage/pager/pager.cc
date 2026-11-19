@@ -283,6 +283,7 @@ namespace storage {
 			checkpoint ( item );
 
 		close_wal ( item );
+		end_statement ( item );
 
 		for ( uint32_t i = 0; i < item.frame_count; i++ ) {
 
@@ -312,6 +313,9 @@ namespace storage {
 		page_frame* frame = find_frame ( item, number );
 
 		if ( frame ) {
+
+			if ( item.statement.active && frame->dirty && !frame->saved && !save_for_statement ( item, frame ) )
+				return nullptr;
 
 			frame->pins++;
 			frame->recent = true;
@@ -358,6 +362,7 @@ namespace storage {
 		frame->pins = 1;
 		frame->dirty = false;
 		frame->recent = true;
+		frame->saved = true;
 		link_frame ( item, frame );
 
 		return frame;
@@ -405,6 +410,7 @@ namespace storage {
 			frame->number = item.header.page_count;
 			frame->pins = 1;
 			frame->recent = true;
+			frame->saved = true;
 			link_frame ( item, frame );
 
 		}
@@ -551,6 +557,116 @@ namespace storage {
 		item.header = item.committed;
 		item.error = PAGER_FINE;
 		item.problem [ 0 ] = 0;
+
+	}
+
+	void begin_statement ( pager& item ) {
+
+		end_statement ( item );
+
+		for ( uint32_t i = 0; i < item.frame_count; i++ )
+			item.frames [ i ]->saved = !item.frames [ i ]->dirty;
+
+		item.statement.active = true;
+		item.statement.header = item.header;
+
+	}
+
+	bool save_for_statement ( pager& item, page_frame* frame ) {
+
+		statement_state& state = item.statement;
+
+		if ( state.count == state.room ) {
+
+			uint32_t grown = state.room ? state.room * 2 : 64;
+			statement_copy* made = base::make < statement_copy > ( grown );
+
+			if ( !made ) {
+
+				fail ( item, PAGER_MEMORY, "out of memory while saving page ", frame->number, " for the statement" );
+
+				return false;
+
+			}
+
+			if ( state.copies ) {
+
+				base::copy ( made, state.copies, sizeof ( statement_copy ) * state.count );
+				base::release ( state.copies );
+
+			}
+
+			state.copies = made;
+			state.room = grown;
+
+		}
+
+		uint8_t* data = base::make < uint8_t > ( PAGE_SIZE );
+
+		if ( !data ) {
+
+			fail ( item, PAGER_MEMORY, "out of memory while saving page ", frame->number, " for the statement" );
+
+			return false;
+
+		}
+
+		base::copy ( data, frame->data, PAGE_SIZE );
+		state.copies [ state.count++ ] = { frame, data };
+		frame->saved = true;
+
+		return true;
+
+	}
+
+	void end_statement ( pager& item ) {
+
+		statement_state& state = item.statement;
+
+		for ( uint32_t i = 0; i < state.count; i++ )
+			base::release ( state.copies [ i ].data );
+
+		base::release ( state.copies );
+		state.copies = nullptr;
+		state.count = 0;
+		state.room = 0;
+		state.active = false;
+
+	}
+
+	void undo_statement ( pager& item ) {
+
+		statement_state& state = item.statement;
+
+		if ( !state.active )
+			return;
+
+		for ( uint32_t i = 0; i < state.count; i++ ) {
+
+			base::copy ( state.copies [ i ].frame->data, state.copies [ i ].data, PAGE_SIZE );
+			state.copies [ i ].frame->saved = false;
+			state.copies [ i ].frame->dirty = true;
+
+		}
+
+		for ( uint32_t i = 0; i < item.frame_count; i++ ) {
+
+			page_frame* frame = item.frames [ i ];
+
+			if ( !frame->number || !frame->dirty || !frame->saved )
+				continue;
+
+			unlink_frame ( item, frame );
+			frame->number = 0;
+			frame->dirty = false;
+			frame->pins = 0;
+
+		}
+
+		item.header = state.header;
+		item.error = PAGER_FINE;
+		item.problem [ 0 ] = 0;
+		end_statement ( item );
 
 	}
 

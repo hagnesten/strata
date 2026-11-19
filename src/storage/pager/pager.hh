@@ -59,6 +59,7 @@ namespace storage {
 		uint32_t pins;
 		bool dirty;
 		bool recent;
+		bool saved;
 		page_frame* chain;
 		uint8_t* data;
 
@@ -98,6 +99,23 @@ namespace storage {
 
 	};
 
+	struct statement_copy {
+
+		page_frame* frame;
+		uint8_t* data;
+
+	};
+
+	struct statement_state {
+
+		bool active;
+		database_header header;
+		statement_copy* copies;
+		uint32_t count;
+		uint32_t room;
+
+	};
+
 	struct pager {
 
 		base::file_handle file;
@@ -115,8 +133,17 @@ namespace storage {
 		pager_stats stats;
 		wal_state wal;
 		bool broken;
+		statement_state statement;
 
 	};
+
+	void begin_statement ( pager& item );
+
+	bool save_for_statement ( pager& item, page_frame* frame );
+
+	void end_statement ( pager& item );
+
+	void undo_statement ( pager& item );
 
 	bool open_wal ( pager& item, uint8_t* page );
 
