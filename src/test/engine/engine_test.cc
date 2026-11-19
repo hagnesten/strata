@@ -232,6 +232,12 @@ namespace test {
 		rows ( db, "SELECT name FROM people WHERE city = 'London'", "" );
 		rows ( db, "SELECT name FROM people WHERE city = 'Boston'", "Barbara" );
 		rows ( db, "SELECT name FROM people WHERE city > 'C' ORDER BY name", "Grace\nLinus" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT city, id FROM people WHERE city > 'C'", "USING COVERING INDEX people_city (city>?)" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT count ( * ) FROM people WHERE city = 'Boston'", "USING COVERING INDEX people_city" );
+		plan_lacks ( db, "EXPLAIN QUERY PLAN SELECT city, name FROM people WHERE city > 'C'", "COVERING" );
+		plan_lacks ( db, "EXPLAIN QUERY PLAN SELECT city FROM people p WHERE city > 'C' AND EXISTS ( SELECT 1 FROM pets WHERE owner = p.age )", "COVERING INDEX people_city" );
+		rows ( db, "SELECT city, id, rowid FROM people WHERE city > 'C' ORDER BY id", "Helsinki|2|2\nNew York|3|3" );
+		rows ( db, "SELECT upper ( city ), count ( * ) FROM people WHERE city >= 'B' GROUP BY city ORDER BY 1", "BOSTON|1\nHELSINKI|1\nNEW YORK|1" );
 		run ( db, "UPDATE people SET city = 'Paris' WHERE name = 'Grace'" );
 		rows ( db, "SELECT name FROM people WHERE city = 'Paris'", "Grace" );
 		rows ( db, "SELECT count ( * ) FROM people WHERE city = 'New York'", "0" );
@@ -295,7 +301,7 @@ namespace test {
 		fails ( db, "SELECT count ( * ) FROM wide WHERE a IS NULL", "no such column: a" );
 		run ( db, "ALTER TABLE wide DROP COLUMN d" );
 		rows ( db, "SELECT id, b, c, e, f FROM wide WHERE c = 'three'", "3|3|three|30|late" );
-		plan_has ( db, "EXPLAIN QUERY PLAN SELECT id FROM wide WHERE c = 'one'", "USING INDEX wide_c" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT id FROM wide WHERE c = 'one'", "USING COVERING INDEX wide_c" );
 		fails ( db, "INSERT INTO wide ( b, c, e ) VALUES ( -1, 'neg', 40 )", "CHECK" );
 		fails ( db, "INSERT INTO wide ( b, e ) VALUES ( 5, 10 )", "UNIQUE" );
 		run ( db, "INSERT INTO wide ( b, e ) VALUES ( 5, 50 )" );
@@ -315,7 +321,7 @@ namespace test {
 		fails ( db, "INSERT INTO boxes VALUES ( 11, 1, 1, 1 )", "takes 3 values" );
 		run ( db, "CREATE INDEX boxes_area ON boxes ( area )" );
 		rows ( db, "SELECT id FROM boxes WHERE area = 20", "2" );
-		plan_has ( db, "EXPLAIN QUERY PLAN SELECT id FROM boxes WHERE area = 20", "USING INDEX boxes_area" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT id FROM boxes WHERE area = 20", "USING COVERING INDEX boxes_area" );
 		run ( db, "ALTER TABLE boxes ADD COLUMN perimeter REAL AS ( 2 * ( w + h ) )" );
 		rows ( db, "SELECT id, perimeter FROM boxes ORDER BY id", "1|26.0\n2|18.0\n10|7.0" );
 		run ( db, "UPDATE boxes SET h = 1 WHERE id = 2" );

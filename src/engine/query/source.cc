@@ -324,7 +324,10 @@ namespace engine {
 
 				const index_info& index = *path.index;
 
-				out.add ( index.unique && path.equal_count == index.column_count ? " USING UNIQUE INDEX " : " USING INDEX " ).add ( index.name );
+				if ( path.covering )
+					out.add ( " USING COVERING INDEX " ).add ( index.name );
+				else
+					out.add ( index.unique && path.equal_count == index.column_count ? " USING UNIQUE INDEX " : " USING INDEX " ).add ( index.name );
 
 				if ( !path.equal_count && !path.low && !path.high )
 					break;
@@ -915,6 +918,38 @@ namespace engine {
 
 	}
 
+	static bool covered_row ( run_context& ctx, source_state& source, const uint8_t* entry, size_t size, int64_t rowid, bool& found ) {
+
+		const index_info& index = *source.plan->path.index;
+		const table_info& table = *source.plan->table;
+		char* kept = ctx.scratch->keep ( reinterpret_cast < const char* > ( entry ), size );
+		storage::value* values = ctx.scratch->make < storage::value > ( table.column_count + 1 );
+		storage::value key [ RUN_KEY_ROOM ];
+		uint32_t count = 0;
+
+		if ( !kept || !values )
+			return fail_run ( ctx, "out of memory" );
+
+		if ( !storage::decode_record ( reinterpret_cast < const uint8_t* > ( kept ), size, key, RUN_KEY_ROOM, count ) || count != index.column_count + 1 )
+			return fail_named ( ctx, "an entry of index ", index.name, " is damaged" );
+
+		for ( uint32_t c = 0; c < table.column_count; c++ )
+			values [ c ] = storage::null_value ( );
+
+		for ( uint32_t k = 0; k < index.column_count; k++ )
+			values [ index.columns [ k ] ] = key [ k ];
+
+		if ( table.rowid_column >= 0 )
+			values [ table.rowid_column ] = storage::integer_value ( rowid );
+
+		source.values = values;
+		source.rowid = rowid;
+		found = true;
+
+		return true;
+
+	}
+
 	static bool next_index ( run_context& ctx, source_state& source, bool& found ) {
 
 		const access_path& path = source.plan->path;
@@ -965,6 +1000,9 @@ namespace engine {
 
 			if ( skip )
 				continue;
+
+			if ( path.covering )
+				return covered_row ( ctx, source, entry, size, rowid, found );
 
 			bool present = false;
 

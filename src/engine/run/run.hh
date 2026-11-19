@@ -168,6 +168,7 @@ namespace engine {
 		sql::expression* high;
 		bool high_inclusive;
 		sql::expression* list;
+		bool covering;
 
 	};
 
@@ -205,6 +206,7 @@ namespace engine {
 		sql::affinity_kind* affinities;
 		bool* hidden;
 		bool* nocase;
+		bool* used;
 		uint32_t width;
 		bool left;
 		bool right;

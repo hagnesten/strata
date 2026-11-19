@@ -36,6 +36,13 @@ namespace engine {
 
 	}
 
+	static void note_use ( prepared_source& source, int32_t column ) {
+
+		if ( source.used && column >= 0 && static_cast < uint32_t > ( column ) < source.width )
+			source.used [ column ] = true;
+
+	}
+
 	static sql::expression* bound_column ( base::arena& memory, uint32_t source, int32_t column, sql::affinity_kind affinity, const char* name, const char* table ) {
 
 		sql::expression* made = memory.make < sql::expression > ( 1 );
@@ -243,6 +250,10 @@ namespace engine {
 				item->source = hit_source;
 				item->column = hit_column;
 				item->cast = hit_column >= 0 ? source.affinities [ hit_column ] : sql::AFFINITY_INTEGER;
+				note_use ( source, hit_column );
+
+				if ( hit_column >= 0 && source.paired_source && source.paired_source [ hit_column ] >= 0 )
+					note_use ( query->sources [ source.paired_source [ hit_column ] ], source.paired_column [ hit_column ] );
 
 				if ( hit_column >= 0 && source.nocase && source.nocase [ hit_column ] )
 					item->nocase = true;
@@ -591,8 +602,9 @@ namespace engine {
 		out.affinities = ctx.lasting->make < sql::affinity_kind > ( out.width + 1 );
 		out.hidden = ctx.lasting->make < bool > ( out.width + 1 );
 		out.nocase = ctx.lasting->make < bool > ( out.width + 1 );
+		out.used = ctx.lasting->make < bool > ( out.width + 1 );
 
-		if ( !out.names || !out.affinities || !out.hidden || !out.nocase )
+		if ( !out.names || !out.affinities || !out.hidden || !out.nocase || !out.used )
 			return fail_run ( ctx, "out of memory" );
 
 		for ( uint32_t c = 0; c < out.width; c++ ) {
@@ -663,6 +675,7 @@ namespace engine {
 					return fail_run ( ctx, "out of memory" );
 
 				value->nocase = source.nocase && source.nocase [ c ];
+				note_use ( source, static_cast < int32_t > ( c ) );
 
 			}
 
@@ -771,6 +784,8 @@ namespace engine {
 			equal->left = bound_column ( *ctx.lasting, static_cast < uint32_t > ( left_source ), left_column, left.affinities [ left_column ], left.names [ left_column ], left.alias );
 			equal->right = bound_column ( *ctx.lasting, right, right_column, source.affinities [ right_column ], source.names [ right_column ], source.alias );
 			source.hidden [ right_column ] = true;
+			note_use ( left, left_column );
+			note_use ( source, right_column );
 
 			if ( !equal->left || !equal->right || !base::push ( *ctx.lasting, source.on_terms, source.on_count, on_room, equal ) )
 				return fail_run ( ctx, "out of memory" );
@@ -1315,6 +1330,38 @@ namespace engine {
 
 	}
 
+	static void mark_covering ( prepared_select* plan ) {
+
+		for ( uint32_t s = 0; s < plan->source_count; s++ ) {
+
+			prepared_source& source = plan->sources [ s ];
+			access_path& path = source.path;
+
+			if ( !source.table || !source.used || path.kind != PATH_INDEX )
+				continue;
+
+			bool covered = true;
+
+			for ( uint32_t c = 0; c < source.width && covered; c++ ) {
+
+				if ( !source.used [ c ] || static_cast < int32_t > ( c ) == source.table->rowid_column )
+					continue;
+
+				bool held = false;
+
+				for ( uint32_t k = 0; k < path.index->column_count && !held; k++ )
+					held = path.index->columns [ k ] == c;
+
+				covered = held;
+
+			}
+
+			path.covering = covered;
+
+		}
+
+	}
+
 	static void finish_flags ( run_context& ctx, prepared_select* plan ) {
 
 		plan->grouping = plan->group_count || plan->aggregate_count;
@@ -1531,6 +1578,9 @@ namespace engine {
 
 		if ( first )
 			order_through_index ( ctx, first );
+
+		for ( prepared_select* core = first; core; core = core->next )
+			mark_covering ( core );
 
 		if ( scope )
 			ctx.ctes = scope->next;

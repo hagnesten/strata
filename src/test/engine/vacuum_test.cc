@@ -49,7 +49,8 @@ namespace test {
 		expect ( trees_intact ( db ), "every tree is intact after VACUUM" );
 		rows ( db, "SELECT count ( * ), sum ( id ), sum ( length ( body ) ) > 300000 FROM bulky", "300|451500|1" );
 		rows ( db, "SELECT count ( * ) FROM bulky WHERE tag = 'tag10'", "60" );
-		plan_has ( db, "EXPLAIN QUERY PLAN SELECT id FROM bulky WHERE tag = 'tag10'", "USING INDEX bulky_tag" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT id FROM bulky WHERE tag = 'tag10'", "USING COVERING INDEX bulky_tag" );
+		plan_has ( db, "EXPLAIN QUERY PLAN SELECT body FROM bulky WHERE tag = 'tag10'", "USING INDEX bulky_tag" );
 		run ( db, "INSERT INTO bulky ( tag, body ) VALUES ( 'late', x'01' )" );
 		rows ( db, "SELECT id FROM bulky WHERE tag = 'late'", "3001" );
 		rows ( db, "SELECT count ( * ) FROM people", "4" );
