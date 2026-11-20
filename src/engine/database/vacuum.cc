@@ -170,7 +170,7 @@ namespace engine {
 		} else
 			target.add ( item.pages.path ).add ( "-vacuum" );
 
-		if ( !storage::checkpoint ( item.pages ) )
+		if ( !statement->into && !storage::checkpoint ( item.pages ) )
 			return pager_problem ( item, "the log could not be folded into the database" );
 
 		base::text problem;
