@@ -100,6 +100,50 @@ namespace test {
 
 	}
 
+	static void exact_money ( engine::database& db ) {
+
+		run ( db, "CREATE TABLE dialect_money ( id INTEGER PRIMARY KEY, amount NUMERIC ( 20, 4 ), loose DECIMAL, cash MONEY )" );
+		run ( db, "INSERT INTO dialect_money ( amount, loose, cash ) VALUES ( '0.1', '0.1', '1.005' ), ( '0.2', '0.2', 2 ), ( '99999999999999.9999', '123456789012345678901234.123456', '-0.004' )" );
+		rows ( db, "SELECT amount, loose, cash, typeof ( amount ) FROM dialect_money ORDER BY id", "0.1000|0.1|1.01|numeric\n0.2000|0.2|2.00|numeric\n99999999999999.9999|123456789012345678901234.123456|0.00|numeric" );
+		rows ( db, "SELECT sum ( amount ), avg ( amount ), sum ( cash ), min ( amount ), max ( loose ) FROM dialect_money", "100000000000000.2999|33333333333333.4333|3.01|0.1000|123456789012345678901234.123456" );
+		rows ( db, "SELECT ( SELECT amount FROM dialect_money WHERE id = 1 ) + ( SELECT amount FROM dialect_money WHERE id = 2 ) = ( SELECT amount FROM dialect_money WHERE id = 1 ) * 3", "1" );
+		fails ( db, "INSERT INTO dialect_money ( amount ) VALUES ( '10000000000000000' )", "numeric field overflow" );
+		fails ( db, "UPDATE dialect_money SET amount = amount * 1000 WHERE id = 3", "numeric field overflow" );
+		run ( db, "CREATE INDEX dialect_money_amount ON dialect_money ( amount )" );
+		rows ( db, "SELECT id FROM dialect_money WHERE amount = '0.2' ORDER BY id", "2" );
+		rows ( db, "SELECT id FROM dialect_money WHERE amount BETWEEN 0 AND 1 ORDER BY amount", "1\n2" );
+		rows ( db, "SELECT count ( DISTINCT amount ), count ( * ) FROM dialect_money GROUP BY amount = '0.1' ORDER BY 1", "1|1\n2|2" );
+		run ( db, "DROP TABLE dialect_money" );
+
+	}
+
+	static void postgres_session ( engine::database& db ) {
+
+		db.schema->postgres = true;
+		rows ( db, "SELECT 0.1 + 0.2 = 0.3, 10::numeric / 4, 7.0 / 2, round ( 2.5 ), 1.50 * 2, abs ( -1.25 )", "1|2.5000000000000000|3.5000000000000000|3|3.00|1.25" );
+		rows ( db, "SELECT 'abc' LIKE 'A%', 'abc' ILIKE 'A%', 1.5::numeric ( 10, 2 )", "0|1|1.50" );
+		fails ( db, "SELECT 1 / 0", "division by zero" );
+		fails ( db, "SELECT 'abc'::int", "invalid input syntax" );
+		rows ( db, "SELECT TIMESTAMPTZ '2026-11-20T14:40:15.25+02:00', '2026-01-02 03:04:05.500'::timestamp, DATE '2026-02-28', '2026-02-28T23:59:59Z'::timestamptz AT TIME ZONE 'UTC'", "2026-11-20 12:40:15.25|2026-01-02 03:04:05.5|2026-02-28|2026-02-28 23:59:59" );
+		rows ( db, "SELECT date_part ( 'year', '2026-11-20 10:00:00' ), EXTRACT ( month FROM '2026-11-20' ), date_trunc ( 'month', '2026-11-20 10:30:00' ), date_part ( 'dow', '2026-11-20' )", "2026.0|11.0|2026-11-01 00:00:00|5.0" );
+		fails ( db, "SELECT '2026-02-30'::date", "invalid input syntax" );
+		run ( db, "CREATE TABLE dialect_ticks ( id BIGSERIAL PRIMARY KEY, at TIMESTAMPTZ, doc JSONB, sym VARCHAR ( 8 ) )" );
+		run ( db, "INSERT INTO dialect_ticks ( at, doc, sym ) VALUES ( '2026-11-20T15:00:00.000+01:00', '{\"side\":\"B\",  \"qty\":1, \"qty\": 2}', 'AAPL' ), ( '2026-11-20 14:30:00', '[1,{\"b\":1,\"a\":2}]', 'MSFT' )" );
+		rows ( db, "SELECT at, doc FROM dialect_ticks ORDER BY at", "2026-11-20 14:00:00|{\"qty\": 2, \"side\": \"B\"}\n2026-11-20 14:30:00|[1, {\"a\": 2, \"b\": 1}]" );
+		rows ( db, "SELECT count ( * ) FROM dialect_ticks WHERE at >= TIMESTAMPTZ '2026-11-20 14:15:00Z'", "1" );
+		rows ( db, "SELECT id FROM dialect_ticks WHERE id = ANY ( '{2,3}' ) AND sym <> ALL ( '{\"AAPL\",NULL}' ) IS NOT TRUE OR id = ANY ( '{1}' ) ORDER BY id", "1\n2" );
+		rows ( db, "SELECT id, sym <> ALL ( '{\"AAPL\",NULL}' ), sym = ANY ( '{\"AAPL\",\"x\"}' ) FROM dialect_ticks ORDER BY id", "1|0|1\n2|NULL|0" );
+		rows ( db, "SELECT id FROM dialect_ticks WHERE id = ANY ( '{1,2}' ) ORDER BY id", "1\n2" );
+		rows ( db, "UPDATE dialect_ticks AS t SET sym = t.sym || '!' WHERE t.id = 2 RETURNING t.id, sym", "2|MSFT!" );
+		rows ( db, "DELETE FROM dialect_ticks d WHERE d.sym = 'AAPL' RETURNING d.id", "1" );
+		rows ( db, "SELECT count ( * ) FROM dialect_ticks", "1" );
+		fails ( db, "INSERT INTO dialect_ticks ( at ) VALUES ( 'yesterday-ish' )", "invalid input syntax" );
+		run ( db, "DROP TABLE dialect_ticks" );
+		db.schema->postgres = false;
+		rows ( db, "SELECT 0.1 + 0.2 = 0.3, typeof ( 1.5 ), 1 / 0, 'abc' LIKE 'A%'", "0|real|NULL|1" );
+
+	}
+
 	void dialect_tests ( engine::database& db ) {
 
 		section ( "Postgres dialect" );
@@ -108,6 +152,8 @@ namespace test {
 		returning_rows ( db );
 		expressions ( db );
 		catalog_views ( db );
+		exact_money ( db );
+		postgres_session ( db );
 
 	}
 
