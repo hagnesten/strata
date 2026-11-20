@@ -120,6 +120,7 @@
     <ClCompile Include="src\engine\write\generated.cc" />
     <ClCompile Include="src\engine\write\returning.cc" />
     <ClCompile Include="src\engine\write\sequence.cc" />
+    <ClCompile Include="src\engine\functions\arrays.cc" />
     <ClCompile Include="src\engine\catalog\views.cc" />
     <ClCompile Include="src\engine\schema\schema.cc" />
     <ClCompile Include="src\engine\schema\index_build.cc" />
@@ -142,6 +143,7 @@
     <ClCompile Include="src\server\postgres\startup.cc" />
     <ClCompile Include="src\server\postgres\query.cc" />
     <ClCompile Include="src\server\postgres\types.cc" />
+    <ClCompile Include="src\server\postgres\procedural.cc" />
     <ClCompile Include="src\base\png\png.cc" />
     <ClCompile Include="src\ui\render\render.cc" />
     <ClCompile Include="src\base\clipboard\clipboard.cc" />

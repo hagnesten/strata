@@ -82,6 +82,7 @@ ENGINE := \
 	src/engine/functions/functions.cc \
 	src/engine/functions/dates.cc \
 	src/engine/functions/json.cc \
+	src/engine/functions/arrays.cc \
 	src/engine/write/changes.cc \
 	src/engine/write/generated.cc \
 	src/engine/write/returning.cc \
@@ -127,7 +128,8 @@ APP := \
 	src/server/users/users.cc \
 	src/server/postgres/startup.cc \
 	src/server/postgres/query.cc \
-	src/server/postgres/types.cc
+	src/server/postgres/types.cc \
+	src/server/postgres/procedural.cc
 
 PROGRAM := $(BASE) $(START) $(STORAGE) $(SQL) $(ENGINE) $(API) $(TESTS) $(APP)
 PROGRAM_OBJECTS := $(patsubst src/%.cc,$(BUILD)/objects/%.o,$(PROGRAM))

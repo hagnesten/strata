@@ -58,6 +58,7 @@ namespace engine {
 		{ "pg_advisory_xact_lock", 1, 2, false, FUNCTION_NOTHING },
 		{ "set_config", 3, 3, false, FUNCTION_NOTHING },
 		{ "now", 0, 0, false, FUNCTION_NOW },
+		{ "strata_any", 2, 2, false, FUNCTION_ARRAY_ANY },
 		{ "statement_timestamp", 0, 0, false, FUNCTION_NOW },
 		{ "transaction_timestamp", 0, 0, false, FUNCTION_NOW },
 		{ "clock_timestamp", 0, 0, false, FUNCTION_NOW },
@@ -1156,7 +1157,7 @@ namespace engine {
 
 				base::text made;
 
-				made.add ( "PostgreSQL 16.0 (Strata " ).add ( ENGINE_VERSION ).add ( ") on x86_64" );
+				made.add ( "PostgreSQL 17.0 (Strata " ).add ( ENGINE_VERSION ).add ( ") on x86_64" );
 
 				return make_text ( ctx, made, out );
 
@@ -1221,6 +1222,9 @@ namespace engine {
 
 			case FUNCTION_NOTHING:
 				return true;
+
+			case FUNCTION_ARRAY_ANY:
+				return array_contains ( ctx, args [ 0 ], args [ 1 ], out );
 
 			case FUNCTION_RANDOMBLOB:
 			case FUNCTION_ZEROBLOB: {

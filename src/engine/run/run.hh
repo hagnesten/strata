@@ -103,6 +103,7 @@ namespace engine {
 		FUNCTION_RANDOM_UUID,
 		FUNCTION_NOTHING,
 		FUNCTION_NOW,
+		FUNCTION_ARRAY_ANY,
 		FUNCTION_DATE,
 		FUNCTION_TIME,
 		FUNCTION_DATETIME,
@@ -322,6 +323,7 @@ namespace engine {
 		storage::value constant;
 		bool like;
 		bool glob;
+		bool exact;
 		bool negated;
 		like_shape shape;
 		const uint8_t* literal;
@@ -830,6 +832,8 @@ namespace engine {
 	bool run_drop ( run_context& ctx, const sql::drop_statement* item, bool index );
 
 	bool run_drop_schema ( run_context& ctx, const sql::drop_statement* item );
+
+	bool array_contains ( run_context& ctx, const storage::value& probe, const storage::value& list, storage::value& out );
 
 	bool ensure_sequence_table ( run_context& ctx );
 

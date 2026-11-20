@@ -122,6 +122,9 @@ namespace server {
 
 				const char* name = item->name;
 
+				if ( base::same_folded ( name, "strata_any" ) )
+					return PG_BOOL;
+
 				if ( base::same_folded ( name, "count" ) || base::same_folded ( name, "length" ) || base::same_folded ( name, "instr" ) || base::same_folded ( name, "row_number" ) || base::same_folded ( name, "rank" ) || base::same_folded ( name, "dense_rank" ) || base::same_folded ( name, "ntile" ) || base::same_folded ( name, "unixepoch" ) || base::same_folded ( name, "changes" ) || base::same_folded ( name, "last_insert_rowid" ) || base::same_folded ( name, "random" ) || base::same_folded ( name, "sign" ) )
 					return PG_INT8;
 
@@ -738,6 +741,124 @@ namespace server {
 
 	}
 
+	static uint32_t array_element ( uint32_t type ) {
+
+		switch ( type ) {
+
+			case 1000: return PG_BOOL;
+			case 1001: return PG_BYTEA;
+			case 1005: return PG_INT2;
+			case 1007: return PG_INT4;
+			case 1016: return PG_INT8;
+			case 1028: return PG_OID;
+			case 1009: case 1015: case 1014: return PG_TEXT;
+			case 1021: return PG_FLOAT4;
+			case 1022: return PG_FLOAT8;
+			case 1231: return PG_NUMERIC;
+			case 2951: return PG_UUID;
+			case 1115: return PG_TIMESTAMP;
+			case 1185: return PG_TIMESTAMPTZ;
+			case 1182: return PG_DATE;
+			case 1183: return PG_TIME;
+			case 199: return PG_JSON;
+			case 3807: return PG_JSONB;
+			default: return 0;
+
+		}
+
+	}
+
+	static bool decode_array ( base::arena& memory, const uint8_t* data, int32_t size, uint32_t element, strata_value& out ) {
+
+		if ( size < 12 )
+			return false;
+
+		uint32_t dimensions = static_cast < uint32_t > ( read_big ( data, 4 ) );
+		uint32_t inner = static_cast < uint32_t > ( read_big ( data + 8, 4 ) );
+		size_t at = 12;
+		uint64_t count = dimensions ? 1 : 0;
+
+		if ( dimensions > 6 || static_cast < size_t > ( size ) < at + dimensions * 8 )
+			return false;
+
+		for ( uint32_t d = 0; d < dimensions; d++ )
+			count *= read_big ( data + at + d * 8, 4 );
+
+		at += dimensions * 8;
+
+		if ( inner )
+			element = inner;
+
+		base::text made;
+
+		made.add ( '{' );
+
+		for ( uint64_t i = 0; i < count; i++ ) {
+
+			if ( at + 4 > static_cast < size_t > ( size ) )
+				return false;
+
+			int32_t length = static_cast < int32_t > ( read_big ( data + at, 4 ) );
+
+			at += 4;
+
+			if ( length > 0 && at + static_cast < size_t > ( length ) > static_cast < size_t > ( size ) )
+				return false;
+
+			if ( i )
+				made.add ( ',' );
+
+			strata_value item = { };
+
+			if ( !decode_parameter ( memory, data + at, length, element, true, item ) )
+				return false;
+
+			switch ( item.type ) {
+
+				case STRATA_NULL:
+					made.add ( "NULL" );
+					break;
+
+				case STRATA_INTEGER:
+					made.signed_number ( item.data.integer );
+					break;
+
+				case STRATA_REAL:
+					made.real ( item.data.real );
+					break;
+
+				default: {
+
+					const char* bytes = static_cast < const char* > ( item.data.bytes );
+
+					made.add ( '"' );
+
+					for ( uint32_t k = 0; k < item.size; k++ ) {
+
+						if ( bytes [ k ] == '"' || bytes [ k ] == '\\' )
+							made.add ( '\\' );
+
+						made.add ( bytes [ k ] );
+
+					}
+
+					made.add ( '"' );
+
+				}
+
+			}
+
+			if ( length > 0 )
+				at += static_cast < size_t > ( length );
+
+		}
+
+		made.add ( '}' );
+
+		return keep_text ( memory, made, out );
+
+	}
+
 	bool decode_parameter ( base::arena& memory, const uint8_t* data, int32_t size, uint32_t type, bool binary, strata_value& out ) {
 
 		out = { };
@@ -749,6 +870,9 @@ namespace server {
 			return true;
 
 		}
+
+		if ( binary && array_element ( type ) )
+			return decode_array ( memory, data, size, array_element ( type ), out );
 
 		if ( !binary ) {
 
@@ -1078,6 +1202,21 @@ namespace server {
 
 		if ( base::starts_with ( message, "the name " ) )
 			return "42P07";
+
+		if ( base::starts_with ( message, "division by zero" ) )
+			return "22012";
+
+		if ( base::starts_with ( message, "invalid input syntax" ) )
+			return "22P02";
+
+		if ( base::starts_with ( message, "numeric field overflow" ) || base::starts_with ( message, "integer overflow" ) )
+			return "22003";
+
+		if ( base::starts_with ( message, "cannot drop schema" ) )
+			return "2BP01";
+
+		if ( base::find_folded ( message, "busy" ) || base::find_folded ( message, "locked" ) )
+			return "55P03";
 
 		return "XX000";
 
