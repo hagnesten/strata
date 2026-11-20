@@ -207,6 +207,13 @@ namespace server {
 
 		state->settings = settings;
 
+		state->grants = base::make < server_grant > ( SERVER_GRANTS );
+
+		if ( !state->grants )
+			return 1;
+
+		load_grants ( *state );
+
 		if ( !load_users ( *state ) && !settings.trust ) {
 
 			base::write_error ( "no users are set up, add one with: strata --user <file> <name> <password>, or start with --trust for a local test\n" );

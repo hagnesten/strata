@@ -1,5 +1,6 @@
 #include "server/server.hh"
 #include "base/file/file.hh"
+#include "base/file/folder.hh"
 #include "base/console/console.hh"
 
 namespace server {
@@ -98,6 +99,16 @@ namespace server {
 			if ( *at++ != '\t' || !read_hex ( at, user.stored, SHA256_BYTES ) || *at++ != '\t' || !read_hex ( at, user.check, SHA256_BYTES ) )
 				return false;
 
+			if ( *at == '\t' ) {
+
+				at++;
+				user.limited = base::starts_with ( at, "limited" );
+
+				while ( *at && *at != '\r' && *at != '\n' )
+					at++;
+
+			}
+
 			while ( *at == '\r' || *at == '\n' )
 				at++;
 
@@ -166,7 +177,30 @@ namespace server {
 
 	}
 
-	int32_t manage_user ( const char* path, const char* name, const char* password ) {
+	bool save_users ( const char* path, const server_user* users, uint32_t count ) {
+
+		base::text file_path;
+		base::text written;
+
+		users_path ( path, file_path );
+
+		for ( uint32_t i = 0; i < count; i++ ) {
+
+			written.add ( users [ i ].name ).add ( '\t' );
+			add_hex ( written, users [ i ].salt, SERVER_SALT );
+			written.add ( '\t' ).number ( users [ i ].iterations ).add ( '\t' );
+			add_hex ( written, users [ i ].stored, SHA256_BYTES );
+			written.add ( '\t' );
+			add_hex ( written, users [ i ].check, SHA256_BYTES );
+			written.add ( users [ i ].limited ? "\tlimited\n" : "\tsuper\n" );
+
+		}
+
+		return base::save_file ( file_path.value ( ), written.value ( ), written.size );
+
+	}
+
+	int32_t manage_user ( const char* path, const char* name, const char* password, bool limited ) {
 
 		server_user* users = base::make < server_user > ( SERVER_USERS + 1 );
 		uint32_t count = 0;
@@ -206,33 +240,12 @@ namespace server {
 
 			}
 
+			users [ count ].limited = limited;
 			count++;
 
 		}
 
-		base::text written;
-
-		for ( uint32_t i = 0; i < count; i++ ) {
-
-			written.add ( users [ i ].name ).add ( '\t' );
-			add_hex ( written, users [ i ].salt, SERVER_SALT );
-			written.add ( '\t' ).number ( users [ i ].iterations ).add ( '\t' );
-			add_hex ( written, users [ i ].stored, SHA256_BYTES );
-			written.add ( '\t' );
-			add_hex ( written, users [ i ].check, SHA256_BYTES );
-			written.add ( '\n' );
-
-		}
-
-		base::file_handle file;
-		bool fine = base::open_file ( file, file_path.value ( ), true );
-
-		if ( fine ) {
-
-			fine = base::truncate_file ( file, 0 ) && ( !written.size || base::write_at ( file, 0, written.value ( ), written.size ) ) && base::sync_file ( file );
-			base::close_file ( file );
-
-		}
+		bool fine = save_users ( path, users, count );
 
 		base::release ( users );
 

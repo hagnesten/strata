@@ -17,6 +17,15 @@
 #define SERVER_BUSY_LIMIT 120000
 #define SERVER_LOCK_RETRY 5
 #define SERVER_CHANNELS 64
+#define SERVER_OBJECT_ROOM 160
+#define SERVER_GRANTS 4096
+#define SERVER_ACCESS_NAMES 256
+#define ACCESS_SELECT 1
+#define ACCESS_INSERT 2
+#define ACCESS_UPDATE 4
+#define ACCESS_DELETE 8
+#define ACCESS_CREATE 16
+#define ACCESS_ALL 31
 #define SERVER_NOTICE_ROOM 8000
 
 #define PG_PROTOCOL 196608
@@ -55,6 +64,26 @@ namespace server {
 		uint32_t iterations;
 		uint8_t stored [ SHA256_BYTES ];
 		uint8_t check [ SHA256_BYTES ];
+		bool limited;
+
+	};
+
+	struct access_list {
+
+		const char* names [ SERVER_ACCESS_NAMES ];
+		uint32_t privileges [ SERVER_ACCESS_NAMES ];
+		uint32_t count;
+		const char* ctes [ SERVER_ACCESS_NAMES ];
+		uint32_t cte_count;
+		bool overflow;
+
+	};
+
+	struct server_grant {
+
+		char grantee [ SERVER_NAME_ROOM ];
+		char object [ SERVER_OBJECT_ROOM ];
+		uint32_t privileges;
 
 	};
 
@@ -121,6 +150,7 @@ namespace server {
 		uint64_t ticket;
 		strata_db* db;
 		char user [ SERVER_NAME_ROOM ];
+		bool limited;
 		char database [ SERVER_NAME_ROOM ];
 		server_statement* statements [ SERVER_STATEMENTS ];
 		uint32_t statement_count;
@@ -143,6 +173,8 @@ namespace server {
 		server_connection* connections [ SERVER_CONNECTIONS ];
 		uint32_t connection_count;
 		server_user users [ SERVER_USERS ];
+		server_grant* grants;
+		uint32_t grant_count;
 		uint32_t user_count;
 		uint32_t next_id;
 		uint64_t next_ticket;
@@ -170,7 +202,19 @@ namespace server {
 
 	int32_t run_server ( const server_settings& settings );
 
-	int32_t manage_user ( const char* path, const char* name, const char* password );
+	int32_t manage_user ( const char* path, const char* name, const char* password, bool limited );
+
+	bool save_users ( const char* path, const server_user* users, uint32_t count );
+
+	bool load_grants ( server_state& state );
+
+	bool save_grants ( server_state& state );
+
+	bool access_allowed ( server_connection& link, const sql::statement* statement, base::text& problem );
+
+	void grant_owner ( server_connection& link, const char* name );
+
+	bool access_command ( server_connection& link, const char* tag, const char* text, size_t size, base::text& problem, const char*& code );
 
 	bool load_users ( server_state& state );
 

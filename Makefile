@@ -133,7 +133,8 @@ APP := \
 	src/server/postgres/query.cc \
 	src/server/postgres/types.cc \
 	src/server/postgres/procedural.cc \
-	src/server/postgres/notify.cc
+	src/server/postgres/notify.cc \
+	src/server/access/access.cc
 
 PROGRAM := $(BASE) $(START) $(STORAGE) $(SQL) $(ENGINE) $(API) $(TESTS) $(APP)
 PROGRAM_OBJECTS := $(patsubst src/%.cc,$(BUILD)/objects/%.o,$(PROGRAM))

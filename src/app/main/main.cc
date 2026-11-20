@@ -173,7 +173,7 @@ namespace app {
 			return run_serve ( count, arguments );
 
 		if ( named ( count, arguments, 1, "--user" ) && count > 3 )
-			return server::manage_user ( arguments [ 2 ], arguments [ 3 ], count > 4 ? arguments [ 4 ] : nullptr );
+			return server::manage_user ( arguments [ 2 ], arguments [ 3 ], count > 4 ? arguments [ 4 ] : nullptr, count > 5 && base::same ( arguments [ 5 ], "--limited" ) );
 
 		if ( named ( count, arguments, 1, "--check" ) && count > 2 )
 			return run_check ( arguments [ 2 ] );
@@ -193,7 +193,7 @@ namespace app {
 		base::write ( "  strata --test [part]     run the self test (pager, btree, crash, parser, engine)\n" );
 		base::write ( "  strata --check <file>    check every page, tree, row and index entry of a database\n" );
 		base::write ( "  strata --serve <file>    serve a database to Postgres clients (--port, --host, --trust)\n" );
-		base::write ( "  strata --user <file> <name> [password]   add, change or remove a server user\n" );
+		base::write ( "  strata --user <file> <name> [password] [--limited]   add, change or remove a server user\n" );
 
 		if ( STRATA_WINDOWS ) {
 

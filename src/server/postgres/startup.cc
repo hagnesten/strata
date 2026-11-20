@@ -277,6 +277,8 @@ namespace server {
 			if ( !scram_exchange ( link, *user ) )
 				return false;
 
+			link.limited = user->limited;
+
 		}
 
 		if ( strata_open ( state.settings.path, &link.db ) != STRATA_OK ) {

@@ -4,6 +4,8 @@ namespace server {
 
 	static void drop_statement ( server_connection& link, const char* name );
 
+	static bool access_tag ( const char* tag );
+
 	static bool word_at ( const char* text, size_t size, size_t& at, const char* word ) {
 
 		size_t start = at;
@@ -134,6 +136,28 @@ namespace server {
 			{ "revoke", "REVOKE" },
 
 		};
+
+		static const char* const role_verbs [ ] [ 2 ] = {
+
+			{ "create", "CREATE ROLE" },
+			{ "alter", "ALTER ROLE" },
+			{ "drop", "DROP ROLE" },
+
+		};
+
+		for ( const auto& pair : role_verbs ) {
+
+			at = 0;
+
+			if ( word_at ( sql, size, at, pair [ 0 ] ) && ( word_at ( sql, size, at, "role" ) || word_at ( sql, size, at, "user" ) ) ) {
+
+				base::copy_text ( tag, tag_room, pair [ 1 ] );
+
+				return true;
+
+			}
+
+		}
 
 		for ( const auto& pair : quiet ) {
 
@@ -283,7 +307,10 @@ namespace server {
 				case sql::STATEMENT_INSERT: tag.add ( "INSERT 0 " ).signed_number ( strata_changes ( link.db ) ); break;
 				case sql::STATEMENT_UPDATE: tag.add ( "UPDATE " ).signed_number ( strata_changes ( link.db ) ); break;
 				case sql::STATEMENT_DELETE: tag.add ( "DELETE " ).signed_number ( strata_changes ( link.db ) ); break;
-				case sql::STATEMENT_CREATE_TABLE: tag.add ( "CREATE TABLE" ); break;
+				case sql::STATEMENT_CREATE_TABLE:
+					tag.add ( "CREATE TABLE" );
+					grant_owner ( link, prepared->statement->create_table->name );
+					break;
 				case sql::STATEMENT_CREATE_INDEX: tag.add ( "CREATE INDEX" ); break;
 				case sql::STATEMENT_DROP_TABLE: tag.add ( "DROP TABLE" ); break;
 				case sql::STATEMENT_DROP_INDEX: tag.add ( "DROP INDEX" ); break;
@@ -402,11 +429,14 @@ namespace server {
 
 			tail = sql + at;
 
-			if ( base::same ( statement.tag, "LISTEN" ) || base::same ( statement.tag, "UNLISTEN" ) || base::same ( statement.tag, "NOTIFY" ) ) {
+			bool notice = base::same ( statement.tag, "LISTEN" ) || base::same ( statement.tag, "UNLISTEN" ) || base::same ( statement.tag, "NOTIFY" );
+
+			if ( notice || access_tag ( statement.tag ) ) {
 
 				size_t start_args = 0;
 
-				word_at ( sql, at, start_args, statement.tag [ 0 ] == 'L' ? "listen" : statement.tag [ 0 ] == 'U' ? "unlisten" : "notify" );
+				if ( notice )
+					word_at ( sql, at, start_args, statement.tag [ 0 ] == 'L' ? "listen" : statement.tag [ 0 ] == 'U' ? "unlisten" : "notify" );
 
 				statement.body = base::make < char > ( at - start_args + 1 );
 
@@ -449,6 +479,28 @@ namespace server {
 			statement.column_modifiers [ c ] = explain ? -1 : column_modifier ( plan, c );
 
 		}
+
+		return true;
+
+	}
+
+	static bool access_tag ( const char* tag ) {
+
+		return base::same ( tag, "GRANT" ) || base::same ( tag, "REVOKE" ) || base::same ( tag, "CREATE ROLE" ) || base::same ( tag, "ALTER ROLE" ) || base::same ( tag, "DROP ROLE" );
+
+	}
+
+	static bool denied ( server_connection& link, server_statement& statement ) {
+
+		if ( !link.limited || !statement.stmt || !statement.stmt->prepared )
+			return false;
+
+		base::text problem;
+
+		if ( access_allowed ( link, statement.stmt->prepared->statement, problem ) )
+			return false;
+
+		send_error ( link, "42501", problem.value ( ) );
 
 		return true;
 
@@ -507,6 +559,21 @@ namespace server {
 			if ( !run_do_block ( link, statement.body, statement.body_size, problem ) ) {
 
 				send_error ( link, error_code ( problem.value ( ), false ), problem.size ? problem.value ( ) : "the DO block failed" );
+
+				return false;
+
+			}
+
+		}
+
+		if ( access_tag ( statement.tag ) ) {
+
+			base::text problem;
+			const char* code = "42601";
+
+			if ( !access_command ( link, statement.tag, statement.body ? statement.body : "", statement.body_size, problem, code ) ) {
+
+				send_error ( link, code, problem.value ( ) );
 
 				return false;
 
@@ -734,6 +801,8 @@ namespace server {
 
 			if ( aborted_block ( link, *statement ) )
 				fine = !link.failed;
+			else if ( denied ( link, *statement ) )
+				fine = false;
 			else if ( statement->control )
 				fine = run_control ( link, *statement, true );
 			else if ( statement->stmt ) {
@@ -1026,6 +1095,9 @@ namespace server {
 
 		if ( aborted_block ( link, statement ) )
 			return !link.failed;
+
+		if ( denied ( link, statement ) )
+			return false;
 
 		if ( statement.control )
 			return run_control ( link, statement, false );
