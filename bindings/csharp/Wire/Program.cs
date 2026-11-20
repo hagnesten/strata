@@ -287,7 +287,7 @@ namespace Strata.Wire {
 				bookReads++;
 
 				if ( r == 1 )
-					Expect ( top.Rows.Count > 0 && top.Rows.Count <= 20 && top.Rows [ 0 ] [ 3 ] is decimal && ( long ) top.Rows [ 0 ] [ 2 ] > 0, "the order book read returns typed rows" );
+					Expect ( top.Rows.Count > 0 && top.Rows.Count <= 20 && top.Rows [ 0 ] [ 3 ] is decimal && top.Rows [ 0 ] [ 2 ] is int && ( int ) top.Rows [ 0 ] [ 2 ] > 0, "the order book read returns typed rows" );
 
 			}
 
