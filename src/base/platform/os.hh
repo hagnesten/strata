@@ -22,6 +22,17 @@ namespace base {
 
 	namespace os {
 
+		struct socket_poll {
+
+			void* socket;
+			bool want_read;
+			bool want_write;
+			bool readable;
+			bool writable;
+			bool failed;
+
+		};
+
 		typedef bool ( *folder_visit ) ( void* context, const char* name, bool directory, uint64_t size );
 
 		void* allocate_pages ( size_t size );
@@ -95,6 +106,16 @@ namespace base {
 		bool receive_some ( void* socket, void* out, size_t room, size_t& got );
 
 		void close_socket ( void* socket );
+
+		bool listen_tcp ( void*& out, const char* host, uint16_t port );
+
+		bool accept_tcp ( void* listener, void*& out, bool& accepted );
+
+		bool send_some ( void* socket, const void* data, size_t size, size_t& sent );
+
+		bool receive_now ( void* socket, void* out, size_t room, size_t& got, bool& closed );
+
+		bool poll_sockets ( socket_poll* items, uint32_t count, int32_t timeout );
 
 		[[ noreturn ]] void exit_process ( int32_t code );
 

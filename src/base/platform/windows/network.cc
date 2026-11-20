@@ -130,6 +130,146 @@ namespace base {
 
 		}
 
+		bool listen_tcp ( void*& out, const char* host, uint16_t port ) {
+
+			out = nullptr;
+
+			if ( !start_sockets ( ) )
+				return false;
+
+			sockaddr_in address = { };
+
+			address.sin_family = AF_INET;
+			address.sin_port = htons ( port );
+
+			if ( !host || !*host || host [ 0 ] == '*' )
+				address.sin_addr.s_addr = htonl ( INADDR_ANY );
+			else if ( inet_pton ( AF_INET, host [ 0 ] == 'l' ? "127.0.0.1" : host, &address.sin_addr ) != 1 )
+				return false;
+
+			SOCKET made = socket ( AF_INET, SOCK_STREAM, IPPROTO_TCP );
+
+			if ( made == INVALID_SOCKET )
+				return false;
+
+			BOOL exclusive = TRUE;
+			u_long nonblocking = 1;
+
+			setsockopt ( made, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast < const char* > ( &exclusive ), sizeof ( exclusive ) );
+
+			if ( bind ( made, reinterpret_cast < sockaddr* > ( &address ), sizeof ( address ) ) != 0 || listen ( made, SOMAXCONN ) != 0 || ioctlsocket ( made, FIONBIO, &nonblocking ) != 0 ) {
+
+				closesocket ( made );
+
+				return false;
+
+			}
+
+			out = reinterpret_cast < void* > ( made );
+
+			return true;
+
+		}
+
+		bool accept_tcp ( void* listener, void*& out, bool& accepted ) {
+
+			out = nullptr;
+			accepted = false;
+
+			SOCKET made = accept ( reinterpret_cast < SOCKET > ( listener ), nullptr, nullptr );
+
+			if ( made == INVALID_SOCKET )
+				return WSAGetLastError ( ) == WSAEWOULDBLOCK;
+
+			BOOL on = TRUE;
+			u_long nonblocking = 1;
+
+			setsockopt ( made, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast < const char* > ( &on ), sizeof ( on ) );
+			ioctlsocket ( made, FIONBIO, &nonblocking );
+			out = reinterpret_cast < void* > ( made );
+			accepted = true;
+
+			return true;
+
+		}
+
+		bool send_some ( void* socket, const void* data, size_t size, size_t& sent ) {
+
+			int chunk = size > 0x40000000 ? 0x40000000 : static_cast < int > ( size );
+			int put = send ( reinterpret_cast < SOCKET > ( socket ), static_cast < const char* > ( data ), chunk, 0 );
+
+			sent = 0;
+
+			if ( put >= 0 ) {
+
+				sent = static_cast < size_t > ( put );
+
+				return true;
+
+			}
+
+			return WSAGetLastError ( ) == WSAEWOULDBLOCK;
+
+		}
+
+		bool receive_now ( void* socket, void* out, size_t room, size_t& got, bool& closed ) {
+
+			int chunk = room > 0x40000000 ? 0x40000000 : static_cast < int > ( room );
+			int read = recv ( reinterpret_cast < SOCKET > ( socket ), static_cast < char* > ( out ), chunk, 0 );
+
+			got = 0;
+			closed = false;
+
+			if ( read > 0 ) {
+
+				got = static_cast < size_t > ( read );
+
+				return true;
+
+			}
+
+			if ( read == 0 ) {
+
+				closed = true;
+
+				return true;
+
+			}
+
+			return WSAGetLastError ( ) == WSAEWOULDBLOCK;
+
+		}
+
+		bool poll_sockets ( socket_poll* items, uint32_t count, int32_t timeout ) {
+
+			WSAPOLLFD polled [ 512 ];
+
+			if ( count > 512 )
+				count = 512;
+
+			for ( uint32_t i = 0; i < count; i++ ) {
+
+				polled [ i ].fd = reinterpret_cast < SOCKET > ( items [ i ].socket );
+				polled [ i ].events = static_cast < SHORT > ( ( items [ i ].want_read ? POLLRDNORM : 0 ) | ( items [ i ].want_write ? POLLWRNORM : 0 ) );
+				polled [ i ].revents = 0;
+
+			}
+
+			if ( WSAPoll ( polled, count, timeout ) < 0 )
+				return false;
+
+			for ( uint32_t i = 0; i < count; i++ ) {
+
+				items [ i ].readable = ( polled [ i ].revents & ( POLLRDNORM | POLLHUP ) ) != 0;
+				items [ i ].writable = ( polled [ i ].revents & POLLWRNORM ) != 0;
+				items [ i ].failed = ( polled [ i ].revents & ( POLLERR | POLLNVAL ) ) != 0;
+
+			}
+
+			return true;
+
+		}
+
 	}
 
 }

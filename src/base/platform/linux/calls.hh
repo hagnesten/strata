@@ -37,6 +37,30 @@
 #define LINUX_OPENAT 257
 #define LINUX_FSTATAT 262
 #define LINUX_GETRANDOM 318
+#define LINUX_POLL 7
+#define LINUX_SOCKET 41
+#define LINUX_CONNECT 42
+#define LINUX_SENDTO 44
+#define LINUX_RECVFROM 45
+#define LINUX_BIND 49
+#define LINUX_LISTEN 50
+#define LINUX_SETSOCKOPT 54
+#define LINUX_ACCEPT4 288
+#define LINUX_AF_INET 2
+#define LINUX_SOCK_STREAM 1
+#define LINUX_SOCK_NONBLOCK 0x800
+#define LINUX_SOL_SOCKET 1
+#define LINUX_SO_REUSEADDR 2
+#define LINUX_IPPROTO_TCP 6
+#define LINUX_TCP_NODELAY 1
+#define LINUX_MSG_NOSIGNAL 0x4000
+#define LINUX_AGAIN 11
+#define LINUX_POLL_IN 1
+#define LINUX_POLL_OUT 4
+#define LINUX_POLL_ERROR 8
+#define LINUX_POLL_HANGUP 0x10
+#define LINUX_POLL_INVALID 0x20
+#define LINUX_POLL_ROOM 512
 
 #define LINUX_AT_CWD -100
 #define LINUX_READ_ONLY 0
@@ -93,6 +117,23 @@ namespace base {
 			int64_t length;
 			int32_t process;
 			int32_t tail;
+
+		};
+
+		struct socket_address {
+
+			uint16_t family;
+			uint16_t port;
+			uint32_t address;
+			uint8_t zero [ 8 ];
+
+		};
+
+		struct poll_entry {
+
+			int32_t descriptor;
+			int16_t events;
+			int16_t returned;
 
 		};
 
