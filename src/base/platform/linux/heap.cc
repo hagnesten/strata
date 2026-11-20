@@ -48,6 +48,8 @@ namespace base {
 
 	static uint8_t* carve ( size_t size ) {
 
+		size = ( size + 15 ) & ~static_cast < size_t > ( 15 );
+
 		if ( heap.chunk_left < size ) {
 
 			size_t room = size > HEAP_CHUNK / 4 ? size : HEAP_CHUNK;
