@@ -712,9 +712,19 @@ namespace engine {
 			if ( hits [ i ].key->on_delete != sql::FOREIGN_RESTRICT )
 				cascades = true;
 
+		bool hinted = ctx.hinted && ctx.hint_rowid == rowid;
+		uint32_t hint_page = ctx.hint_page;
+		uint32_t hint_slot = ctx.hint_slot;
+		uint64_t hint_layout = ctx.hint_layout;
+		bool done = false;
+
+		ctx.hinted = false;
 		fine = fine && begin_writes ( ctx, cascades ) && change_indexes ( ctx, table, values, rowid, false );
 
-		if ( fine && !storage::table_delete ( tree, rowid, found ) )
+		if ( fine && hinted && hint_layout == ctx.pages->layout && !storage::table_delete_at ( tree, hint_page, hint_slot, rowid, done ) )
+			fine = fail_storage ( ctx, "a row could not be deleted" );
+
+		if ( fine && !done && !storage::table_delete ( tree, rowid, found ) )
 			fine = fail_storage ( ctx, "a row could not be deleted" );
 
 		for ( uint32_t i = 0; i < count && fine; i++ ) {
@@ -1814,13 +1824,25 @@ namespace engine {
 			base::arena_mark mark = ctx.scratch->mark ( );
 			storage::value* old = nullptr;
 			bool found = false;
+			uint32_t page = 0;
+			uint32_t slot = 0;
 
-			if ( !read_row ( ctx, *table, rowids [ r ], old, found ) )
+			if ( !read_row_at ( ctx, *table, rowids [ r ], old, found, page, slot ) )
 				return false;
 
 			if ( found ) {
 
-				if ( !delete_row ( ctx, *table, rowids [ r ], old ) )
+				ctx.hinted = true;
+				ctx.hint_page = page;
+				ctx.hint_slot = slot;
+				ctx.hint_rowid = rowids [ r ];
+				ctx.hint_layout = ctx.pages->layout;
+
+				bool fine = delete_row ( ctx, *table, rowids [ r ], old );
+
+				ctx.hinted = false;
+
+				if ( !fine )
 					return false;
 
 				ctx.changes++;

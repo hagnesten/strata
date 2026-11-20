@@ -782,6 +782,8 @@ namespace engine {
 
 	bool read_row ( run_context& ctx, const table_info& table, int64_t rowid, storage::value*& values, bool& found );
 
+	bool read_row_at ( run_context& ctx, const table_info& table, int64_t rowid, storage::value*& values, bool& found, uint32_t& page, uint32_t& slot );
+
 	bool make_index_key ( run_context& ctx, const index_info& index, const storage::value* values, int64_t rowid, bool with_rowid, base::text& out );
 
 	void choose_path ( run_context& ctx, prepared_select* plan, uint32_t level );

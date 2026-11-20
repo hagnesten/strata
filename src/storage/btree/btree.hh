@@ -230,6 +230,8 @@ namespace storage {
 
 	bool table_replace_at ( btree& tree, uint32_t number, uint32_t slot, int64_t rowid, const uint8_t* payload, size_t size, bool& done );
 
+	bool table_delete_at ( btree& tree, uint32_t number, uint32_t slot, int64_t rowid, bool& done );
+
 	bool check_btree ( pager& owner, uint32_t root, bool index, tree_report& report );
 
 	bool copy_btree ( pager& from, uint32_t root, bool index, pager& to, uint32_t& made );

@@ -1058,6 +1058,22 @@ namespace engine {
 
 	}
 
+	bool read_row_at ( run_context& ctx, const table_info& table, int64_t rowid, storage::value*& values, bool& found, uint32_t& page, uint32_t& slot ) {
+
+		storage::btree tree = { ctx.pages, table.root, false };
+		const uint8_t* data = nullptr;
+		size_t size = 0;
+
+		if ( !storage::table_lookup ( tree, rowid, *ctx.scratch, data, size, found, &page, &slot ) )
+			return fail_storage ( ctx, "a row could not be read" );
+
+		if ( !found )
+			return true;
+
+		return decode_bytes ( ctx, table, rowid, data, size, values );
+
+	}
+
 	bool read_row ( run_context& ctx, const table_info& table, int64_t rowid, storage::value*& values, bool& found ) {
 
 		storage::btree tree = { ctx.pages, table.root, false };

@@ -1394,6 +1394,52 @@ namespace storage {
 
 	}
 
+	bool table_delete_at ( btree& tree, uint32_t number, uint32_t slot, int64_t rowid, bool& done ) {
+
+		pager& owner = *tree.owner;
+
+		done = false;
+
+		if ( !number )
+			return true;
+
+		page_frame* frame = get_page ( owner, number );
+
+		if ( !frame )
+			return false;
+
+		cell_info old;
+		uint32_t count = count_of ( frame->data );
+		bool usable = frame->data [ 0 ] == PAGE_TABLE_LEAF && slot < count && parse_cell ( frame->data, slot, old ) && old.rowid == rowid && !old.overflow;
+
+		if ( usable && number != tree.root )
+			usable = quick_used ( frame->data ) >= BTREE_UNDERFULL + old.size + 2;
+
+		if ( !usable ) {
+
+			release_page ( frame );
+
+			return true;
+
+		}
+
+		if ( !change_page ( owner, frame ) ) {
+
+			release_page ( frame );
+
+			return false;
+
+		}
+
+		drop_cell ( frame->data, slot, old.size );
+		dirty_page ( frame );
+		release_page ( frame );
+		done = true;
+
+		return true;
+
+	}
+
 	bool index_insert ( btree& tree, const uint8_t* key, size_t size, bool& existed ) {
 
 		base::text& cell = tree.owner->cell_bytes;
