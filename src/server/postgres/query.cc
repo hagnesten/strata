@@ -248,7 +248,7 @@ namespace server {
 			put16 ( link, 0 );
 			put32 ( link, static_cast < int32_t > ( statement.column_types [ c ] ) );
 			put16 ( link, static_cast < int16_t > ( type_size ( statement.column_types [ c ] ) ) );
-			put32 ( link, -1 );
+			put32 ( link, statement.stmt ? statement.column_modifiers [ c ] : -1 );
 			put16 ( link, format );
 
 		}
@@ -402,8 +402,14 @@ namespace server {
 
 		const engine::prepared_select* plan = statement.stmt->prepared ? engine::statement_plan ( *statement.stmt->prepared ) : nullptr;
 
-		for ( uint32_t c = 0; c < statement.column_count; c++ )
-			statement.column_types [ c ] = statement.stmt->prepared && statement.stmt->prepared->statement->kind == sql::STATEMENT_EXPLAIN ? ( c < 2 ? PG_INT8 : PG_TEXT ) : column_type ( plan, c );
+		for ( uint32_t c = 0; c < statement.column_count; c++ ) {
+
+			bool explain = statement.stmt->prepared && statement.stmt->prepared->statement->kind == sql::STATEMENT_EXPLAIN;
+
+			statement.column_types [ c ] = explain ? ( c < 2 ? PG_INT8 : PG_TEXT ) : column_type ( plan, c );
+			statement.column_modifiers [ c ] = explain ? -1 : column_modifier ( plan, c );
+
+		}
 
 		return true;
 

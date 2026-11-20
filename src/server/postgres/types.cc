@@ -10,6 +10,7 @@ namespace server {
 
 		switch ( oid ) {
 
+			case PG_VARCHAR: case PG_BPCHAR:
 			case PG_BOOL: case PG_BYTEA: case PG_INT8: case PG_INT2: case PG_INT4: case PG_TEXT: case PG_OID: case PG_JSON: case PG_FLOAT4: case PG_FLOAT8:
 			case PG_DATE: case PG_TIME: case PG_TIMESTAMP: case PG_TIMESTAMPTZ: case PG_NUMERIC: case PG_UUID: case PG_JSONB:
 				return oid;
@@ -213,6 +214,44 @@ namespace server {
 				return PG_TEXT;
 
 		}
+
+	}
+
+	int32_t column_modifier ( const engine::prepared_select* plan, uint32_t column ) {
+
+		if ( !plan || column >= plan->output_count )
+			return -1;
+
+		const sql::expression* item = plan->outputs [ column ];
+
+		if ( !item || item->kind != sql::EXPRESSION_COLUMN || item->depth != 0 || item->source < 0 || static_cast < uint32_t > ( item->source ) >= plan->source_count || item->column < 0 )
+			return -1;
+
+		const engine::prepared_source& source = plan->sources [ item->source ];
+
+		if ( !source.table || static_cast < uint32_t > ( item->column ) >= source.table->column_count )
+			return -1;
+
+		const engine::column_info& info = source.table->columns [ item->column ];
+		uint32_t oid = declared_type ( info.type );
+
+		if ( oid == PG_NUMERIC && info.precision > 0 )
+			return ( info.precision << 16 | base::max ( info.scale, 0 ) ) + 4;
+
+		if ( oid != PG_VARCHAR && oid != PG_BPCHAR )
+			return -1;
+
+		const char* open = info.type;
+
+		while ( *open && *open != '(' )
+			open++;
+
+		int32_t length = 0;
+
+		for ( const char* at = *open ? open + 1 : open; *at >= '0' && *at <= '9'; at++ )
+			length = base::min ( length * 10 + ( *at - '0' ), 10485760 );
+
+		return length ? length + 4 : -1;
 
 	}
 

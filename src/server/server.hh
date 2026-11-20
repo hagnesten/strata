@@ -27,6 +27,8 @@
 #define PG_INT2 21
 #define PG_INT4 23
 #define PG_TEXT 25
+#define PG_VARCHAR 1043
+#define PG_BPCHAR 1042
 #define PG_OID 26
 #define PG_JSON 114
 #define PG_FLOAT4 700
@@ -71,6 +73,7 @@ namespace server {
 		uint32_t parameter_types [ SERVER_PARAMETERS ];
 		uint32_t column_count;
 		uint32_t column_types [ SERVER_COLUMNS ];
+		int32_t column_modifiers [ SERVER_COLUMNS ];
 		bool returns_rows;
 		char tag [ 32 ];
 		bool control;
@@ -209,6 +212,8 @@ namespace server {
 	const uint8_t* read_span ( pg_reader& reader, size_t size );
 
 	uint32_t column_type ( const engine::prepared_select* plan, uint32_t column );
+
+	int32_t column_modifier ( const engine::prepared_select* plan, uint32_t column );
 
 	uint32_t declared_type ( const char* type );
 
