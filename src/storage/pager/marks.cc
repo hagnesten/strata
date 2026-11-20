@@ -221,6 +221,7 @@ namespace storage {
 			return;
 
 		item.shape++;
+		item.layout++;
 
 		for ( uint32_t m = stack.count; m-- > depth; ) {
 

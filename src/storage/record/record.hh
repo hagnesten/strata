@@ -51,6 +51,10 @@ namespace storage {
 
 	value blob_value ( const uint8_t* data, size_t size );
 
+	size_t record_size ( const value* values, uint32_t count );
+
+	void write_record ( const value* values, uint32_t count, uint8_t* out );
+
 	void encode_record ( const value* values, uint32_t count, base::text& out );
 
 	bool decode_record ( const uint8_t* data, size_t size, value* out, uint32_t room, uint32_t& count );
@@ -60,6 +64,8 @@ namespace storage {
 	int32_t compare_values ( const value& a, const value& b );
 
 	int32_t compare_records ( const uint8_t* a, size_t a_size, const uint8_t* b, size_t b_size, uint32_t columns );
+
+	bool field_at ( const uint8_t* data, size_t size, uint32_t column, value& out, bool& present );
 
 	bool last_integer ( const uint8_t* data, size_t size, int64_t& out );
 

@@ -91,12 +91,21 @@ namespace storage {
 
 	};
 
+	enum seek_match : uint8_t {
+
+		SEEK_UNKNOWN,
+		SEEK_EQUAL,
+		SEEK_NONE,
+
+	};
+
 	struct cursor {
 
 		btree tree;
 		uint32_t page;
 		uint32_t slot;
 		bool valid;
+		seek_match match;
 
 	};
 
@@ -166,6 +175,8 @@ namespace storage {
 	bool cursor_payload ( cursor& at, base::text& out );
 
 	bool cursor_take ( cursor& at, base::arena& memory, int64_t& rowid, const uint8_t*& data, size_t& size );
+
+	bool cursor_view ( cursor& at, base::arena& memory, int64_t& rowid, const uint8_t*& data, size_t& size, page_frame*& held );
 
 	bool check_btree ( pager& owner, uint32_t root, bool index, tree_report& report );
 

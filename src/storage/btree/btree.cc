@@ -1652,17 +1652,129 @@ namespace storage {
 
 	}
 
+	static leaf_hint* hint_for ( pager& owner, uint32_t root ) {
+
+		for ( uint32_t i = 0; i < PAGER_LEAVES; i++ )
+			if ( owner.leaves [ i ].root == root )
+				return &owner.leaves [ i ];
+
+		return nullptr;
+
+	}
+
+	static void remember_leaf ( pager& owner, leaf_hint* hint, uint32_t root, uint32_t leaf ) {
+
+		if ( !hint ) {
+
+			hint = &owner.leaves [ owner.next_leaf++ % PAGER_LEAVES ];
+			hint->root = root;
+			hint->score = 1;
+			hint->tries = 0;
+
+		}
+
+		hint->leaf = leaf;
+		hint->layout = owner.layout;
+
+	}
+
+	static bool hinted_seek ( pager& owner, const leaf_hint& hint, const key_probe& probe, cursor& at, bool& hit ) {
+
+		page_frame* frame = get_page ( owner, hint.leaf );
+
+		hit = false;
+
+		if ( !frame )
+			return false;
+
+		const uint8_t* page = frame->data;
+		uint32_t count = count_of ( page );
+		bool fine = true;
+
+		if ( page [ 0 ] == PAGE_INDEX_LEAF && count >= 2 ) {
+
+			int32_t low_order = index_order ( owner, page, 0, count, probe, fine );
+			int32_t high_order = fine && low_order < 0 ? index_order ( owner, page, count - 1, count, probe, fine ) : -1;
+
+			if ( fine && low_order < 0 && high_order >= 0 ) {
+
+				uint32_t low = 1;
+				uint32_t high = count - 1;
+				bool exact = high_order == 0;
+
+				while ( fine && low < high ) {
+
+					uint32_t middle = low + ( high - low ) / 2;
+					int32_t order = index_order ( owner, page, middle, count, probe, fine );
+
+					if ( order < 0 )
+						low = middle + 1;
+					else {
+
+						high = middle;
+						exact = exact || order == 0;
+
+					}
+
+				}
+
+				if ( fine ) {
+
+					at.page = hint.leaf;
+					at.slot = low;
+					at.valid = true;
+					at.match = exact ? SEEK_EQUAL : SEEK_NONE;
+					hit = true;
+
+				}
+
+			}
+
+		}
+
+		release_page ( frame );
+
+		return fine;
+
+	}
+
 	static bool descend ( cursor& at, btree& tree, bool first, int64_t rowid, const uint8_t* key, size_t size, uint32_t columns ) {
 
 		pager& owner = *tree.owner;
 		uint32_t number = tree.root;
 		key_probe probe;
+		leaf_hint* hint = nullptr;
+		bool hinted = tree.index && !first;
 
 		at.tree = tree;
 		at.valid = false;
+		at.match = SEEK_UNKNOWN;
 
-		if ( tree.index && !first )
+		if ( hinted ) {
+
 			make_probe ( key, size, columns, probe );
+			hint = hint_for ( owner, tree.root );
+
+			if ( hint && hint->layout == owner.layout && ( hint->score > 0 || ( ++hint->tries & 15 ) == 0 ) ) {
+
+				bool hit = false;
+
+				if ( !hinted_seek ( owner, *hint, probe, at, hit ) )
+					return false;
+
+				if ( hit ) {
+
+					hint->score = hint->score < 8 ? hint->score + 1 : 8;
+
+					return true;
+
+				}
+
+				hint->score = hint->score > -8 ? hint->score - 1 : -8;
+
+			}
+
+		}
 
 		for ( uint32_t depth = 0; depth <= BTREE_DEPTH; depth++ ) {
 
@@ -1687,11 +1799,21 @@ namespace storage {
 				uint32_t slot = 0;
 				bool exact = false;
 				bool fine = first || find_slot ( owner, frame->data, !tree.index, rowid, &probe, slot, exact );
+				uint32_t count = count_of ( frame->data );
 
 				release_page ( frame );
 
 				if ( !fine )
 					return false;
+
+				if ( hinted ) {
+
+					remember_leaf ( owner, hint, tree.root, number );
+
+					if ( slot < count )
+						at.match = exact ? SEEK_EQUAL : SEEK_NONE;
+
+				}
 
 				at.page = number;
 				at.slot = slot;
@@ -1816,6 +1938,76 @@ namespace storage {
 		release_page ( frame );
 
 		return fine;
+
+	}
+
+	bool cursor_view ( cursor& at, base::arena& memory, int64_t& rowid, const uint8_t*& data, size_t& size, page_frame*& held ) {
+
+		held = nullptr;
+
+		if ( !at.valid )
+			return false;
+
+		pager& owner = *at.tree.owner;
+		page_frame* frame = get_page ( owner, at.page );
+
+		if ( !frame )
+			return false;
+
+		cell_info info;
+		uint32_t count = count_of ( frame->data );
+		bool fine = at.slot < count && parse_cell ( frame->data, at.slot, info );
+		bool kept_frame = false;
+
+		if ( fine && info.payload == info.local ) {
+
+			data = info.local_data;
+			size = info.local;
+			kept_frame = true;
+
+		} else if ( fine ) {
+
+			base::text whole;
+
+			fine = read_full ( owner, info, whole );
+
+			char* kept = fine ? memory.keep ( whole.value ( ), whole.size ) : nullptr;
+
+			fine = kept != nullptr;
+			data = reinterpret_cast < const uint8_t* > ( kept );
+			size = whole.size;
+
+		}
+
+		uint32_t next = link_a ( frame->data );
+
+		rowid = info.rowid;
+
+		if ( fine && kept_frame )
+			held = frame;
+		else
+			release_page ( frame );
+
+		if ( !fine )
+			return false;
+
+		at.slot++;
+
+		if ( at.slot < count )
+			return true;
+
+		at.page = next;
+		at.slot = 0;
+
+		if ( settle ( at ) )
+			return true;
+
+		if ( held )
+			release_page ( held );
+
+		held = nullptr;
+
+		return false;
 
 	}
 

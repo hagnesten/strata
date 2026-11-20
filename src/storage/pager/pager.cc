@@ -410,6 +410,7 @@ namespace storage {
 		page_frame* frame = nullptr;
 
 		item.shape++;
+		item.layout++;
 
 		if ( !item.wal.writing && !begin_write ( item ) )
 			return nullptr;
@@ -498,6 +499,7 @@ namespace storage {
 		}
 
 		item.shape++;
+		item.layout++;
 
 		page_frame* frame = get_page ( item, number );
 
@@ -611,6 +613,7 @@ namespace storage {
 	void rollback_pager ( pager& item ) {
 
 		item.shape++;
+		item.layout++;
 		end_write ( item );
 
 		for ( uint32_t i = 0; i < item.frame_count; i++ ) {

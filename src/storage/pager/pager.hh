@@ -19,6 +19,7 @@
 #define WAL_CHECKPOINT_FRAMES 1000
 #define WAL_BATCH 64
 #define PAGER_TAILS 8
+#define PAGER_LEAVES 8
 #define WAL_KEEP_BYTES ( 64ull * 1024 * 1024 )
 
 namespace storage {
@@ -130,6 +131,16 @@ namespace storage {
 
 	};
 
+	struct leaf_hint {
+
+		uint32_t root;
+		uint32_t leaf;
+		uint64_t layout;
+		int32_t score;
+		uint32_t tries;
+
+	};
+
 	struct mark_stack {
 
 		pager_mark* marks;
@@ -162,6 +173,9 @@ namespace storage {
 		uint64_t shape;
 		tail_hint tails [ PAGER_TAILS ];
 		uint32_t next_tail;
+		uint64_t layout;
+		leaf_hint leaves [ PAGER_LEAVES ];
+		uint32_t next_leaf;
 
 	};
 

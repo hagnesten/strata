@@ -301,6 +301,7 @@ namespace storage {
 					discard_frame ( item, item.frames [ i ] );
 
 		item.shape++;
+		item.layout++;
 
 	}
 

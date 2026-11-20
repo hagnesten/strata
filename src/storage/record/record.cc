@@ -58,44 +58,74 @@ namespace storage {
 
 	}
 
-	static void add_varint ( base::text& out, uint64_t number ) {
+	size_t record_size ( const value* values, uint32_t count ) {
 
-		uint8_t bytes [ 10 ];
-		size_t size = base::write_varint ( bytes, number );
-
-		out.add ( reinterpret_cast < const char* > ( bytes ), size );
-
-	}
-
-	void encode_record ( const value* values, uint32_t count, base::text& out ) {
-
-		add_varint ( out, count );
+		size_t size = base::varint_size ( count );
 
 		for ( uint32_t i = 0; i < count; i++ ) {
 
 			const value& item = values [ i ];
 
-			out.add ( static_cast < char > ( item.kind ) );
+			size++;
 
 			if ( item.kind == VALUE_INTEGER )
-				add_varint ( out, base::zigzag ( item.integer ) );
+				size += base::varint_size ( base::zigzag ( item.integer ) );
+			else if ( item.kind == VALUE_REAL )
+				size += 8;
+			else if ( item.kind == VALUE_TEXT || item.kind == VALUE_BLOB )
+				size += base::varint_size ( item.size ) + item.size;
+
+		}
+
+		return size;
+
+	}
+
+	void write_record ( const value* values, uint32_t count, uint8_t* out ) {
+
+		uint8_t* at = out + base::write_varint ( out, count );
+
+		for ( uint32_t i = 0; i < count; i++ ) {
+
+			const value& item = values [ i ];
+
+			*at++ = static_cast < uint8_t > ( item.kind );
+
+			if ( item.kind == VALUE_INTEGER )
+				at += base::write_varint ( at, base::zigzag ( item.integer ) );
 			else if ( item.kind == VALUE_REAL ) {
 
-				uint8_t bytes [ 8 ];
 				uint64_t bits = 0;
 
 				base::copy ( &bits, &item.real, 8 );
-				base::write64 ( bytes, bits );
-				out.add ( reinterpret_cast < const char* > ( bytes ), 8 );
+				base::write64 ( at, bits );
+				at += 8;
 
 			} else if ( item.kind == VALUE_TEXT || item.kind == VALUE_BLOB ) {
 
-				add_varint ( out, item.size );
-				out.add ( reinterpret_cast < const char* > ( item.bytes ), item.size );
+				at += base::write_varint ( at, item.size );
+
+				if ( item.size )
+					base::copy ( at, item.bytes, item.size );
+
+				at += item.size;
 
 			}
 
 		}
+
+	}
+
+	void encode_record ( const value* values, uint32_t count, base::text& out ) {
+
+		size_t size = record_size ( values, count );
+
+		if ( !out.reserve ( out.size + size + 1 ) )
+			return;
+
+		write_record ( values, count, reinterpret_cast < uint8_t* > ( out.data + out.size ) );
+		out.size += size;
+		out.data [ out.size ] = 0;
 
 	}
 
@@ -408,6 +438,61 @@ namespace storage {
 			return 0;
 
 		return left_count == right_count ? 0 : left_count < right_count ? -1 : 1;
+
+	}
+
+	bool field_at ( const uint8_t* data, size_t size, uint32_t column, value& out, bool& present ) {
+
+		size_t at = 0;
+		uint64_t columns = 0;
+
+		present = false;
+
+		if ( !base::read_varint ( data, size, at, columns ) || columns > RECORD_COLUMNS )
+			return false;
+
+		if ( column >= columns )
+			return true;
+
+		for ( uint32_t i = 0; i < column; i++ ) {
+
+			if ( at >= size )
+				return false;
+
+			uint8_t kind = data [ at++ ];
+
+			if ( kind == VALUE_INTEGER ) {
+
+				while ( at < size && data [ at ] & 0x80 )
+					at++;
+
+				if ( at++ >= size )
+					return false;
+
+			} else if ( kind == VALUE_REAL ) {
+
+				if ( size - at < 8 )
+					return false;
+
+				at += 8;
+
+			} else if ( kind == VALUE_TEXT || kind == VALUE_BLOB ) {
+
+				uint64_t length = 0;
+
+				if ( !base::read_varint ( data, size, at, length ) || length > size - at )
+					return false;
+
+				at += static_cast < size_t > ( length );
+
+			} else if ( kind != VALUE_NULL )
+				return false;
+
+		}
+
+		present = true;
+
+		return decode_one ( data, size, at, out );
 
 	}
 

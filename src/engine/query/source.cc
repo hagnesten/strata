@@ -269,6 +269,19 @@ namespace engine {
 			source.path.kind = PATH_ROWID_LIST;
 			source.path.list = list;
 
+			for ( uint32_t t = 0; !outer && t < source.filter_count; t++ ) {
+
+				if ( source.filters [ t ] != list )
+					continue;
+
+				source.filters [ t ] = source.filters [ source.filter_count - 1 ];
+				source.filters [ source.filter_count - 1 ] = list;
+				source.path.consumed = true;
+
+				break;
+
+			}
+
 			return;
 
 		}
@@ -684,7 +697,7 @@ namespace engine {
 		}
 
 		terms = source.plan->filters;
-		count = source.plan->filter_count;
+		count = source.plan->filter_count - ( source.plan->path.consumed ? 1 : 0 );
 
 	}
 
@@ -802,15 +815,92 @@ namespace engine {
 
 		}
 
+		source.quick_column = source.quick_count ? source.quick [ 0 ].column : QUICK_MIXED;
+
+		for ( uint32_t q = 1; q < source.quick_count; q++ )
+			if ( source.quick [ q ].column != source.quick_column )
+				source.quick_column = QUICK_MIXED;
+
 		source.quick_ready = true;
 
 		return true;
 
 	}
 
+	static bool quick_one ( run_context& ctx, const quick_test& test, const storage::value& value ) {
+
+		if ( test.like )
+			return value.kind != storage::VALUE_NULL && test.constant.kind != storage::VALUE_NULL && like_fast ( ctx, test, value ) != test.negated;
+
+		if ( value.kind == storage::VALUE_INTEGER && test.constant.kind == storage::VALUE_INTEGER ) {
+
+			int64_t a = value.integer;
+			int64_t b = test.constant.integer;
+
+			switch ( test.op ) {
+
+				case sql::OPERATOR_EQUAL:
+				case sql::OPERATOR_IS:
+					return a == b;
+
+				case sql::OPERATOR_NOT_EQUAL:
+				case sql::OPERATOR_IS_NOT:
+					return a != b;
+
+				case sql::OPERATOR_LESS:
+					return a < b;
+
+				case sql::OPERATOR_LESS_EQUAL:
+					return a <= b;
+
+				case sql::OPERATOR_GREATER:
+					return a > b;
+
+				case sql::OPERATOR_GREATER_EQUAL:
+					return a >= b;
+
+				default:
+					break;
+
+			}
+
+		}
+
+		return compare_with ( test.op, value, test.constant ) == TRUTH_TRUE;
+
+	}
+
 	static bool quick_passes ( run_context& ctx, source_state& source, int64_t rowid, const uint8_t* data, size_t size, bool& pass ) {
 
 		const table_info& table = *source.plan->table;
+
+		if ( source.quick_column != QUICK_MIXED ) {
+
+			storage::value value;
+
+			pass = true;
+
+			if ( source.quick_column < 0 )
+				value = storage::integer_value ( rowid );
+			else {
+
+				bool present = false;
+
+				if ( !storage::field_at ( data, size, static_cast < uint32_t > ( source.quick_column ), value, present ) )
+					return fail_named ( ctx, "a row of table ", table.name, " is damaged" );
+
+				if ( !present && !fallback_value ( ctx, table.columns [ source.quick_column ], value ) )
+					return false;
+
+			}
+
+			for ( uint32_t q = 0; q < source.quick_count && pass; q++ )
+				pass = quick_one ( ctx, source.quick [ q ], value );
+
+			return true;
+
+		}
+
 		storage::value* values = static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * ( table.column_count + 1 ) ) );
 		uint32_t count = 0;
 
@@ -834,10 +924,7 @@ namespace engine {
 			else if ( !fallback_value ( ctx, table.columns [ test.column ], value ) )
 				return false;
 
-			if ( test.like )
-				pass = value.kind != storage::VALUE_NULL && test.constant.kind != storage::VALUE_NULL && like_fast ( ctx, test, value ) != test.negated;
-			else
-				pass = compare_with ( test.op, value, test.constant ) == TRUTH_TRUE;
+			pass = quick_one ( ctx, test, value );
 
 		}
 
@@ -1051,17 +1138,15 @@ namespace engine {
 
 	static bool keep_key ( run_context& ctx, const storage::value* values, uint32_t count, const uint8_t*& out, size_t& size ) {
 
-		base::text record;
+		size = storage::record_size ( values, count );
 
-		storage::encode_record ( values, count, record );
-
-		char* kept = ctx.scratch->keep ( record.value ( ), record.size );
+		uint8_t* kept = static_cast < uint8_t* > ( ctx.scratch->take_raw ( size + 1 ) );
 
 		if ( !kept )
 			return fail_run ( ctx, "out of memory" );
 
-		out = reinterpret_cast < const uint8_t* > ( kept );
-		size = record.size;
+		storage::write_record ( values, count, kept );
+		out = kept;
 
 		return true;
 
@@ -1169,6 +1254,9 @@ namespace engine {
 
 		if ( !storage::cursor_seek_key ( source.index_at, source.index_tree, source.equal_key, source.equal_size, equal ) )
 			return fail_storage ( ctx, "an index could not be searched" );
+
+		if ( source.index_at.match == storage::SEEK_NONE )
+			source.done = true;
 
 		return true;
 
@@ -1550,12 +1638,16 @@ namespace engine {
 					int64_t rowid = 0;
 					const uint8_t* data = nullptr;
 					size_t size = 0;
+					storage::page_frame* held = nullptr;
 					base::arena_mark mark = ctx.scratch->mark ( );
 
-					if ( !storage::cursor_take ( source.at, *ctx.scratch, rowid, data, size ) )
+					if ( !storage::cursor_view ( source.at, *ctx.scratch, rowid, data, size, held ) )
 						return fail_storage ( ctx, "a table could not be read" );
 
 					if ( ( plan.path.kind == PATH_ROWID_RANGE && rowid > source.high ) || ( plan.path.kind == PATH_ROWID_EQUAL && rowid != source.low ) ) {
+
+						if ( held )
+							storage::release_page ( held );
 
 						source.done = true;
 
@@ -1566,8 +1658,12 @@ namespace engine {
 					if ( source.quick_ready && source.quick_count ) {
 
 						bool pass = true;
+						bool fine = quick_passes ( ctx, source, rowid, data, size, pass );
 
-						if ( !quick_passes ( ctx, source, rowid, data, size, pass ) )
+						if ( held && ( !fine || !pass ) )
+							storage::release_page ( held );
+
+						if ( !fine )
 							return false;
 
 						if ( !pass ) {
@@ -1587,6 +1683,22 @@ namespace engine {
 							continue;
 
 						}
+
+					}
+
+					if ( held ) {
+
+						uint8_t* kept = static_cast < uint8_t* > ( ctx.scratch->take_raw ( size + 1 ) );
+
+						if ( kept )
+							base::copy ( kept, data, size );
+
+						storage::release_page ( held );
+
+						if ( !kept )
+							return fail_run ( ctx, "out of memory" );
+
+						data = kept;
 
 					}
 

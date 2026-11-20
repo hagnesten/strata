@@ -260,10 +260,12 @@ namespace engine {
 			if ( rejected )
 				return true;
 
-			values = ctx.scratch->make < storage::value > ( plan->output_count + 1 );
+			values = static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * ( plan->output_count + 1 ) ) );
 
 			if ( !values )
 				return fail_run ( ctx, "out of memory" );
+
+			values [ plan->output_count ] = storage::null_value ( );
 
 			for ( uint32_t i = 0; i < plan->output_count; i++ )
 				if ( !evaluate ( ctx, &scope, plan->outputs [ i ], values [ i ] ) )
@@ -275,7 +277,7 @@ namespace engine {
 
 		if ( pipe.key_count ) {
 
-			keys = ctx.scratch->make < storage::value > ( pipe.key_count );
+			keys = static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * pipe.key_count ) );
 
 			if ( !keys )
 				return fail_run ( ctx, "out of memory" );
@@ -438,10 +440,12 @@ namespace engine {
 	static bool group_step ( run_context& ctx, query_state& scope, group_table& table ) {
 
 		prepared_select* plan = scope.plan;
-		storage::value* keys = ctx.scratch->make < storage::value > ( plan->group_count + 1 );
+		storage::value* keys = static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * ( plan->group_count + 1 ) ) );
 
 		if ( !keys )
 			return fail_run ( ctx, "out of memory" );
+
+		keys [ plan->group_count ] = storage::null_value ( );
 
 		for ( uint32_t i = 0; i < plan->group_count; i++ ) {
 
@@ -478,7 +482,7 @@ namespace engine {
 		for ( uint32_t a = 0; a < plan->aggregate_count; a++ ) {
 
 			const sql::expression* call = plan->aggregates [ a ];
-			storage::value* args = call->count ? ctx.scratch->make < storage::value > ( call->count ) : nullptr;
+			storage::value* args = call->count ? static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * call->count ) ) : nullptr;
 
 			if ( call->count && !args )
 				return fail_run ( ctx, "out of memory" );

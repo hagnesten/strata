@@ -5,6 +5,7 @@
 
 #define RUN_DEPTH 48
 #define SORT_BOUND 100000
+#define QUICK_MIXED -2
 #define ENGINE_VERSION "0.5"
 #define RUN_KEY_ROOM ( CATALOG_KEY_COLUMNS + 1 )
 
@@ -174,6 +175,7 @@ namespace engine {
 		bool high_inclusive;
 		sql::expression* list;
 		bool covering;
+		bool consumed;
 
 	};
 
@@ -344,6 +346,7 @@ namespace engine {
 		uint32_t quick_count;
 		bool* quick_wanted;
 		uint32_t quick_limit;
+		int32_t quick_column;
 		sql::expression** residual;
 		uint32_t residual_count;
 
