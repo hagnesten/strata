@@ -2,6 +2,97 @@
 
 namespace storage {
 
+	static uint32_t decimal_bytes ( __int128 mantissa ) {
+
+		uint32_t count = 1;
+
+		while ( count < 16 ) {
+
+			__int128 low = -( static_cast < __int128 > ( 1 ) << ( count * 8 - 1 ) );
+			__int128 high = ( static_cast < __int128 > ( 1 ) << ( count * 8 - 1 ) ) - 1;
+
+			if ( mantissa >= low && mantissa <= high )
+				break;
+
+			count++;
+
+		}
+
+		return count;
+
+	}
+
+	static __int128 ten_power ( uint32_t exponent ) {
+
+		__int128 value = 1;
+
+		for ( uint32_t i = 0; i < exponent; i++ )
+			value *= 10;
+
+		return value;
+
+	}
+
+	static int32_t compare_exact ( __int128 a, uint32_t a_scale, __int128 b, uint32_t b_scale ) {
+
+		__int128 a_divisor = ten_power ( a_scale );
+		__int128 b_divisor = ten_power ( b_scale );
+		__int128 a_whole = a / a_divisor;
+		__int128 b_whole = b / b_divisor;
+
+		if ( a_whole != b_whole )
+			return a_whole < b_whole ? -1 : 1;
+
+		uint32_t scale = a_scale > b_scale ? a_scale : b_scale;
+		__int128 a_part = ( a % a_divisor ) * ten_power ( scale - a_scale );
+		__int128 b_part = ( b % b_divisor ) * ten_power ( scale - b_scale );
+
+		return a_part == b_part ? 0 : a_part < b_part ? -1 : 1;
+
+	}
+
+	static double decimal_double ( const value& item ) {
+
+		double divisor = 1;
+
+		for ( uint32_t i = 0; i < item.subtype; i++ )
+			divisor *= 10;
+
+		return static_cast < double > ( decimal_mantissa ( item ) ) / divisor;
+
+	}
+
+	void write_decimal ( const value& item, base::text& out ) {
+
+		__int128 mantissa = decimal_mantissa ( item );
+		unsigned __int128 magnitude = mantissa < 0 ? static_cast < unsigned __int128 > ( -( mantissa + 1 ) ) + 1 : static_cast < unsigned __int128 > ( mantissa );
+		char digits [ 48 ];
+		uint32_t count = 0;
+
+		do {
+
+			digits [ count++ ] = static_cast < char > ( '0' + static_cast < uint32_t > ( magnitude % 10 ) );
+			magnitude /= 10;
+
+		} while ( magnitude );
+
+		while ( count <= item.subtype )
+			digits [ count++ ] = '0';
+
+		if ( mantissa < 0 )
+			out.add ( '-' );
+
+		for ( uint32_t i = count; i > 0; i-- ) {
+
+			if ( i == item.subtype && item.subtype )
+				out.add ( '.' );
+
+			out.add ( digits [ i - 1 ] );
+
+		}
+
+	}
+
 	size_t record_size ( const value* values, uint32_t count ) {
 
 		size_t size = base::varint_size ( count );
@@ -18,6 +109,8 @@ namespace storage {
 				size += 8;
 			else if ( item.kind == VALUE_TEXT || item.kind == VALUE_BLOB )
 				size += base::varint_size ( item.size ) + item.size;
+			else if ( item.kind == VALUE_DECIMAL )
+				size += 2 + decimal_bytes ( decimal_mantissa ( item ) );
 
 		}
 
@@ -54,6 +147,19 @@ namespace storage {
 
 				at += item.size;
 
+			} else if ( item.kind == VALUE_DECIMAL ) {
+
+				__int128 mantissa = decimal_mantissa ( item );
+				uint32_t bytes = decimal_bytes ( mantissa );
+
+				*at++ = item.subtype;
+				*at++ = static_cast < uint8_t > ( bytes );
+
+				for ( uint32_t k = 0; k < bytes; k++ )
+					at [ k ] = static_cast < uint8_t > ( static_cast < unsigned __int128 > ( mantissa ) >> ( ( bytes - 1 - k ) * 8 ) );
+
+				at += bytes;
+
 			}
 
 		}
@@ -75,11 +181,36 @@ namespace storage {
 
 	static bool decode_one ( const uint8_t* data, size_t size, size_t& at, value& out ) {
 
-		if ( at >= size || data [ at ] > VALUE_BLOB )
+		if ( at >= size || data [ at ] > VALUE_DECIMAL )
 			return false;
 
 		out = { };
 		out.kind = static_cast < value_kind > ( data [ at++ ] );
+
+		if ( out.kind == VALUE_DECIMAL ) {
+
+			if ( size - at < 2 )
+				return false;
+
+			uint8_t scale = data [ at ];
+			uint32_t bytes = data [ at + 1 ];
+
+			at += 2;
+
+			if ( !bytes || bytes > 16 || size - at < bytes )
+				return false;
+
+			unsigned __int128 bits = data [ at ] & 0x80 ? ~static_cast < unsigned __int128 > ( 0 ) : 0;
+
+			for ( uint32_t k = 0; k < bytes; k++ )
+				bits = bits << 8 | data [ at + k ];
+
+			at += bytes;
+			out = decimal_raw ( static_cast < __int128 > ( bits ), scale );
+
+			return true;
+
+		}
 
 		if ( out.kind == VALUE_INTEGER ) {
 
@@ -160,6 +291,17 @@ namespace storage {
 
 		if ( kind == VALUE_NULL )
 			return true;
+
+		if ( kind == VALUE_DECIMAL ) {
+
+			if ( size - at < 2 || data [ at + 1 ] > 16 || size - at - 2 < data [ at + 1 ] )
+				return false;
+
+			at += 2 + data [ at + 1 ];
+
+			return true;
+
+		}
 
 		if ( kind == VALUE_INTEGER ) {
 
@@ -246,7 +388,7 @@ namespace storage {
 
 	static uint32_t rank ( value_kind kind ) {
 
-		return kind == VALUE_NULL ? 0 : kind == VALUE_INTEGER || kind == VALUE_REAL ? 1 : kind == VALUE_TEXT ? 2 : 3;
+		return kind == VALUE_NULL ? 0 : kind == VALUE_INTEGER || kind == VALUE_REAL || kind == VALUE_DECIMAL ? 1 : kind == VALUE_TEXT ? 2 : 3;
 
 	}
 
@@ -266,8 +408,11 @@ namespace storage {
 			if ( a.kind == VALUE_INTEGER && b.kind == VALUE_INTEGER )
 				return a.integer == b.integer ? 0 : a.integer < b.integer ? -1 : 1;
 
-			double x = a.kind == VALUE_INTEGER ? static_cast < double > ( a.integer ) : a.real;
-			double y = b.kind == VALUE_INTEGER ? static_cast < double > ( b.integer ) : b.real;
+			if ( a.kind != VALUE_REAL && b.kind != VALUE_REAL )
+				return compare_exact ( a.kind == VALUE_DECIMAL ? decimal_mantissa ( a ) : a.integer, a.kind == VALUE_DECIMAL ? a.subtype : 0, b.kind == VALUE_DECIMAL ? decimal_mantissa ( b ) : b.integer, b.kind == VALUE_DECIMAL ? b.subtype : 0 );
+
+			double x = a.kind == VALUE_INTEGER ? static_cast < double > ( a.integer ) : a.kind == VALUE_DECIMAL ? decimal_double ( a ) : a.real;
+			double y = b.kind == VALUE_INTEGER ? static_cast < double > ( b.integer ) : b.kind == VALUE_DECIMAL ? decimal_double ( b ) : b.real;
 
 			return x == y ? 0 : x < y ? -1 : 1;
 
@@ -428,6 +573,13 @@ namespace storage {
 					return false;
 
 				at += static_cast < size_t > ( length );
+
+			} else if ( kind == VALUE_DECIMAL ) {
+
+				if ( size - at < 2 || data [ at + 1 ] > 16 || size - at - 2 < data [ at + 1 ] )
+					return false;
+
+				at += 2 + data [ at + 1 ];
 
 			} else if ( kind != VALUE_NULL )
 				return false;

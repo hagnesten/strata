@@ -15,6 +15,7 @@ namespace storage {
 		VALUE_REAL,
 		VALUE_TEXT,
 		VALUE_BLOB,
+		VALUE_DECIMAL,
 
 	};
 
@@ -96,6 +97,30 @@ namespace storage {
 		return made;
 
 	}
+
+	inline value decimal_raw ( __int128 mantissa, uint8_t scale ) {
+
+		value made = { };
+		unsigned __int128 bits = static_cast < unsigned __int128 > ( mantissa );
+
+		made.kind = VALUE_DECIMAL;
+		made.subtype = scale;
+		made.integer = static_cast < int64_t > ( static_cast < uint64_t > ( bits ) );
+		made.size = static_cast < size_t > ( static_cast < uint64_t > ( bits >> 64 ) );
+
+		return made;
+
+	}
+
+	inline __int128 decimal_mantissa ( const value& item ) {
+
+		unsigned __int128 bits = static_cast < unsigned __int128 > ( static_cast < uint64_t > ( item.size ) ) << 64 | static_cast < uint64_t > ( item.integer );
+
+		return static_cast < __int128 > ( bits );
+
+	}
+
+	void write_decimal ( const value& item, base::text& out );
 
 	size_t record_size ( const value* values, uint32_t count );
 

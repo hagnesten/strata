@@ -1,4 +1,5 @@
 #include "engine/value/value.hh"
+#include "engine/value/decimal.hh"
 #include "base/hash/crc32c.hh"
 
 namespace engine {
@@ -102,7 +103,7 @@ namespace engine {
 
 	storage::value numeric_of ( const storage::value& item ) {
 
-		if ( item.kind == storage::VALUE_INTEGER || item.kind == storage::VALUE_REAL || item.kind == storage::VALUE_NULL )
+		if ( item.kind == storage::VALUE_INTEGER || item.kind == storage::VALUE_REAL || item.kind == storage::VALUE_NULL || item.kind == storage::VALUE_DECIMAL )
 			return item;
 
 		storage::value out;
@@ -120,6 +121,17 @@ namespace engine {
 		if ( number.kind == storage::VALUE_NULL )
 			return false;
 
+		if ( number.kind == storage::VALUE_DECIMAL ) {
+
+			decimal_number exact = { };
+
+			decimal_of ( number, exact );
+			out = decimal_real ( exact );
+
+			return true;
+
+		}
+
 		out = number.kind == storage::VALUE_INTEGER ? static_cast < double > ( number.integer ) : number.real;
 
 		return true;
@@ -132,6 +144,19 @@ namespace engine {
 
 		if ( number.kind == storage::VALUE_NULL )
 			return false;
+
+		if ( number.kind == storage::VALUE_DECIMAL ) {
+
+			decimal_number exact = { };
+
+			decimal_of ( number, exact );
+
+			if ( !decimal_rescale ( exact, 0 ) || !decimal_integral ( exact, out ) )
+				out = decimal_real ( exact ) < 0 ? static_cast < int64_t > ( 0x8000000000000000ull ) : 0x7FFFFFFFFFFFFFFFll;
+
+			return true;
+
+		}
 
 		if ( number.kind == storage::VALUE_INTEGER )
 			out = number.integer;
@@ -155,6 +180,9 @@ namespace engine {
 
 		if ( number.kind == storage::VALUE_INTEGER )
 			return number.integer ? TRUTH_TRUE : TRUTH_FALSE;
+
+		if ( number.kind == storage::VALUE_DECIMAL )
+			return storage::decimal_mantissa ( number ) ? TRUTH_TRUE : TRUTH_FALSE;
 
 		return number.real != 0 ? TRUTH_TRUE : TRUTH_FALSE;
 
@@ -192,7 +220,14 @@ namespace engine {
 
 		if ( item.kind == storage::VALUE_INTEGER )
 			made.signed_number ( item.integer );
-		else
+		else if ( item.kind == storage::VALUE_DECIMAL ) {
+
+			decimal_number exact = { };
+
+			decimal_of ( item, exact );
+			decimal_text ( exact, made );
+
+		} else
 			made.real ( item.real );
 
 		char* kept = memory.keep ( made.value ( ), made.size );
@@ -222,6 +257,23 @@ namespace engine {
 
 				}
 
+				if ( number.kind == storage::VALUE_DECIMAL ) {
+
+					decimal_number exact = { };
+					int64_t whole = 0;
+
+					decimal_of ( number, exact );
+
+					if ( affinity == sql::AFFINITY_REAL )
+						return storage::real_value ( decimal_real ( exact ) );
+
+					if ( decimal_integral ( exact, whole ) )
+						return storage::integer_value ( whole );
+
+					return number;
+
+				}
+
 				if ( affinity == sql::AFFINITY_REAL && number.kind == storage::VALUE_INTEGER )
 					return storage::real_value ( static_cast < double > ( number.integer ) );
 
@@ -233,7 +285,7 @@ namespace engine {
 			}
 
 			case sql::AFFINITY_TEXT:
-				if ( item.kind == storage::VALUE_INTEGER || item.kind == storage::VALUE_REAL )
+				if ( item.kind == storage::VALUE_INTEGER || item.kind == storage::VALUE_REAL || item.kind == storage::VALUE_DECIMAL )
 					return text_of ( memory, item );
 
 				return item;
@@ -259,7 +311,63 @@ namespace engine {
 		storage::value x = numeric_of ( a );
 		storage::value y = numeric_of ( b );
 
-		if ( op == sql::OPERATOR_BIT_AND || op == sql::OPERATOR_BIT_OR || op == sql::OPERATOR_SHIFT_LEFT || op == sql::OPERATOR_SHIFT_RIGHT ) {
+		if ( x.kind == storage::VALUE_DECIMAL || y.kind == storage::VALUE_DECIMAL ) {
+
+			decimal_number p = { };
+			decimal_number q = { };
+			decimal_number r = { };
+			bool fine = false;
+			bool exact = x.kind != storage::VALUE_REAL && y.kind != storage::VALUE_REAL;
+
+			if ( exact && decimal_of ( x, p ) && decimal_of ( y, q ) ) {
+
+				switch ( op ) {
+
+					case sql::OPERATOR_ADD: fine = decimal_add ( p, q, false, r ); break;
+					case sql::OPERATOR_SUBTRACT: fine = decimal_add ( p, q, true, r ); break;
+					case sql::OPERATOR_MULTIPLY: fine = decimal_multiply ( p, q, r ); break;
+
+					case sql::OPERATOR_DIVIDE:
+						if ( !q.mantissa )
+							return storage::null_value ( );
+
+						fine = decimal_divide ( p, q, r );
+						break;
+
+					case sql::OPERATOR_MODULO:
+						if ( !q.mantissa )
+							return storage::null_value ( );
+
+						fine = decimal_modulo ( p, q, r );
+						break;
+
+					default:
+						break;
+
+				}
+
+				if ( fine )
+					return decimal_result ( r );
+
+			}
+
+			if ( x.kind == storage::VALUE_DECIMAL ) {
+
+				decimal_of ( x, p );
+				x = storage::real_value ( decimal_real ( p ) );
+
+			}
+
+			if ( y.kind == storage::VALUE_DECIMAL ) {
+
+				decimal_of ( y, q );
+				y = storage::real_value ( decimal_real ( q ) );
+
+			}
+
+		}
+
+		if ( op == sql::OPERATOR_BIT_AND|| op == sql::OPERATOR_BIT_OR || op == sql::OPERATOR_SHIFT_LEFT || op == sql::OPERATOR_SHIFT_RIGHT ) {
 
 			int64_t left = 0;
 			int64_t right = 0;
@@ -578,6 +686,20 @@ namespace engine {
 	}
 
 	uint32_t hash_value ( const storage::value& item, uint32_t seed ) {
+
+		if ( item.kind == storage::VALUE_DECIMAL ) {
+
+			decimal_number number = { };
+			int64_t whole = 0;
+
+			decimal_of ( item, number );
+
+			if ( decimal_integral ( number, whole ) )
+				return hash_value ( storage::integer_value ( whole ), seed );
+
+			return hash_value ( storage::real_value ( decimal_real ( number ) ), seed );
+
+		}
 
 		uint8_t kind = item.kind == storage::VALUE_REAL ? storage::VALUE_INTEGER : item.kind;
 
