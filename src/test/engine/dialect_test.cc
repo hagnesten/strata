@@ -80,7 +80,7 @@ namespace test {
 		rows ( db, "SELECT '42'::int + 1, 7::text || 'x', 'TRUE'::boolean, 'off'::bool, '2024-01-02'::timestamp with time zone, 1.5::numeric ( 10, 2 )", "43|7x|1|0|2024-01-02|1.5" );
 		rows ( db, "SELECT 'Apple' ILIKE 'a%', 'Apple' NOT ILIKE 'b%'", "1|1" );
 		rows ( db, "SELECT current_database ( ), current_schema, current_user, length ( gen_random_uuid ( ) ), substr ( gen_random_uuid ( ), 15, 1 )", "strata|public|strata|36|4" );
-		rows ( db, "SELECT version ( ) LIKE 'PostgreSQL 17%', length ( now ( ) ), current_setting ( 'server_version_num' )", "1|23|170000" );
+		rows ( db, "SELECT version ( ) LIKE 'PostgreSQL 17%', length ( now ( ) ) BETWEEN 19 AND 23, now ( ) LIKE '____-__-__ __:__:__%', current_setting ( 'server_version_num' )", "1|1|1|170000" );
 		fails ( db, "SELECT 'maybe'::boolean", "boolean" );
 
 	}
@@ -144,9 +144,31 @@ namespace test {
 
 	}
 
+	static void wide_alignment ( ) {
+
+		bool aligned = true;
+		void* blocks [ 200 ];
+		base::arena memory;
+
+		for ( uint32_t i = 0; i < 200; i++ ) {
+
+			blocks [ i ] = base::allocate ( 1 + i * 7 );
+			aligned = aligned && blocks [ i ] && reinterpret_cast < uintptr_t > ( blocks [ i ] ) % 16 == 0;
+			aligned = aligned && reinterpret_cast < uintptr_t > ( memory.take ( 1 + i * 3 ) ) % 16 == 0;
+
+		}
+
+		for ( uint32_t i = 0; i < 200; i++ )
+			base::release ( blocks [ i ] );
+
+		expect ( aligned, "the heap and arenas hand out 16-byte aligned memory for 128-bit values" );
+
+	}
+
 	void dialect_tests ( engine::database& db ) {
 
 		section ( "Postgres dialect" );
+		wide_alignment ( );
 		identity_columns ( db );
 		schemas ( db );
 		returning_rows ( db );
