@@ -687,7 +687,7 @@ namespace engine {
 
 		test.shape = LIKE_GENERIC;
 
-		if ( test.glob || test.constant.kind != storage::VALUE_TEXT )
+		if ( test.glob || test.exact || test.constant.kind != storage::VALUE_TEXT )
 			return;
 
 		size_t start = 0;
@@ -775,7 +775,7 @@ namespace engine {
 			}
 
 			default:
-				return like_match ( test.constant.bytes, test.constant.size, bytes, size, 0, test.glob );
+				return like_match ( test.constant.bytes, test.constant.size, bytes, size, 0, test.glob, test.exact );
 
 		}
 
@@ -897,6 +897,7 @@ namespace engine {
 			made.constant = constant;
 			made.like = like;
 			made.glob = like && term->star;
+			made.exact = like && !term->star && ctx.schema->postgres && !term->nocase;
 			made.negated = like && term->negated;
 
 			if ( like )

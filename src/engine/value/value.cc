@@ -450,7 +450,7 @@ namespace engine {
 
 	}
 
-	bool like_match ( const uint8_t* pattern, size_t pattern_size, const uint8_t* text, size_t text_size, uint32_t escape, bool glob ) {
+	bool like_match ( const uint8_t* pattern, size_t pattern_size, const uint8_t* text, size_t text_size, uint32_t escape, bool glob, bool exact ) {
 
 		size_t p = 0;
 		size_t t = 0;
@@ -548,7 +548,7 @@ namespace engine {
 						next_p = at;
 
 					} else
-						hit = glob ? wanted == have : fold ( wanted ) == fold ( have );
+						hit = glob || exact ? wanted == have : fold ( wanted ) == fold ( have );
 
 					if ( hit ) {
 

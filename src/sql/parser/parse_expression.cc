@@ -5,10 +5,10 @@ namespace sql {
 	static const char* const reserved [ ] = {
 
 		"select", "from", "where", "group", "having", "order", "limit", "offset", "union", "intersect", "except", "values",
-		"insert", "update", "delete", "create", "drop", "alter", "into", "set", "on", "using", "join", "left", "inner",
+		"create", "into", "set", "on", "using", "join", "left", "inner",
 		"cross", "outer", "and", "or", "not", "is", "in", "like", "glob", "between", "case", "when", "then", "else", "end",
-		"as", "by", "asc", "desc", "null", "distinct", "all", "exists", "primary", "unique", "check", "default",
-		"references", "foreign", "constraint", "table", "index", "begin", "commit", "rollback", "collate", "escape", "cast",
+		"as", "asc", "desc", "null", "distinct", "all", "exists", "primary", "unique", "check", "default",
+		"references", "foreign", "constraint", "table", "collate", "cast",
 		"returning", "ilike",
 
 	};
@@ -1243,6 +1243,77 @@ namespace sql {
 				operator_kind op = symbol_is ( item.current, "=" ) || symbol_is ( item.current, "==" ) ? OPERATOR_EQUAL : OPERATOR_NOT_EQUAL;
 
 				advance ( item );
+
+				lexer saved = item.lex;
+				token saved_token = item.current;
+				bool all = token_is ( item.current, "all" );
+
+				if ( ( token_is ( item.current, "any" ) || token_is ( item.current, "some" ) || all ) && ( advance ( item ), symbol_is ( item.current, "(" ) ) && ( op == OPERATOR_EQUAL ) != all ) {
+
+					advance ( item );
+
+					if ( starts_select ( item.current ) ) {
+
+						expression* made = new_expression ( item, EXPRESSION_IN );
+
+						if ( !made )
+							return nullptr;
+
+						made->left = left;
+						made->negated = all;
+						made->query = parse_select ( item );
+
+						if ( !made->query || !expect_symbol ( item, ")" ) )
+							return nullptr;
+
+						left = made;
+
+						continue;
+
+					}
+
+					expression* call = new_expression ( item, EXPRESSION_FUNCTION );
+					expression** list = item.memory->make < expression* > ( 2 );
+
+					if ( !call || !list ) {
+
+						fail_here ( item, "out of memory" );
+
+						return nullptr;
+
+					}
+
+					list [ 0 ] = left;
+					list [ 1 ] = parse_expression ( item );
+
+					if ( !list [ 1 ] || !expect_symbol ( item, ")" ) )
+						return nullptr;
+
+					call->name = "strata_any";
+					call->list = list;
+					call->count = 2;
+
+					if ( all ) {
+
+						expression* flip = new_expression ( item, EXPRESSION_UNARY );
+
+						if ( !flip )
+							return nullptr;
+
+						flip->op = OPERATOR_NOT;
+						flip->left = call;
+						call = flip;
+
+					}
+
+					left = call;
+
+					continue;
+
+				}
+
+				item.lex = saved;
+				item.current = saved_token;
 				left = binary ( item, op, left, parse_comparison ( item ) );
 
 				continue;
@@ -1360,6 +1431,7 @@ namespace sql {
 					return nullptr;
 
 				made->star = token_is ( item.current, "glob" );
+				made->nocase = token_is ( item.current, "ilike" );
 				advance ( item );
 				made->left = left;
 				made->negated = negated;

@@ -215,7 +215,7 @@ namespace sql {
 
 			case EXPRESSION_LIKE:
 				print_expression ( out, item->left );
-				out.add ( item->negated ? " NOT" : "" ).add ( item->star ? " GLOB " : " LIKE " );
+				out.add ( item->negated ? " NOT" : "" ).add ( item->star ? " GLOB " : item->nocase ? " ILIKE " : " LIKE " );
 				print_expression ( out, item->right );
 
 				if ( item->third ) {

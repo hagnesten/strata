@@ -146,6 +146,22 @@ namespace engine {
 
 		}
 
+		if ( ctx.schema->postgres && item.kind == storage::VALUE_TEXT && ( affinity == sql::AFFINITY_INTEGER || affinity == sql::AFFINITY_REAL || affinity == sql::AFFINITY_NUMERIC ) ) {
+
+			storage::value parsed;
+
+			if ( !read_number_text ( item.bytes, item.size, parsed, true ) || ( affinity == sql::AFFINITY_INTEGER && parsed.kind != storage::VALUE_INTEGER ) ) {
+
+				base::text message;
+
+				message.add ( "invalid input syntax for type " ).add ( affinity == sql::AFFINITY_INTEGER ? "integer" : "numeric" ).add ( ": \"" ).add ( reinterpret_cast < const char* > ( item.bytes ), base::min < size_t > ( item.size, 64 ) ).add ( '"' );
+
+				return fail_run ( ctx, message.value ( ) );
+
+			}
+
+		}
+
 		switch ( affinity ) {
 
 			case sql::AFFINITY_INTEGER: {
@@ -341,7 +357,7 @@ namespace engine {
 
 		storage::value a = text_of ( *ctx.scratch, text );
 		storage::value b = text_of ( *ctx.scratch, pattern );
-		bool hit = like_match ( b.bytes, b.size, a.bytes, a.size, escape_code, item->star );
+		bool hit = like_match ( b.bytes, b.size, a.bytes, a.size, escape_code, item->star, ctx.schema->postgres && !item->nocase );
 
 		out = storage::integer_value ( hit != item->negated ? 1 : 0 );
 
@@ -461,6 +477,15 @@ namespace engine {
 				return json_arrow ( ctx, a, b, item->op == sql::OPERATOR_JSON_VALUE, out );
 
 			default:
+				if ( ctx.schema->postgres && ( item->op == sql::OPERATOR_DIVIDE || item->op == sql::OPERATOR_MODULO ) && a.kind != storage::VALUE_NULL && b.kind != storage::VALUE_NULL ) {
+
+					storage::value divisor = numeric_of ( b );
+
+					if ( ( divisor.kind == storage::VALUE_INTEGER && !divisor.integer ) || ( divisor.kind == storage::VALUE_REAL && divisor.real == 0 ) )
+						return fail_run ( ctx, "division by zero" );
+
+				}
+
 				out = arithmetic ( item->op, a, b );
 
 				return true;

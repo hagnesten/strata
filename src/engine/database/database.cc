@@ -47,6 +47,7 @@ namespace engine {
 		item.schema->session_user [ 0 ] = 0;
 		item.schema->session_database [ 0 ] = 0;
 		item.schema->session_id = 0;
+		item.schema->postgres = false;
 
 		if ( !load_catalog ( item.pages, *item.schema, item.problem ) ) {
 

@@ -97,6 +97,7 @@ namespace engine {
 		char session_user [ CATALOG_SEARCH_ROOM ];
 		char session_database [ CATALOG_SEARCH_ROOM ];
 		uint32_t session_id;
+		bool postgres;
 
 	};
 

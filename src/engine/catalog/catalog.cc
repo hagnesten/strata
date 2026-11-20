@@ -70,8 +70,8 @@ namespace engine {
 
 		static const char* const known [ ] [ 2 ] = {
 
-			{ "server_version", "16.0" },
-			{ "server_version_num", "160000" },
+			{ "server_version", "17.0" },
+			{ "server_version_num", "170000" },
 			{ "transaction_isolation", "serializable" },
 			{ "default_transaction_isolation", "serializable" },
 			{ "max_identifier_length", "63" },
