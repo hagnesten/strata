@@ -251,6 +251,7 @@
     <ClCompile Include="src\test\engine\update_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\test\engine\semi_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\test\engine\range_test.cc"><Filter>src\test\engine</Filter></ClCompile>
+    <ClCompile Include="src\test\engine\fold_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClInclude Include="src\engine\version.hh"><Filter>src\engine</Filter></ClInclude>
     <None Include="src\base\platform\linux\coroutine.cc"><Filter>src\base\platform\linux</Filter></None>
     <None Include="src\base\platform\linux\runtime.cc"><Filter>src\base\platform\linux</Filter></None>
@@ -304,6 +305,7 @@
     <ClCompile Include="src\storage\btree\estimate.cc"><Filter>src\storage\btree</Filter></ClCompile>
     <ClCompile Include="src\engine\query\select.cc"><Filter>src\engine\query</Filter></ClCompile>
     <ClCompile Include="src\engine\query\semi.cc"><Filter>src\engine\query</Filter></ClCompile>
+    <ClCompile Include="src\engine\query\fold.cc"><Filter>src\engine\query</Filter></ClCompile>
     <ClCompile Include="src\engine\query\source.cc"><Filter>src\engine\query</Filter></ClCompile>
     <ClCompile Include="src\engine\query\aggregate.cc"><Filter>src\engine\query</Filter></ClCompile>
     <ClCompile Include="src\engine\query\window.cc"><Filter>src\engine\query</Filter></ClCompile>

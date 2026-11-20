@@ -166,6 +166,7 @@
     <ClCompile Include="src\engine\search\snippets.cc"><Filter>src\engine\search</Filter></ClCompile>
     <ClCompile Include="src\engine\query\select.cc"><Filter>src\engine\query</Filter></ClCompile>
     <ClCompile Include="src\engine\query\semi.cc"><Filter>src\engine\query</Filter></ClCompile>
+    <ClCompile Include="src\engine\query\fold.cc"><Filter>src\engine\query</Filter></ClCompile>
     <ClCompile Include="src\engine\query\source.cc"><Filter>src\engine\query</Filter></ClCompile>
     <ClCompile Include="src\engine\query\aggregate.cc"><Filter>src\engine\query</Filter></ClCompile>
     <ClCompile Include="src\engine\query\window.cc"><Filter>src\engine\query</Filter></ClCompile>

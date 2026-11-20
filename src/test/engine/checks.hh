@@ -45,6 +45,8 @@ namespace test {
 
 	void range_tests ( engine::database& db );
 
+	void fold_tests ( engine::database& db );
+
 	void concurrency_tests ( const char* path );
 
 }

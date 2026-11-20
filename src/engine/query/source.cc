@@ -574,6 +574,36 @@ namespace engine {
 
 	}
 
+	bool decode_into ( run_context& ctx, source_state& source, int64_t rowid, const uint8_t* data, size_t size, storage::value* values ) {
+
+		const table_info& table = *source.plan->table;
+		uint32_t limit = decode_limit ( ctx, source );
+		uint32_t count = 0;
+
+		values [ table.column_count ] = storage::null_value ( );
+
+		if ( limit > RECORD_COLUMNS )
+			return decode_row ( ctx, table, data, size, rowid, values );
+
+		if ( !storage::decode_wanted ( data, size, values, table.column_count, source.plan->used, limit, count ) )
+			return fail_named ( ctx, "a row of table ", table.name, " is damaged" );
+
+		for ( uint32_t i = count; i < table.column_count; i++ ) {
+
+			if ( i >= limit )
+				values [ i ] = storage::null_value ( );
+			else if ( !fallback_value ( ctx, table.columns [ i ], values [ i ] ) )
+				return false;
+
+		}
+
+		if ( table.rowid_column >= 0 )
+			values [ table.rowid_column ] = storage::integer_value ( rowid );
+
+		return true;
+
+	}
+
 	static bool decode_scanned ( run_context& ctx, source_state& source, int64_t rowid, const uint8_t* data, size_t size ) {
 
 		const table_info& table = *source.plan->table;
@@ -767,7 +797,7 @@ namespace engine {
 
 	}
 
-	static bool compile_quick ( run_context& ctx, query_state* scope, source_state& source ) {
+	bool compile_quick ( run_context& ctx, query_state* scope, source_state& source ) {
 
 		prepared_source& plan = *source.plan;
 		const table_info* table = plan.table;
@@ -936,7 +966,7 @@ namespace engine {
 
 	}
 
-	static bool quick_passes ( run_context& ctx, source_state& source, int64_t rowid, const uint8_t* data, size_t size, bool& pass ) {
+	bool quick_passes ( run_context& ctx, source_state& source, int64_t rowid, const uint8_t* data, size_t size, bool& pass ) {
 
 		const table_info& table = *source.plan->table;
 

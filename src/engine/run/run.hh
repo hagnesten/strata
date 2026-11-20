@@ -384,6 +384,22 @@ namespace engine {
 
 	};
 
+	struct fold_state {
+
+		struct run_context* ctx;
+		struct query_state* scope;
+		source_state* source;
+		struct group_state* group;
+		storage::value* row;
+		sql::expression* const* terms;
+		uint32_t term_count;
+		bool checked;
+		bool range;
+		bool failed;
+		int64_t high;
+
+	};
+
 	struct query_state {
 
 		prepared_select* plan;
@@ -735,6 +751,20 @@ namespace engine {
 	bool run_child ( run_context& ctx, query_state* scope, const sql::expression* item, storage::value& out );
 
 	bool sort_rejects ( output_pipe& pipe, const storage::value& key );
+
+	group_state* new_group ( run_context& ctx, query_state& scope, group_table& table, const storage::value* keys, uint32_t hash );
+
+	bool step_group ( run_context& ctx, query_state& scope, group_state& group );
+
+	bool compile_quick ( run_context& ctx, query_state* scope, source_state& source );
+
+	bool quick_passes ( run_context& ctx, source_state& source, int64_t rowid, const uint8_t* data, size_t size, bool& pass );
+
+	bool decode_into ( run_context& ctx, source_state& source, int64_t rowid, const uint8_t* data, size_t size, storage::value* values );
+
+	bool can_fold ( const prepared_select* plan );
+
+	bool fold_rows ( run_context& ctx, query_state& scope, group_table& groups );
 
 	semi_plan* semi_join ( run_context& ctx, prepared_select* child );
 

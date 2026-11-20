@@ -396,7 +396,7 @@ namespace engine {
 
 	}
 
-	static group_state* new_group ( run_context& ctx, query_state& scope, group_table& table, const storage::value* keys, uint32_t hash ) {
+	group_state* new_group ( run_context& ctx, query_state& scope, group_table& table, const storage::value* keys, uint32_t hash ) {
 
 		prepared_select* plan = scope.plan;
 		group_state* group = ctx.memory->make < group_state > ( 1 );
@@ -454,7 +454,7 @@ namespace engine {
 
 	}
 
-	static bool step_group ( run_context& ctx, query_state& scope, group_state& group ) {
+	bool step_group ( run_context& ctx, query_state& scope, group_state& group ) {
 
 		prepared_select* plan = scope.plan;
 
@@ -857,7 +857,12 @@ namespace engine {
 
 		}
 
-		if ( fine && !run_level ( ctx, scope, 0, pipe, groups ) )
+		bool folded = fine && can_fold ( plan );
+
+		if ( folded && !fold_rows ( ctx, scope, groups ) )
+			return false;
+
+		if ( fine && !folded && !run_level ( ctx, scope, 0, pipe, groups ) )
 			return false;
 
 		for ( uint32_t s = 0; fine && s < plan->source_count && !pipe.stopped; s++ )

@@ -98,6 +98,7 @@
     <ClCompile Include="src\engine\search\snippets.cc" />
     <ClCompile Include="src\engine\query\select.cc" />
     <ClCompile Include="src\engine\query\semi.cc" />
+    <ClCompile Include="src\engine\query\fold.cc" />
     <ClCompile Include="src\engine\query\source.cc" />
     <ClCompile Include="src\engine\query\aggregate.cc" />
     <ClCompile Include="src\engine\query\window.cc" />
