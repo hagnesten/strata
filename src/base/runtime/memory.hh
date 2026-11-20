@@ -9,13 +9,29 @@ namespace base {
 
 	void release ( void* block );
 
-	void fill ( void* target, uint8_t value, size_t size );
+	inline void fill ( void* target, uint8_t value, size_t size ) {
 
-	void copy ( void* target, const void* source, size_t size );
+		__builtin_memset ( target, value, size );
 
-	void move ( void* target, const void* source, size_t size );
+	}
 
-	bool same_bytes ( const void* a, const void* b, size_t size );
+	inline void copy ( void* target, const void* source, size_t size ) {
+
+		__builtin_memcpy ( target, source, size );
+
+	}
+
+	inline void move ( void* target, const void* source, size_t size ) {
+
+		__builtin_memmove ( target, source, size );
+
+	}
+
+	inline bool same_bytes ( const void* a, const void* b, size_t size ) {
+
+		return __builtin_memcmp ( a, b, size ) == 0;
+
+	}
 
 	void swap_bytes ( void* a, void* b, size_t size );
 

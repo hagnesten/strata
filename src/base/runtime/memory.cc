@@ -155,30 +155,6 @@ extern "C" {
 
 namespace base {
 
-	void fill ( void* target, uint8_t value, size_t size ) {
-
-		memset ( target, value, size );
-
-	}
-
-	void copy ( void* target, const void* source, size_t size ) {
-
-		memcpy ( target, source, size );
-
-	}
-
-	void move ( void* target, const void* source, size_t size ) {
-
-		memmove ( target, source, size );
-
-	}
-
-	bool same_bytes ( const void* a, const void* b, size_t size ) {
-
-		return memcmp ( a, b, size ) == 0;
-
-	}
-
 	void swap_bytes ( void* a, void* b, size_t size ) {
 
 		uint8_t* left = static_cast < uint8_t* > ( a );
