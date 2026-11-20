@@ -83,6 +83,8 @@ namespace sql {
 
 	expression* parse_expression ( parser& item );
 
+	expression* parse_value_expression ( parser& item );
+
 	select_statement* parse_select ( parser& item );
 
 	expression* new_expression ( parser& item, expression_kind kind );

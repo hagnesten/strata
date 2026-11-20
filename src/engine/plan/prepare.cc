@@ -1399,6 +1399,15 @@ namespace engine {
 
 				}
 
+				for ( uint32_t c = 0; c < plan->output_count && plan->order_output [ i ] < 0 && !plan->next && !plan->values_only; c++ ) {
+
+					const sql::expression* output = plan->outputs [ c ];
+
+					if ( output && output->kind == sql::EXPRESSION_COLUMN && output->table && output->name && base::same_folded ( output->name, term->name ) )
+						plan->order_output [ i ] = static_cast < int32_t > ( c );
+
+				}
+
 				if ( plan->order_output [ i ] >= 0 )
 					continue;
 

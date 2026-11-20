@@ -721,7 +721,7 @@ namespace sql {
 
 				} else if ( symbol_is ( item.current, "-" ) || symbol_is ( item.current, "+" ) ) {
 
-					out.fallback = parse_expression ( item );
+					out.fallback = parse_value_expression ( item );
 
 					if ( !out.fallback )
 						return false;
@@ -730,10 +730,12 @@ namespace sql {
 
 					token here = item.current;
 
-					if ( here.kind != TOKEN_INTEGER && here.kind != TOKEN_REAL && here.kind != TOKEN_STRING && here.kind != TOKEN_BLOB && !token_is ( here, "null" ) && !token_is ( here, "true" ) && !token_is ( here, "false" ) )
+					if ( here.kind == TOKEN_NAME && !reserved_word ( here ) )
+						out.fallback = parse_value_expression ( item );
+					else if ( here.kind != TOKEN_INTEGER && here.kind != TOKEN_REAL && here.kind != TOKEN_STRING && here.kind != TOKEN_BLOB && !token_is ( here, "null" ) && !token_is ( here, "true" ) && !token_is ( here, "false" ) )
 						return fail_here ( item, "a DEFAULT needs a constant or an expression in brackets" );
-
-					out.fallback = parse_expression ( item );
+					else
+						out.fallback = parse_value_expression ( item );
 
 					if ( !out.fallback )
 						return false;

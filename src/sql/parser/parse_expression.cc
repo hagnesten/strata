@@ -1206,6 +1206,12 @@ namespace sql {
 
 	}
 
+	expression* parse_value_expression ( parser& item ) {
+
+		return parse_bits ( item );
+
+	}
+
 	static expression* parse_comparison ( parser& item ) {
 
 		expression* left = parse_bits ( item );
