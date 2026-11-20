@@ -50,12 +50,34 @@ Strata is a single-file SQL database engine and a studio app for working with it
   - IDENTITY and serial columns, which never reuse an id
   - `RETURNING`, `::` casts, typed literals (`TIMESTAMPTZ '...'`), `AT TIME ZONE` and `EXTRACT`
   - `ILIKE`, `= ANY (array)` and `<> ALL (array)`
-  - UPDATE and DELETE aliases, `DO` blocks with `IF [NOT] EXISTS`
+  - UPDATE and DELETE aliases, `UPDATE ... FROM` and `DELETE ... USING`, `DO` blocks with `IF [NOT] EXISTS`
   - `pg_catalog` and `information_schema` views
+  - arrays (`ARRAY[...]`, `@>`, `<@`, `&&`, `cardinality`), intervals (`INTERVAL '1 day'`, timestamp arithmetic, `make_interval`) and `E'...'` strings
+- **Schema changes:** everything EF Core migrations emit.
+  - `ALTER COLUMN ... TYPE`, `SET/DROP NOT NULL`, `SET/DROP DEFAULT` and `ADD/DROP IDENTITY`
+  - `ADD/DROP/RENAME CONSTRAINT` for primary keys, foreign keys, unique and check constraints
+  - `ALTER INDEX ... RENAME`
+  - views
+  - sequences with `nextval`, `currval`, `setval` and `pg_get_serial_sequence`
+
+  A change that could break existing rows rewrites and checks every row first. If one row fails, the whole change is undone.
 - **Exact money:** `NUMERIC(p,s)`, `DECIMAL` and `MONEY` columns store exact decimals up to 36 digits. They round to the declared scale and use Postgres's rules for division and averages.
 - **Timestamps and JSON:** timestamps are stored in one canonical UTC form, and `jsonb` is normalized the way Postgres stores it.
 - **Concurrency:** many readers run alongside one writer. Each statement sees the latest commits (read committed). Waiting writers drop their snapshot and are served in order, and the next one starts the moment a transaction ends.
 - **Realtime:** `LISTEN`, `UNLISTEN` and `NOTIFY` deliver events between connections. Notifications sent inside a transaction arrive only if it commits.
+- **TLS 1.3:** `--tls` encrypts connections. Strata's own code does all of it, with no OpenSSL or system TLS library.
+  - It uses X25519, ECDSA P-256 and AES-128-GCM on the processor's AES instructions.
+  - The first start makes a self-signed certificate (`<file>.cert.pem` and `<file>.key.pem`). Use `--tls-cert`/`--tls-key` for your own ECDSA P-256 certificate in PEM form.
+  - `--tls-required` refuses plain connections.
+  - Key, user and grant files are readable only by their owner.
+- **Roles:** `CREATE ROLE`, `GRANT` and `REVOKE` work per table. `--user <file> <name> <password> --limited` makes a user who needs grants.
+- **Monitoring:**
+  - `pg_stat_activity` shows every session and what it is running.
+  - A superuser can end a session with `pg_terminate_backend`.
+  - `--slow <ms>` logs slow statements, and `--log <file>` keeps the log, including failed sign-ins.
+- **Backups:** `--backup-folder`, `--backup-every` and `--backup-keep` take online backups, checked before they are kept. `strata --backup` and `strata --restore` do the same by hand.
+
+`bindings/csharp/Replay` replays a Postgres statement log (`log_statement = 'all'`, csvlog or a `.sql` file) against Postgres and Strata side by side. It reports every query whose result differs. `--copy` first copies the tables and data across.
 
 `bindings/csharp/Compat` runs the same Npgsql, Dapper and EF Core scenarios against Strata and a real Postgres and compares every result. `bindings/csharp/Wire` is a dependency-free check with an orders-and-fills trading workload.
 
@@ -94,8 +116,12 @@ Strata is a single-file SQL database engine and a studio app for working with it
 strata <file>                open a database in the SQL shell
 strata <file> "<sql>"        run SQL and print the rows
 strata --studio [file]       open the studio
-strata --serve <file> [--port 5432] [--host 0.0.0.0]
+strata --serve <file> [--port 5432] [--host 0.0.0.0] [--tls] [--tls-required]
+              [--tls-cert <pem> --tls-key <pem>] [--slow <ms>] [--log <file>]
+              [--backup-folder <dir> --backup-every <minutes> --backup-keep <count>]
                              serve the database to Postgres clients
+strata --backup <file> <copy>   copy a live database and check the copy
+strata --restore <copy> <file>  check a backup and put it in place
 strata --user <file> <name> [password]
                              add or change a server user, or remove it with no password
 strata --capture <folder>    render every studio view to PNG and play a scripted session
