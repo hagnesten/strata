@@ -414,10 +414,83 @@ namespace Strata.Wire {
 
 		}
 
+		private static void HotRow ( string [ ] args, int clients, int each ) {
+
+			using ( PgWire setup = Connect ( args ) )
+				setup.Query ( "DROP TABLE IF EXISTS hot_orders; DROP TABLE IF EXISTS hot_balance; CREATE TABLE hot_orders ( id BIGSERIAL PRIMARY KEY, client INTEGER NOT NULL, n INTEGER NOT NULL ); CREATE TABLE hot_balance ( id INTEGER PRIMARY KEY, cash BIGINT NOT NULL ); INSERT INTO hot_balance VALUES ( 1, 0 )" );
+
+			Exception problem = null;
+			Thread [ ] threads = new Thread [ clients ];
+			Stopwatch clock = Stopwatch.StartNew ( );
+
+			for ( int c = 0; c < clients; c++ ) {
+
+				int client = c;
+
+				threads [ c ] = new Thread ( ( ) => {
+
+					try {
+
+						using ( PgWire wire = Connect ( args ) ) {
+
+							PgStatement insert = wire.Prepare ( "INSERT INTO hot_orders ( client, n ) VALUES ( $1, $2 )", PgWire.Int4, PgWire.Int4 );
+							PgStatement bump = wire.Prepare ( "UPDATE hot_balance SET cash = cash + 1 WHERE id = 1", new uint [ 0 ] );
+
+							for ( int i = 0; i < each; i++ ) {
+
+								wire.Query ( "BEGIN" );
+								wire.Execute ( insert, client, i );
+								wire.Execute ( bump );
+								wire.Query ( "COMMIT" );
+
+							}
+
+						}
+
+					} catch ( Exception error ) {
+
+						problem = error;
+
+					}
+
+				} );
+
+				threads [ c ].Start ( );
+
+			}
+
+			foreach ( Thread thread in threads )
+				thread.Join ( );
+
+			clock.Stop ( );
+
+			using ( PgWire check = Connect ( args ) ) {
+
+				PgResult total = check.Query ( "SELECT ( SELECT count ( * ) FROM hot_orders ), ( SELECT cash FROM hot_balance )" ) [ 0 ];
+
+				Expect ( problem == null && ( string ) total.Rows [ 0 ] [ 0 ] == ( clients * each ).ToString ( CultureInfo.InvariantCulture ) && ( string ) total.Rows [ 0 ] [ 1 ] == ( clients * each ).ToString ( CultureInfo.InvariantCulture ), "hot row with " + clients + " clients keeps every transaction" + ( problem == null ? "" : ": " + problem.Message ) );
+
+			}
+
+			Console.WriteLine ( string.Format ( CultureInfo.InvariantCulture, "  hot row, {0,2} clients            {1,8:N0} tx  {2,10:N0} tx/s  {3,8:N1} us each", clients, clients * each, clients * each / clock.Elapsed.TotalSeconds, clock.Elapsed.TotalMilliseconds * 1000 / ( clients * each ) ) );
+
+		}
+
 		private static int Main ( string [ ] args ) {
 
 			int orders = int.Parse ( Option ( args, "--orders", "5000" ), CultureInfo.InvariantCulture );
 			int clients = int.Parse ( Option ( args, "--clients", "8" ), CultureInfo.InvariantCulture );
+
+			if ( Option ( args, "--hot", null ) != null ) {
+
+				foreach ( string count in Option ( args, "--hot", "1" ).Split ( ',' ) )
+					HotRow ( args, int.Parse ( count, CultureInfo.InvariantCulture ), int.Parse ( Option ( args, "--each", "200" ), CultureInfo.InvariantCulture ) );
+
+				Console.WriteLine ( ( checks - failures ) + " of " + checks + " checks passed" );
+
+				return failures == 0 ? 0 : 1;
+
+			}
 
 			try {
 
