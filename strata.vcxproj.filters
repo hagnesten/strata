@@ -359,6 +359,7 @@
     <ClCompile Include="src\server\loop\loop.cc"><Filter>src\server\loop</Filter></ClCompile>
     <ClCompile Include="src\server\loop\log.cc"><Filter>src\server\loop</Filter></ClCompile>
     <ClCompile Include="src\server\loop\backups.cc"><Filter>src\server\loop</Filter></ClCompile>
+    <ClCompile Include="src\server\loop\activity.cc"><Filter>src\server\loop</Filter></ClCompile>
     <ClCompile Include="src\app\backup\backup.cc"><Filter>src\app\backup</Filter></ClCompile>
     <ClCompile Include="src\server\users\users.cc"><Filter>src\server\users</Filter></ClCompile>
     <ClCompile Include="src\server\postgres\startup.cc"><Filter>src\server\postgres</Filter></ClCompile>

@@ -11,6 +11,10 @@
 
 namespace engine {
 
+	activity_writer activity_hook = nullptr;
+
+	terminate_handler terminate_hook = nullptr;
+
 	struct view_type {
 
 		uint32_t oid;
@@ -840,6 +844,29 @@ namespace engine {
 
 	}
 
+	static void build_activity ( catalog& schema, base::text& sql ) {
+
+		view_rows rows = { };
+
+		rows.width = 9;
+
+		if ( activity_hook )
+			activity_hook ( rows.out, rows.count );
+
+		sql.add ( "SELECT CAST ( 1 AS oid ) AS datid, " );
+		quoted ( sql, schema.session_database [ 0 ] ? schema.session_database : "strata" );
+		sql.add ( " AS datname, CAST ( column1 AS integer ) AS pid, CAST ( 10 AS oid ) AS usesysid, column2 AS usename, column3 AS application_name, "
+			"CAST ( NULL AS text ) AS client_addr, CAST ( column4 AS timestamptz ) AS backend_start, CAST ( NULL AS timestamptz ) AS xact_start, "
+			"CAST ( column5 AS timestamptz ) AS query_start, CAST ( column5 AS timestamptz ) AS state_change, column8 AS wait_event_type, column9 AS wait_event, "
+			"column6 AS state, CAST ( NULL AS text ) AS backend_xid, column7 AS query, 'client backend' AS backend_type FROM ( VALUES " );
+
+		if ( rows.count )
+			sql.add ( rows.out.value ( ), rows.out.size ).add ( " ) AS v" );
+		else
+			sql.add ( "( NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL ) ) AS v WHERE 0" );
+
+	}
+
 	static void build_empty ( base::text& sql, const char* name ) {
 
 		if ( base::same_folded ( name, "pg_enum" ) )
@@ -907,6 +934,8 @@ namespace engine {
 			build_settings ( schema, sql );
 		else if ( base::same_folded ( bare, "pg_tables" ) )
 			build_tables ( schema, sql, false );
+		else if ( base::same_folded ( bare, "pg_stat_activity" ) )
+			build_activity ( schema, sql );
 		else {
 
 			build_single ( schema, sql, bare );

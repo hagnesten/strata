@@ -484,6 +484,22 @@ namespace server {
 
 	}
 
+	static void keep_text ( server_statement& statement, const char* sql, size_t size ) {
+
+		while ( size && ( *sql == ' ' || *sql == '\n' || *sql == '\r' || *sql == '\t' ) ) {
+
+			sql++;
+			size--;
+
+		}
+
+		while ( size && ( sql [ size - 1 ] == ' ' || sql [ size - 1 ] == '\n' || sql [ size - 1 ] == '\r' || sql [ size - 1 ] == '\t' || sql [ size - 1 ] == ';' ) )
+			size--;
+
+		base::copy_span ( statement.text, sizeof ( statement.text ), sql, size );
+
+	}
+
 	static bool access_tag ( const char* tag ) {
 
 		return base::same ( tag, "GRANT" ) || base::same ( tag, "REVOKE" ) || base::same ( tag, "CREATE ROLE" ) || base::same ( tag, "ALTER ROLE" ) || base::same ( tag, "DROP ROLE" );
@@ -786,8 +802,13 @@ namespace server {
 			if ( !statement )
 				return false;
 
+			uint64_t started = base::os::ticks ( );
+
+			begin_activity ( link, sql );
+
 			if ( !fill_statement ( link, *statement, at, static_cast < size_t > ( end - at ), tail ) ) {
 
+				link.active = false;
 				report ( link );
 				release_statement ( statement );
 
@@ -796,6 +817,7 @@ namespace server {
 			}
 
 			any = true;
+			keep_text ( *statement, at, static_cast < size_t > ( ( tail > at ? tail : end ) - at ) );
 
 			bool fine = true;
 
@@ -820,6 +842,7 @@ namespace server {
 
 			}
 
+			end_activity ( link, started );
 			release_statement ( statement );
 			at = tail > at ? tail : end;
 
@@ -912,7 +935,13 @@ namespace server {
 
 		const char* tail = nullptr;
 
-		if ( !fill_statement ( link, *statement, sql, base::length ( sql ), tail ) ) {
+		begin_activity ( link, sql );
+
+		bool filled = fill_statement ( link, *statement, sql, base::length ( sql ), tail );
+
+		link.active = false;
+
+		if ( !filled ) {
 
 			report ( link );
 			release_statement ( statement );
@@ -925,6 +954,7 @@ namespace server {
 			if ( !statement->parameter_types [ i ] )
 				statement->parameter_types [ i ] = PG_TEXT;
 
+		keep_text ( *statement, sql, base::length ( sql ) );
 		link.statements [ link.statement_count++ ] = statement;
 		begin_message ( link, '1' );
 		end_message ( link );
@@ -1076,6 +1106,8 @@ namespace server {
 
 	}
 
+	static bool execute_portal ( server_connection& link, server_portal& portal, int32_t limit );
+
 	static bool execute_message ( server_connection& link, pg_reader& reader ) {
 
 		read_string ( reader );
@@ -1090,6 +1122,20 @@ namespace server {
 			return false;
 
 		}
+
+		uint64_t started = base::os::ticks ( );
+
+		begin_activity ( link, portal.statement->text );
+
+		bool fine = execute_portal ( link, portal, limit );
+
+		end_activity ( link, started );
+
+		return fine;
+
+	}
+
+	static bool execute_portal ( server_connection& link, server_portal& portal, int32_t limit ) {
 
 		server_statement& statement = *portal.statement;
 

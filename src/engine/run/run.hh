@@ -109,6 +109,7 @@ namespace engine {
 		FUNCTION_DATE_PART,
 		FUNCTION_DATE_TRUNC,
 		FUNCTION_TIMEZONE,
+		FUNCTION_TERMINATE,
 		FUNCTION_DATE,
 		FUNCTION_TIME,
 		FUNCTION_DATETIME,
@@ -856,6 +857,14 @@ namespace engine {
 	bool keep_high_water ( run_context& ctx, const table_info& table );
 
 	bool forget_sequence ( run_context& ctx, const table_info& table );
+
+	typedef void ( *activity_writer ) ( base::text& rows, uint32_t& count );
+
+	typedef int32_t ( *terminate_handler ) ( uint32_t session, int64_t target );
+
+	extern activity_writer activity_hook;
+
+	extern terminate_handler terminate_hook;
 
 	sql::select_statement* catalog_view ( run_context& ctx, const char* name );
 

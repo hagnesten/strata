@@ -135,7 +135,7 @@ namespace server {
 
 				const char* name = item->name;
 
-				if ( base::same_folded ( name, "strata_any" ) )
+				if ( base::same_folded ( name, "strata_any" ) || base::same_folded ( name, "pg_terminate_backend" ) )
 					return PG_BOOL;
 
 				if ( base::same_folded ( name, "date_part" ) )

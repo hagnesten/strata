@@ -151,6 +151,7 @@
     <ClCompile Include="src\server\access\access.cc" />
     <ClCompile Include="src\server\loop\log.cc" />
     <ClCompile Include="src\server\loop\backups.cc" />
+    <ClCompile Include="src\server\loop\activity.cc" />
     <ClCompile Include="src\app\backup\backup.cc" />
     <ClCompile Include="src\base\png\png.cc" />
     <ClCompile Include="src\ui\render\render.cc" />

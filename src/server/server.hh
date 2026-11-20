@@ -20,6 +20,7 @@
 #define SERVER_OBJECT_ROOM 160
 #define SERVER_GRANTS 4096
 #define SERVER_ACCESS_NAMES 256
+#define SERVER_QUERY_ROOM 1024
 #define ACCESS_SELECT 1
 #define ACCESS_INSERT 2
 #define ACCESS_UPDATE 4
@@ -117,6 +118,7 @@ namespace server {
 		char control_text [ 256 ];
 		char* body;
 		size_t body_size;
+		char text [ SERVER_QUERY_ROOM ];
 
 	};
 
@@ -156,6 +158,12 @@ namespace server {
 		strata_db* db;
 		char user [ SERVER_NAME_ROOM ];
 		bool limited;
+		char application [ SERVER_NAME_ROOM ];
+		char started [ 40 ];
+		char query [ SERVER_QUERY_ROOM ];
+		char query_start [ 40 ];
+		bool active;
+		bool terminate;
 		char database [ SERVER_NAME_ROOM ];
 		server_statement* statements [ SERVER_STATEMENTS ];
 		uint32_t statement_count;
@@ -228,6 +236,12 @@ namespace server {
 	void server_log ( server_state& state, const char* line );
 
 	void tend_backups ( server_state& state, uint64_t now );
+
+	void watch_activity ( server_state& state );
+
+	void begin_activity ( server_connection& link, const char* text );
+
+	void end_activity ( server_connection& link, uint64_t started );
 
 	bool access_command ( server_connection& link, const char* tag, const char* text, size_t size, base::text& problem, const char*& code );
 

@@ -62,6 +62,7 @@ namespace engine {
 		{ "date_part", 2, 2, false, FUNCTION_DATE_PART },
 		{ "date_trunc", 2, 3, false, FUNCTION_DATE_TRUNC },
 		{ "timezone", 2, 2, false, FUNCTION_TIMEZONE },
+		{ "pg_terminate_backend", 1, 2, false, FUNCTION_TERMINATE },
 		{ "statement_timestamp", 0, 0, false, FUNCTION_NOW },
 		{ "transaction_timestamp", 0, 0, false, FUNCTION_NOW },
 		{ "clock_timestamp", 0, 0, false, FUNCTION_NOW },
@@ -1242,6 +1243,28 @@ namespace engine {
 
 			case FUNCTION_ARRAY_ANY:
 				return array_contains ( ctx, args [ 0 ], args [ 1 ], out );
+
+			case FUNCTION_TERMINATE: {
+
+				int64_t target = 0;
+
+				if ( args [ 0 ].kind == storage::VALUE_NULL || !integer_of ( args [ 0 ], target ) )
+					return true;
+
+				if ( !terminate_hook )
+					return fail_run ( ctx, "pg_terminate_backend only works on a server" );
+
+				int32_t ended = terminate_hook ( ctx.schema->session_id, target );
+
+				if ( ended < 0 )
+					return fail_run ( ctx, "permission denied: only a superuser can end another session" );
+
+				out = storage::integer_value ( ended );
+				out.subtype = LITERAL_BOOLEAN;
+
+				return true;
+
+			}
 
 			case FUNCTION_TIMEZONE: {
 

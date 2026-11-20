@@ -212,6 +212,8 @@ namespace server {
 		if ( !state->grants )
 			return 1;
 
+		watch_activity ( *state );
+
 		load_grants ( *state );
 
 		if ( !load_users ( *state ) && !settings.trust ) {
@@ -338,7 +340,7 @@ namespace server {
 
 				server_connection& link = *state->connections [ i ];
 
-				if ( link.closed || ( link.finished && link.output_sent >= link.output.size ) )
+				if ( link.closed || ( link.terminate && !link.active ) || ( link.finished && link.output_sent >= link.output.size ) )
 					close_connection ( *state, i );
 
 			}

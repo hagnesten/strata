@@ -170,6 +170,7 @@ namespace server {
 
 			line.add ( "password authentication failed for user \"" ).add ( link.user ).add ( '"' );
 			send_fatal ( link, "28P01", line.value ( ) );
+			server_log ( *link.owner, line.value ( ) );
 
 			return false;
 
@@ -250,6 +251,8 @@ namespace server {
 					base::copy_text ( link.user, sizeof ( link.user ), value );
 				else if ( base::same ( key, "database" ) )
 					base::copy_text ( link.database, sizeof ( link.database ), value );
+				else if ( base::same ( key, "application_name" ) )
+					base::copy_text ( link.application, sizeof ( link.application ), value );
 
 			}
 
@@ -269,6 +272,7 @@ namespace server {
 
 				line.add ( "password authentication failed for user \"" ).add ( link.user ).add ( '"' );
 				send_fatal ( link, "28P01", line.value ( ) );
+				server_log ( *link.owner, line.value ( ) );
 
 				return false;
 
@@ -296,6 +300,15 @@ namespace server {
 		base::copy_text ( session.session_user, sizeof ( session.session_user ), link.user );
 		base::copy_text ( session.session_database, sizeof ( session.session_database ), link.database [ 0 ] ? link.database : link.user );
 		session.session_id = link.id;
+
+		base::text stamp;
+
+		time_stamp ( stamp, false );
+
+		if ( stamp.size > 4 )
+			stamp.size -= 4;
+
+		base::copy_span ( link.started, sizeof ( link.started ), stamp.value ( ), stamp.size );
 		session.postgres = true;
 		link.db->database.read_committed = true;
 		send_auth ( link, 0, nullptr, 0 );

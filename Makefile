@@ -130,6 +130,7 @@ APP := \
 	src/app/backup/backup.cc \
 	src/server/loop/log.cc \
 	src/server/loop/backups.cc \
+	src/server/loop/activity.cc \
 	src/server/loop/loop.cc \
 	src/server/users/users.cc \
 	src/server/postgres/startup.cc \
