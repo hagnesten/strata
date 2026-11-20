@@ -164,6 +164,46 @@ namespace base {
 
 	}
 
+	bool copy_file ( const char* from, const char* to ) {
+
+		file_handle source;
+		file_handle target;
+
+		if ( !open_reading ( source, from ) )
+			return false;
+
+		if ( !open_file ( target, to, true ) ) {
+
+			close_file ( source );
+
+			return false;
+
+		}
+
+		uint64_t size = file_size ( source );
+		uint64_t at = 0;
+		size_t room = 1u << 20;
+		char* chunk = make < char > ( room );
+		bool fine = chunk && truncate_file ( target, 0 );
+
+		while ( fine && at < size ) {
+
+			size_t step = static_cast < size_t > ( size - at < room ? size - at : room );
+
+			fine = read_at ( source, at, chunk, step ) && write_at ( target, at, chunk, step );
+			at += step;
+
+		}
+
+		fine = fine && sync_file ( target );
+		release ( chunk );
+		close_file ( source );
+		close_file ( target );
+
+		return fine;
+
+	}
+
 	bool save_file ( const char* path, const char* data, size_t size ) {
 
 		text temporary;

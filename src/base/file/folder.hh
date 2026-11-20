@@ -36,6 +36,8 @@ namespace base {
 
 	bool save_file ( const char* path, const char* data, size_t size );
 
+	bool copy_file ( const char* from, const char* to );
+
 	bool environment_path ( const char* name, text& out );
 
 }

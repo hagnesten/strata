@@ -119,6 +119,12 @@ namespace base {
 
 		[[ noreturn ]] void exit_process ( int32_t code );
 
+		bool own_program ( text& out );
+
+		bool start_process ( const char* program, const char* const* arguments, uint32_t count, void*& out );
+
+		bool process_finished ( void* process, int32_t& code );
+
 	}
 
 }

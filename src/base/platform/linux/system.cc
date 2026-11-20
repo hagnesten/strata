@@ -468,6 +468,68 @@ namespace base {
 
 		}
 
+		bool own_program ( text& out ) {
+
+			out.clear ( );
+			out.add ( "/proc/self/exe" );
+
+			return true;
+
+		}
+
+		bool start_process ( const char* program, const char* const* arguments, uint32_t count, void*& out ) {
+
+			const char** list = static_cast < const char** > ( allocate_pages ( ( ( count + 2 ) * sizeof ( char* ) + 4095 ) & ~static_cast < size_t > ( 4095 ) ) );
+			const char* empty [ 1 ] = { nullptr };
+
+			out = nullptr;
+
+			if ( !list )
+				return false;
+
+			list [ 0 ] = program;
+
+			for ( uint32_t i = 0; i < count; i++ )
+				list [ i + 1 ] = arguments [ i ];
+
+			list [ count + 1 ] = nullptr;
+
+			long child = call1 ( LINUX_FORK, 0 );
+
+			if ( child == 0 ) {
+
+				call3 ( LINUX_EXECVE, reinterpret_cast < long > ( program ), reinterpret_cast < long > ( list ), reinterpret_cast < long > ( empty ) );
+
+				for ( ;; )
+					call1 ( LINUX_EXIT_GROUP, 127 );
+
+			}
+
+			release_pages ( list, ( ( count + 2 ) * sizeof ( char* ) + 4095 ) & ~static_cast < size_t > ( 4095 ) );
+
+			if ( failed ( child ) )
+				return false;
+
+			out = reinterpret_cast < void* > ( static_cast < intptr_t > ( child ) );
+
+			return true;
+
+		}
+
+		bool process_finished ( void* process, int32_t& code ) {
+
+			int32_t status = 0;
+			long child = static_cast < long > ( reinterpret_cast < intptr_t > ( process ) );
+
+			if ( !child || call4 ( LINUX_WAIT4, child, reinterpret_cast < long > ( &status ), LINUX_NO_HANG, 0 ) != child )
+				return false;
+
+			code = ( status & 0x7F ) ? 128 + ( status & 0x7F ) : ( status >> 8 ) & 0xFF;
+
+			return true;
+
+		}
+
 	}
 
 }

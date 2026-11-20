@@ -414,6 +414,117 @@ namespace base {
 
 		}
 
+		bool own_program ( text& out ) {
+
+			wchar_t wide [ 4096 ];
+			DWORD length = GetModuleFileNameW ( nullptr, wide, 4096 );
+			char narrow [ 4096 * 3 ];
+
+			if ( !length || length >= 4096 )
+				return false;
+
+			int written = WideCharToMultiByte ( CP_UTF8, 0, wide, static_cast < int > ( length ), narrow, sizeof ( narrow ), nullptr, nullptr );
+
+			if ( written <= 0 )
+				return false;
+
+			out.clear ( );
+			out.add ( narrow, static_cast < size_t > ( written ) );
+
+			return true;
+
+		}
+
+		static void quote_argument ( text& line, const char* argument ) {
+
+			line.add ( '"' );
+
+			uint32_t slashes = 0;
+
+			for ( const char* at = argument; *at; at++ ) {
+
+				if ( *at == '\\' ) {
+
+					slashes++;
+
+					continue;
+
+				}
+
+				for ( uint32_t i = 0; i < ( *at == '"' ? slashes * 2 + 1 : slashes ); i++ )
+					line.add ( '\\' );
+
+				slashes = 0;
+				line.add ( *at );
+
+			}
+
+			for ( uint32_t i = 0; i < slashes * 2; i++ )
+				line.add ( '\\' );
+
+			line.add ( '"' );
+
+		}
+
+		bool start_process ( const char* program, const char* const* arguments, uint32_t count, void*& out ) {
+
+			text line;
+
+			out = nullptr;
+			quote_argument ( line, program );
+
+			for ( uint32_t i = 0; i < count; i++ ) {
+
+				line.add ( ' ' );
+				quote_argument ( line, arguments [ i ] );
+
+			}
+
+			int units = MultiByteToWideChar ( CP_UTF8, 0, line.value ( ), static_cast < int > ( line.size ), nullptr, 0 );
+
+			if ( units <= 0 || units >= 32767 )
+				return false;
+
+			wchar_t* wide = static_cast < wchar_t* > ( HeapAlloc ( GetProcessHeap ( ), HEAP_ZERO_MEMORY, ( static_cast < size_t > ( units ) + 1 ) * sizeof ( wchar_t ) ) );
+
+			if ( !wide )
+				return false;
+
+			MultiByteToWideChar ( CP_UTF8, 0, line.value ( ), static_cast < int > ( line.size ), wide, units );
+
+			STARTUPINFOW start = { };
+			PROCESS_INFORMATION made = { };
+
+			start.cb = sizeof ( start );
+
+			BOOL fine = CreateProcessW ( nullptr, wide, nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &start, &made );
+
+			HeapFree ( GetProcessHeap ( ), 0, wide );
+
+			if ( !fine )
+				return false;
+
+			CloseHandle ( made.hThread );
+			out = made.hProcess;
+
+			return true;
+
+		}
+
+		bool process_finished ( void* process, int32_t& code ) {
+
+			DWORD status = 0;
+
+			if ( !process || WaitForSingleObject ( process, 0 ) != WAIT_OBJECT_0 || !GetExitCodeProcess ( process, &status ) )
+				return false;
+
+			code = static_cast < int32_t > ( status );
+			CloseHandle ( process );
+
+			return true;
+
+		}
+
 	}
 
 }
