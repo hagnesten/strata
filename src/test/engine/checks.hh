@@ -47,6 +47,8 @@ namespace test {
 
 	void fold_tests ( engine::database& db );
 
+	void dialect_tests ( engine::database& db );
+
 	void concurrency_tests ( const char* path );
 
 }

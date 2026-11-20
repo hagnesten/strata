@@ -113,6 +113,7 @@ TESTS := \
 	src/test/engine/semi_test.cc \
 	src/test/engine/range_test.cc \
 	src/test/engine/fold_test.cc \
+	src/test/engine/dialect_test.cc \
 	src/test/engine/concurrency_test.cc \
 	src/test/api/api_test.cc
 

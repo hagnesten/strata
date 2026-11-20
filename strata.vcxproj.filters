@@ -264,6 +264,7 @@
     <ClCompile Include="src\test\engine\semi_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\test\engine\range_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\test\engine\fold_test.cc"><Filter>src\test\engine</Filter></ClCompile>
+    <ClCompile Include="src\test\engine\dialect_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClInclude Include="src\engine\version.hh"><Filter>src\engine</Filter></ClInclude>
     <None Include="src\base\platform\linux\coroutine.cc"><Filter>src\base\platform\linux</Filter></None>
     <None Include="src\base\platform\linux\runtime.cc"><Filter>src\base\platform\linux</Filter></None>

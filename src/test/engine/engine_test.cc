@@ -658,6 +658,7 @@ namespace test {
 		semi_tests ( *db );
 		range_tests ( *db );
 		fold_tests ( *db );
+		dialect_tests ( *db );
 		fuzz_tests ( *db );
 		engine::close_database ( *db );
 		db->problem.~text ( );
