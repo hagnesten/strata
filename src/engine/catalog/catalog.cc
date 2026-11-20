@@ -225,6 +225,7 @@ namespace engine {
 			info.nocase = column.nocase;
 			info.exact = decimal_type ( column.type, info.precision, info.scale );
 			info.moment = moment_type ( column.type );
+			info.binary_json = base::find_folded ( column.type, "jsonb" );
 			info.fallback = column.fallback;
 			info.check = column.check;
 			info.generated = column.generated;

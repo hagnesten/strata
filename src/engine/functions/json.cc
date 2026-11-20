@@ -239,6 +239,235 @@ namespace engine {
 
 	}
 
+	static bool write_canonical ( const uint8_t* text, size_t size, size_t& at, base::text& out, uint32_t depth ) {
+
+		skip_space ( text, size, at );
+
+		if ( at >= size || depth > 200 )
+			return false;
+
+		if ( text [ at ] == '[' ) {
+
+			at++;
+			out.add ( '[' );
+			skip_space ( text, size, at );
+
+			bool first = true;
+
+			while ( at < size && text [ at ] != ']' ) {
+
+				if ( !first )
+					out.add ( ", " );
+
+				if ( !write_canonical ( text, size, at, out, depth + 1 ) )
+					return false;
+
+				skip_space ( text, size, at );
+				first = false;
+
+				if ( at < size && text [ at ] == ',' )
+					at++;
+				else if ( at >= size || text [ at ] != ']' )
+					return false;
+
+			}
+
+			if ( at >= size )
+				return false;
+
+			at++;
+			out.add ( ']' );
+
+			return true;
+
+		}
+
+		if ( text [ at ] != '{' ) {
+
+			size_t start = at;
+
+			if ( !skip_value ( text, size, at, depth ) )
+				return false;
+
+			out.add ( reinterpret_cast < const char* > ( text + start ), at - start );
+
+			return true;
+
+		}
+
+		uint32_t room = 0;
+		uint32_t count = 0;
+		size_t* spans = nullptr;
+		uint32_t* order = nullptr;
+		bool fine = true;
+
+		at++;
+		skip_space ( text, size, at );
+
+		while ( fine && at < size && text [ at ] != '}' ) {
+
+			size_t key = at;
+
+			if ( text [ at ] != '"' || !skip_string ( text, size, at ) ) {
+
+				fine = false;
+
+				break;
+
+			}
+
+			size_t key_end = at;
+
+			skip_space ( text, size, at );
+
+			if ( at >= size || text [ at++ ] != ':' ) {
+
+				fine = false;
+
+				break;
+
+			}
+
+			skip_space ( text, size, at );
+
+			size_t value = at;
+
+			if ( !skip_value ( text, size, at, depth + 1 ) ) {
+
+				fine = false;
+
+				break;
+
+			}
+
+			size_t value_end = at;
+			uint32_t slot = count;
+
+			for ( uint32_t k = 0; k < count; k++ )
+				if ( spans [ k * 4 + 1 ] - spans [ k * 4 ] == key_end - key && base::same_bytes ( text + spans [ k * 4 ], text + key, key_end - key ) )
+					slot = k;
+
+			if ( slot == count ) {
+
+				if ( count == room ) {
+
+					uint32_t grown = room ? room * 2 : 16;
+					size_t* made = base::make < size_t > ( static_cast < size_t > ( grown ) * 4 );
+
+					if ( !made ) {
+
+						fine = false;
+
+						break;
+
+					}
+
+					if ( spans )
+						base::copy ( made, spans, sizeof ( size_t ) * count * 4 );
+
+					base::release ( spans );
+					spans = made;
+					room = grown;
+
+				}
+
+				count++;
+
+			}
+
+			spans [ slot * 4 ] = key;
+			spans [ slot * 4 + 1 ] = key_end;
+			spans [ slot * 4 + 2 ] = value;
+			spans [ slot * 4 + 3 ] = value_end;
+			skip_space ( text, size, at );
+
+			if ( at < size && text [ at ] == ',' ) {
+
+				at++;
+				skip_space ( text, size, at );
+
+			} else if ( at >= size || text [ at ] != '}' )
+				fine = false;
+
+		}
+
+		order = fine && count ? base::make < uint32_t > ( count ) : nullptr;
+
+		if ( !fine || at >= size || ( count && !order ) ) {
+
+			base::release ( spans );
+			base::release ( order );
+
+			return false;
+
+		}
+
+		at++;
+
+		for ( uint32_t k = 0; k < count; k++ )
+			order [ k ] = k;
+
+		for ( uint32_t i = 1; i < count; i++ ) {
+
+			uint32_t moving = order [ i ];
+			size_t length = spans [ moving * 4 + 1 ] - spans [ moving * 4 ];
+			uint32_t j = i;
+
+			while ( j > 0 ) {
+
+				uint32_t other = order [ j - 1 ];
+				size_t other_length = spans [ other * 4 + 1 ] - spans [ other * 4 ];
+				size_t shared = length < other_length ? length : other_length;
+				int32_t order_bytes = __builtin_memcmp ( text + spans [ other * 4 ], text + spans [ moving * 4 ], shared );
+
+				if ( other_length < length || ( other_length == length && order_bytes <= 0 ) )
+					break;
+
+				order [ j ] = other;
+				j--;
+
+			}
+
+			order [ j ] = moving;
+
+		}
+
+		out.add ( '{' );
+
+		for ( uint32_t i = 0; i < count && fine; i++ ) {
+
+			uint32_t k = order [ i ];
+			size_t inner = spans [ k * 4 + 2 ];
+
+			if ( i )
+				out.add ( ", " );
+
+			out.add ( reinterpret_cast < const char* > ( text + spans [ k * 4 ] ), spans [ k * 4 + 1 ] - spans [ k * 4 ] ).add ( ": " );
+			fine = write_canonical ( text, spans [ k * 4 + 3 ], inner, out, depth + 1 );
+
+		}
+
+		out.add ( '}' );
+		base::release ( spans );
+		base::release ( order );
+
+		return fine;
+
+	}
+
+	bool canonical_json ( const uint8_t* text, size_t size, base::text& out ) {
+
+		size_t at = 0;
+
+		if ( !write_canonical ( text, size, at, out, 0 ) )
+			return false;
+
+		skip_space ( text, size, at );
+
+		return at == size;
+
+	}
+
 	static void decode_string ( const uint8_t* text, size_t start, size_t end, base::text& out ) {
 
 		for ( size_t at = start + 1; at + 1 < end; ) {

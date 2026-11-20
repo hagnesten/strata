@@ -845,6 +845,8 @@ namespace engine {
 
 	bool column_value ( run_context& ctx, const column_info& column, const storage::value& item, storage::value& out );
 
+	bool canonical_json ( const uint8_t* text, size_t size, base::text& out );
+
 	bool ensure_sequence_table ( run_context& ctx );
 
 	bool read_sequence ( run_context& ctx, const table_info& table, int64_t& value );

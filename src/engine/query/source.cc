@@ -490,6 +490,24 @@ namespace engine {
 
 		decimal_number number = { };
 
+		if ( column.binary_json && ctx.schema->postgres && item.kind == storage::VALUE_TEXT ) {
+
+			base::text written;
+
+			if ( !canonical_json ( item.bytes, item.size, written ) )
+				return fail_run ( ctx, "invalid input syntax for type json" );
+
+			char* kept = ctx.scratch->keep ( written.value ( ), written.size );
+
+			if ( !kept )
+				return fail_run ( ctx, "out of memory" );
+
+			out = storage::text_value ( kept, written.size );
+
+			return true;
+
+		}
+
 		if ( column.moment && ctx.schema->postgres && item.kind == storage::VALUE_TEXT ) {
 
 			base::text written;

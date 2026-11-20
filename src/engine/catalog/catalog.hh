@@ -27,6 +27,7 @@ namespace engine {
 		bool rowid;
 		bool nocase;
 		bool exact;
+		bool binary_json;
 		uint8_t moment;
 		int32_t precision;
 		int32_t scale;
