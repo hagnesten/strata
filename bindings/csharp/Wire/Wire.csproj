@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Strata.Wire</RootNamespace>
+    <AssemblyName>Strata.Wire</AssemblyName>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+</Project>
