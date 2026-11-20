@@ -389,6 +389,9 @@ namespace engine {
 		if ( !write_definition ( ctx, definition, root, rowid ) )
 			return false;
 
+		if ( info.autoincrement && !ensure_sequence_table ( ctx ) )
+			return false;
+
 		uint32_t number = 0;
 
 		for ( uint32_t i = 0; i < definition->column_count; i++ ) {
@@ -568,6 +571,9 @@ namespace engine {
 
 		if ( !table )
 			return item->if_exists ? true : fail_named ( ctx, "no such table: ", item->name, "" );
+
+		if ( !forget_sequence ( ctx, *table ) )
+			return false;
 
 		for ( uint32_t t = 0; t < ctx.schema->table_count; t++ ) {
 

@@ -680,6 +680,9 @@ namespace engine {
 
 	static bool delete_row ( run_context& ctx, table_info& table, int64_t rowid, const storage::value* values ) {
 
+		if ( table.autoincrement && !keep_high_water ( ctx, table ) )
+			return false;
+
 		if ( ++ctx.depth > RUN_DEPTH ) {
 
 			ctx.depth--;
@@ -990,10 +993,24 @@ namespace engine {
 			if ( !storage::table_last ( tree, last, empty ) )
 				return fail_storage ( ctx, "a table could not be read" );
 
-			if ( !empty && last == 0x7FFFFFFFFFFFFFFFll )
+			if ( empty )
+				last = 0;
+
+			if ( table.autoincrement ) {
+
+				int64_t high = 0;
+
+				if ( !read_sequence ( ctx, table, high ) )
+					return false;
+
+				last = base::max ( last, high );
+
+			}
+
+			if ( last == 0x7FFFFFFFFFFFFFFFll )
 				return fail_named ( ctx, "table ", table.name, " has used every row id" );
 
-			rowid = empty ? 1 : last + 1;
+			rowid = last + 1;
 
 		}
 
@@ -1335,6 +1352,13 @@ namespace engine {
 			return false;
 
 		table_info* table = plan->table;
+		returning_plan* back = plan_returning ( ctx, item->table, item->returning );
+
+		if ( item->returning.count && !back )
+			return false;
+
+		start_returning ( ctx, back );
+
 		const int32_t* targets = plan->targets;
 		const bool* targeted = plan->targeted;
 		uint32_t target_count = plan->target_count;
@@ -1414,6 +1438,9 @@ namespace engine {
 
 			if ( written )
 				ctx.changes++;
+
+			if ( written && back && !emit_returning ( ctx, back, values, ctx.last_rowid ) )
+				return false;
 
 			ctx.scratch->rewind ( mark );
 
@@ -1668,10 +1695,20 @@ namespace engine {
 		if ( !update_row ( ctx, table, rowid, old, now, item->conflict, skipped ) )
 			return false;
 
-		if ( !skipped )
-			ctx.changes++;
+		if ( skipped )
+			return true;
 
-		return true;
+		ctx.changes++;
+
+		if ( !item->returning.count )
+			return true;
+
+		int64_t moved = rowid;
+
+		if ( table.rowid_column >= 0 && now [ table.rowid_column ].kind == storage::VALUE_INTEGER )
+			moved = now [ table.rowid_column ].integer;
+
+		return emit_returning ( ctx, static_cast < returning_plan* > ( item->returning.prepared ), now, moved );
 
 	}
 
@@ -1765,9 +1802,19 @@ namespace engine {
 		prepared_select* plan = target->plan;
 		const int32_t* columns = target->columns;
 		query_state state;
+		returning_plan* back = plan_returning ( ctx, item->table, item->returning );
+
+		if ( item->returning.count && !back )
+			return false;
+
+		start_returning ( ctx, back );
 
 		if ( !start_target ( ctx, plan, state ) )
 			return false;
+
+		for ( uint32_t i = 0; i < item->assignment_count && table->autoincrement; i++ )
+			if ( columns [ i ] == table->rowid_column && !keep_high_water ( ctx, *table ) )
+				return false;
 
 		if ( target->one_pass )
 			return update_in_pass ( ctx, item, *target, state );
@@ -1812,6 +1859,12 @@ namespace engine {
 		query_state state;
 		int64_t* rowids = nullptr;
 		uint32_t count = 0;
+		returning_plan* back = plan_returning ( ctx, item->table, item->returning );
+
+		if ( item->returning.count && !back )
+			return false;
+
+		start_returning ( ctx, back );
 
 		if ( !start_target ( ctx, target->plan, state ) || !matching_rowids ( ctx, target->plan, state, rowids, count ) )
 			return false;
@@ -1831,6 +1884,9 @@ namespace engine {
 				return false;
 
 			if ( found ) {
+
+				if ( back && !emit_returning ( ctx, back, old, rowids [ r ] ) )
+					return false;
 
 				ctx.hinted = true;
 				ctx.hint_page = page;

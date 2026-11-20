@@ -11,6 +11,8 @@
 #define SCHEMA_COLUMNS 5
 #define STAT_TABLE "strata_stat"
 #define STAT_COLUMNS 3
+#define SEQUENCE_TABLE "strata_sequence"
+#define SEQUENCE_COLUMNS 2
 #define CATALOG_SEARCH_ROOM 64
 #define CATALOG_NAME_ROOM 256
 
@@ -92,6 +94,9 @@ namespace engine {
 		uint32_t version;
 		uint64_t loads;
 		char search [ CATALOG_SEARCH_ROOM ];
+		char session_user [ CATALOG_SEARCH_ROOM ];
+		char session_database [ CATALOG_SEARCH_ROOM ];
+		uint32_t session_id;
 
 	};
 
@@ -110,6 +115,8 @@ namespace engine {
 	bool search_name ( const catalog& item, const char* name, char* out, size_t room );
 
 	bool set_search ( catalog& item, const char* schema );
+
+	void setting_value ( const catalog& item, const char* name, base::text& out );
 
 	index_info* find_index ( catalog& item, const char* name );
 

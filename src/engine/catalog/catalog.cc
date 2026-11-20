@@ -66,6 +66,52 @@ namespace engine {
 
 	}
 
+	void setting_value ( const catalog& item, const char* name, base::text& out ) {
+
+		static const char* const known [ ] [ 2 ] = {
+
+			{ "server_version", "16.0" },
+			{ "server_version_num", "160000" },
+			{ "transaction_isolation", "serializable" },
+			{ "default_transaction_isolation", "serializable" },
+			{ "max_identifier_length", "63" },
+			{ "max_index_keys", "32" },
+			{ "standard_conforming_strings", "on" },
+			{ "client_encoding", "UTF8" },
+			{ "server_encoding", "UTF8" },
+			{ "timezone", "UTC" },
+			{ "datestyle", "ISO, MDY" },
+			{ "intervalstyle", "postgres" },
+			{ "integer_datetimes", "on" },
+			{ "is_superuser", "on" },
+			{ "lc_collate", "C" },
+			{ "lc_ctype", "C" },
+			{ "block_size", "4096" },
+
+		};
+
+		if ( base::same_folded ( name, "search_path" ) ) {
+
+			out.add ( item.search [ 0 ] ? item.search : "public" );
+
+			return;
+
+		}
+
+		for ( const auto& pair : known ) {
+
+			if ( base::same_folded ( pair [ 0 ], name ) ) {
+
+				out.add ( pair [ 1 ] );
+
+				return;
+
+			}
+
+		}
+
+	}
+
 	table_info* find_table ( catalog& item, const char* name ) {
 
 		char qualified [ CATALOG_NAME_ROOM ];
@@ -206,7 +252,7 @@ namespace engine {
 				info.rowid = true;
 				info.not_null = false;
 				out.rowid_column = static_cast < int32_t > ( i );
-				out.autoincrement = column.autoincrement;
+				out.autoincrement = column.autoincrement || column.identity;
 
 			} else if ( column.autoincrement ) {
 
@@ -258,6 +304,7 @@ namespace engine {
 
 					out.rowid_column = static_cast < int32_t > ( columns [ 0 ] );
 					out.columns [ columns [ 0 ] ].rowid = true;
+					out.autoincrement = out.autoincrement || definition->columns [ columns [ 0 ] ].identity;
 
 				} else {
 
