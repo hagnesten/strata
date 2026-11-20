@@ -149,6 +149,9 @@
     <ClCompile Include="src\server\postgres\procedural.cc" />
     <ClCompile Include="src\server\postgres\notify.cc" />
     <ClCompile Include="src\server\access\access.cc" />
+    <ClCompile Include="src\server\loop\log.cc" />
+    <ClCompile Include="src\server\loop\backups.cc" />
+    <ClCompile Include="src\app\backup\backup.cc" />
     <ClCompile Include="src\base\png\png.cc" />
     <ClCompile Include="src\ui\render\render.cc" />
     <ClCompile Include="src\base\clipboard\clipboard.cc" />
@@ -207,6 +210,7 @@
     <ClInclude Include="src\engine\value\value.hh" />
     <ClInclude Include="src\engine\value\decimal.hh" />
     <ClInclude Include="src\engine\value\moment.hh" />
+    <ClInclude Include="src\app\backup\backup.hh" />
     <ClInclude Include="src\engine\catalog\catalog.hh" />
     <ClInclude Include="src\base\sort\sort.hh" />
     <ClInclude Include="src\base\clock\clock.hh" />

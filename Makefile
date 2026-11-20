@@ -127,6 +127,9 @@ TESTS := \
 APP := \
 	src/app/main/main.cc \
 	src/app/shell/shell.cc \
+	src/app/backup/backup.cc \
+	src/server/loop/log.cc \
+	src/server/loop/backups.cc \
 	src/server/loop/loop.cc \
 	src/server/users/users.cc \
 	src/server/postgres/startup.cc \

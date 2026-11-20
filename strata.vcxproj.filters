@@ -199,6 +199,9 @@
     <Filter Include="src\app\main">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D07}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\app\backup">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D08}</UniqueIdentifier>
+    </Filter>
     <Filter Include="src\base\platform">
       <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F10}</UniqueIdentifier>
     </Filter>
@@ -354,6 +357,9 @@
     <ClCompile Include="src\test\engine\vacuum_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\app\shell\shell.cc"><Filter>src\app\shell</Filter></ClCompile>
     <ClCompile Include="src\server\loop\loop.cc"><Filter>src\server\loop</Filter></ClCompile>
+    <ClCompile Include="src\server\loop\log.cc"><Filter>src\server\loop</Filter></ClCompile>
+    <ClCompile Include="src\server\loop\backups.cc"><Filter>src\server\loop</Filter></ClCompile>
+    <ClCompile Include="src\app\backup\backup.cc"><Filter>src\app\backup</Filter></ClCompile>
     <ClCompile Include="src\server\users\users.cc"><Filter>src\server\users</Filter></ClCompile>
     <ClCompile Include="src\server\postgres\startup.cc"><Filter>src\server\postgres</Filter></ClCompile>
     <ClCompile Include="src\server\postgres\query.cc"><Filter>src\server\postgres</Filter></ClCompile>
@@ -419,6 +425,7 @@
     <ClInclude Include="src\engine\value\value.hh"><Filter>src\engine\value</Filter></ClInclude>
     <ClInclude Include="src\engine\value\decimal.hh"><Filter>src\engine\value</Filter></ClInclude>
     <ClInclude Include="src\engine\value\moment.hh"><Filter>src\engine\value</Filter></ClInclude>
+    <ClInclude Include="src\app\backup\backup.hh"><Filter>src\app\backup</Filter></ClInclude>
     <ClInclude Include="src\engine\catalog\catalog.hh"><Filter>src\engine\catalog</Filter></ClInclude>
     <ClInclude Include="src\base\sort\sort.hh"><Filter>src\base\sort</Filter></ClInclude>
     <ClInclude Include="src\base\clock\clock.hh"><Filter>src\base\clock</Filter></ClInclude>

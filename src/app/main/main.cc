@@ -4,7 +4,7 @@
 #include "test/harness/harness.hh"
 #include "app/shell/shell.hh"
 #include "server/server.hh"
-#include "engine/check/check.hh"
+#include "app/backup/backup.hh"
 
 #if STRATA_WINDOWS
 #include "studio/app/studio.hh"
@@ -72,6 +72,7 @@ namespace app {
 		settings.path = arguments [ 2 ];
 		settings.host = "0.0.0.0";
 		settings.port = 5432;
+		settings.backup_keep = 14;
 
 		for ( int32_t i = 3; i < count; i++ ) {
 
@@ -83,6 +84,22 @@ namespace app {
 				settings.quiet = true;
 			else if ( base::same ( arguments [ i ], "--host" ) && i + 1 < count )
 				settings.host = arguments [ ++i ];
+			else if ( base::same ( arguments [ i ], "--backup-folder" ) && i + 1 < count )
+				settings.backup_folder = arguments [ ++i ];
+			else if ( base::same ( arguments [ i ], "--log" ) && i + 1 < count )
+				settings.log_path = arguments [ ++i ];
+			else if ( ( base::same ( arguments [ i ], "--backup-every" ) || base::same ( arguments [ i ], "--backup-keep" ) || base::same ( arguments [ i ], "--slow" ) ) && i + 1 < count && base::read_number ( arguments [ i + 1 ], number ) && number < 100000000 ) {
+
+				if ( base::same ( arguments [ i ], "--backup-every" ) )
+					settings.backup_minutes = static_cast < uint32_t > ( number );
+				else if ( base::same ( arguments [ i ], "--backup-keep" ) )
+					settings.backup_keep = static_cast < uint32_t > ( number );
+				else
+					settings.slow_milliseconds = static_cast < uint32_t > ( number );
+
+				i++;
+
+			}
 			else if ( base::same ( arguments [ i ], "--port" ) && i + 1 < count && base::read_number ( arguments [ i + 1 ], number ) && number && number < 65536 ) {
 
 				settings.port = static_cast < uint16_t > ( number );
@@ -90,7 +107,7 @@ namespace app {
 
 			} else {
 
-				base::write_error ( "strata --serve <file> [--port 5432] [--host 0.0.0.0] [--trust]\n" );
+				base::write_error ( "strata --serve <file> [--port 5432] [--host 0.0.0.0] [--trust] [--backup-folder <dir> --backup-every <minutes> --backup-keep <count>] [--slow <ms>] [--log <file>]\n" );
 
 				return 2;
 
@@ -99,65 +116,6 @@ namespace app {
 		}
 
 		return server::run_server ( settings );
-
-	}
-
-	static int32_t run_check ( const char* path ) {
-
-		if ( !base::path_exists ( path ) ) {
-
-			base::write_error ( "there is no database at that path\n" );
-
-			return 2;
-
-		}
-
-		engine::database* db = base::make < engine::database > ( 1 );
-		engine::check_report report = { };
-
-		if ( !db || !engine::open_database ( *db, path ) ) {
-
-			base::write_error ( "the database could not be opened" );
-
-			if ( db && db->problem.size )
-				base::write_error ( ": " ), base::write_error ( db->problem.value ( ) );
-
-			base::write_error ( "\n" );
-
-			if ( db ) {
-
-				db->problem.~text ( );
-				base::release ( db );
-
-			}
-
-			return 2;
-
-		}
-
-		bool fine = engine::check_database ( *db, report );
-		base::text line;
-
-		line.add ( "checked " ).number ( report.pages ).add ( " pages, " ).number ( report.trees ).add ( " trees, " ).number ( report.rows ).add ( " rows, " ).number ( report.entries ).add ( " index entries, " ).number ( report.free_pages ).add ( " free pages\n" );
-		base::write ( line.value ( ) );
-
-		for ( uint32_t i = 0; i < report.problem_count; i++ ) {
-
-			base::write ( "  problem: " );
-			base::write ( report.problems [ i ] );
-			base::write ( "\n" );
-
-		}
-
-		bool clean = fine && !report.problem_count;
-
-		base::write ( clean ? "ok\n" : "the file has problems\n" );
-		engine::forget_report ( report );
-		engine::close_database ( *db );
-		db->problem.~text ( );
-		base::release ( db );
-
-		return clean ? 0 : 1;
 
 	}
 
@@ -178,6 +136,12 @@ namespace app {
 		if ( named ( count, arguments, 1, "--check" ) && count > 2 )
 			return run_check ( arguments [ 2 ] );
 
+		if ( named ( count, arguments, 1, "--backup" ) && count > 3 )
+			return run_backup ( arguments [ 2 ], arguments [ 3 ] );
+
+		if ( named ( count, arguments, 1, "--restore" ) && count > 3 )
+			return run_restore ( arguments [ 2 ], arguments [ 3 ] );
+
 		if ( named ( count, arguments, 1, "--test" ) )
 			return test::run_all ( count > 2 ? arguments [ 2 ] : nullptr );
 
@@ -192,6 +156,8 @@ namespace app {
 		base::write ( "  strata <file> \"<sql>\"    run SQL against a database and print the rows\n" );
 		base::write ( "  strata --test [part]     run the self test (pager, btree, crash, parser, engine)\n" );
 		base::write ( "  strata --check <file>    check every page, tree, row and index entry of a database\n" );
+		base::write ( "  strata --backup <file> <copy>     make a checked copy, safe while the server runs\n" );
+		base::write ( "  strata --restore <copy> <file>    check a backup and restore it to a new path\n" );
 		base::write ( "  strata --serve <file>    serve a database to Postgres clients (--port, --host, --trust)\n" );
 		base::write ( "  strata --user <file> <name> [password] [--limited]   add, change or remove a server user\n" );
 

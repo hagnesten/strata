@@ -332,6 +332,8 @@ namespace server {
 
 			}
 
+			tend_backups ( *state, now_ms ( ) );
+
 			for ( uint32_t i = state->connection_count; i-- > 0; ) {
 
 				server_connection& link = *state->connections [ i ];

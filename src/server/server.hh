@@ -94,6 +94,11 @@ namespace server {
 		uint16_t port;
 		bool trust;
 		bool quiet;
+		const char* backup_folder;
+		uint32_t backup_minutes;
+		uint32_t backup_keep;
+		uint32_t slow_milliseconds;
+		const char* log_path;
 
 	};
 
@@ -179,6 +184,10 @@ namespace server {
 		uint32_t next_id;
 		uint64_t next_ticket;
 		uint64_t last_retry;
+		uint64_t next_backup;
+		void* backup_process;
+		char backup_target [ 1024 ];
+		uint64_t started_ms;
 		bool released;
 		bool running;
 
@@ -213,6 +222,12 @@ namespace server {
 	bool access_allowed ( server_connection& link, const sql::statement* statement, base::text& problem );
 
 	void grant_owner ( server_connection& link, const char* name );
+
+	void time_stamp ( base::text& out, bool compact );
+
+	void server_log ( server_state& state, const char* line );
+
+	void tend_backups ( server_state& state, uint64_t now );
 
 	bool access_command ( server_connection& link, const char* tag, const char* text, size_t size, base::text& problem, const char*& code );
 
