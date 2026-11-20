@@ -299,7 +299,47 @@ namespace engine {
 
 	}
 
+	static bool loose_moment ( const storage::value& item ) {
+
+		if ( item.kind != storage::VALUE_TEXT || item.size <= 10 )
+			return false;
+
+		if ( item.bytes [ 10 ] == 'T' || item.bytes [ 10 ] == 't' || item.bytes [ item.size - 1 ] == 'Z' || item.bytes [ item.size - 1 ] == 'z' )
+			return true;
+
+		for ( size_t i = 11; i < item.size; i++ )
+			if ( item.bytes [ i ] == '+' || item.bytes [ i ] == '-' )
+				return true;
+
+		return false;
+
+	}
+
+	static void settle_parameter ( run_context& ctx, const sql::expression* column, const sql::expression* other, storage::value& value ) {
+
+		if ( !column || column->kind != sql::EXPRESSION_COLUMN || !column->moment || !other || other->kind != sql::EXPRESSION_PARAMETER || !loose_moment ( value ) )
+			return;
+
+		base::text written;
+
+		if ( !canonical_moment ( value.bytes, value.size, static_cast < moment_kind > ( column->moment ), written ) )
+			return;
+
+		char* kept = ctx.scratch->keep ( written.value ( ), written.size );
+
+		if ( kept )
+			value = storage::text_value ( kept, written.size );
+
+	}
+
 	static truth_kind compare_expressions ( run_context& ctx, sql::operator_kind op, const sql::expression* left, storage::value a, const sql::expression* right, storage::value b ) {
+
+		if ( ctx.schema->postgres ) {
+
+			settle_parameter ( ctx, left, right, b );
+			settle_parameter ( ctx, right, left, a );
+
+		}
 
 		if ( ( a.subtype == LITERAL_INTERVAL || b.subtype == LITERAL_INTERVAL ) && a.kind == storage::VALUE_TEXT && b.kind == storage::VALUE_TEXT ) {
 

@@ -232,6 +232,7 @@ namespace sql {
 		window_spec* window;
 		int32_t window_index;
 		bool nocase;
+		uint8_t moment;
 		void* search;
 
 	};

@@ -295,6 +295,7 @@ namespace engine {
 				item->source = hit_source;
 				item->column = hit_column;
 				item->cast = hit_column >= 0 ? source.affinities [ hit_column ] : sql::AFFINITY_INTEGER;
+				item->moment = source.table && hit_column >= 0 && static_cast < uint32_t > ( hit_column ) < source.table->column_count ? source.table->columns [ hit_column ].moment : 0;
 				note_use ( source, hit_column );
 
 				if ( hit_column >= 0 && source.paired_source && source.paired_source [ hit_column ] >= 0 )
@@ -454,6 +455,79 @@ namespace engine {
 		item->search = binding;
 
 		return bind ( ctx, scope, item->right, mode, aliases );
+
+	}
+
+	static bool settle_literal ( run_context& ctx, uint8_t moment, sql::expression* other ) {
+
+		if ( !moment || !other || other->kind != sql::EXPRESSION_LITERAL || other->literal.kind != storage::VALUE_TEXT )
+			return true;
+
+		base::text written;
+
+		if ( !canonical_moment ( other->literal.bytes, other->literal.size, static_cast < moment_kind > ( moment ), written ) ) {
+
+			base::text message;
+
+			message.add ( "invalid input syntax for type timestamp: \"" ).add ( reinterpret_cast < const char* > ( other->literal.bytes ), base::min < size_t > ( other->literal.size, 64 ) ).add ( '"' );
+
+			return fail_run ( ctx, message.value ( ) );
+
+		}
+
+		char* kept = ctx.lasting->keep ( written.value ( ), written.size );
+
+		if ( !kept )
+			return fail_run ( ctx, "out of memory" );
+
+		other->literal = storage::text_value ( kept, written.size );
+
+		return true;
+
+	}
+
+	static uint8_t column_moment ( const sql::expression* item ) {
+
+		return item && item->kind == sql::EXPRESSION_COLUMN ? item->moment : 0;
+
+	}
+
+	static bool settle_moments ( run_context& ctx, sql::expression* item ) {
+
+		switch ( item->kind ) {
+
+			case sql::EXPRESSION_BINARY:
+
+				switch ( item->op ) {
+
+					case sql::OPERATOR_EQUAL:
+					case sql::OPERATOR_NOT_EQUAL:
+					case sql::OPERATOR_LESS:
+					case sql::OPERATOR_LESS_EQUAL:
+					case sql::OPERATOR_GREATER:
+					case sql::OPERATOR_GREATER_EQUAL:
+						return settle_literal ( ctx, column_moment ( item->left ), item->right ) && settle_literal ( ctx, column_moment ( item->right ), item->left );
+
+					default:
+						return true;
+
+				}
+
+			case sql::EXPRESSION_BETWEEN:
+				return settle_literal ( ctx, column_moment ( item->left ), item->right ) && settle_literal ( ctx, column_moment ( item->left ), item->third );
+
+			case sql::EXPRESSION_IN:
+
+				for ( uint32_t i = 0; i < item->count; i++ )
+					if ( !settle_literal ( ctx, column_moment ( item->left ), item->list [ i ] ) )
+						return false;
+
+				return true;
+
+			default:
+				return true;
+
+		}
 
 	}
 
@@ -716,6 +790,9 @@ namespace engine {
 
 		}
 
+		if ( fine && ctx.schema->postgres )
+			fine = settle_moments ( ctx, item );
+
 		return fine;
 
 	}
@@ -763,8 +840,19 @@ namespace engine {
 
 			}
 
-			case sql::EXPRESSION_CASE:
+			case sql::EXPRESSION_CASE: {
+
+				const sql::expression* otherwise = item->right;
+
+				while ( otherwise && otherwise->kind == sql::EXPRESSION_CASE )
+					otherwise = otherwise->right;
+
+				if ( otherwise && ( otherwise->kind == sql::EXPRESSION_COLUMN || otherwise->kind == sql::EXPRESSION_FUNCTION ) )
+					return postgres_name ( ctx, otherwise );
+
 				return "case";
+
+			}
 
 			case sql::EXPRESSION_EXISTS:
 				return "exists";

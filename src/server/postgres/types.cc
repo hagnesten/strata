@@ -629,6 +629,14 @@ namespace server {
 
 				}
 
+				case PG_TIMESTAMPTZ:
+					engine::describe_value ( written, item );
+
+					if ( item.kind == storage::VALUE_TEXT && !engine::moment_infinity ( item.bytes, item.size ) && written.size >= 19 )
+						written.add ( "+00" );
+
+					break;
+
 				case PG_BYTEA: {
 
 					written.add ( "\\x" );
