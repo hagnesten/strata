@@ -373,6 +373,7 @@ namespace sql {
 	struct update_statement {
 
 		const char* table;
+		const char* alias;
 		assignment* assignments;
 		uint32_t assignment_count;
 		expression* where;
@@ -385,6 +386,7 @@ namespace sql {
 	struct delete_statement {
 
 		const char* table;
+		const char* alias;
 		expression* where;
 		mutable void* prepared;
 		returning_clause returning;

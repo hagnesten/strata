@@ -2,6 +2,12 @@
 
 namespace engine {
 
+	const char* returning_alias ( const sql::statement* item ) {
+
+		return item->kind == sql::STATEMENT_UPDATE ? item->update->alias : item->kind == sql::STATEMENT_DELETE ? item->remove->alias : nullptr;
+
+	}
+
 	const sql::returning_clause* returning_of ( const sql::statement* item, const char*& table ) {
 
 		switch ( item->kind ) {
@@ -81,7 +87,7 @@ namespace engine {
 
 	}
 
-	returning_plan* plan_returning ( run_context& ctx, const char* name, const sql::returning_clause& returning ) {
+	returning_plan* plan_returning ( run_context& ctx, const char* name, const char* alias, const sql::returning_clause& returning ) {
 
 		const sql::returning_clause* clause = &returning;
 
@@ -116,7 +122,7 @@ namespace engine {
 		}
 
 		*made = { };
-		made->scope = prepare_table_scope ( ctx, table, bare_name ( table->name ), nullptr, nullptr );
+		made->scope = prepare_table_scope ( ctx, table, alias ? alias : bare_name ( table->name ), nullptr, nullptr );
 		made->outputs = ctx.lasting->make < sql::expression* > ( width + 1 );
 		made->names = ctx.lasting->make < const char* > ( width + 1 );
 

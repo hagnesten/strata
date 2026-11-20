@@ -1252,6 +1252,53 @@ namespace sql {
 
 		}
 
+		while ( result && token_is ( item.current, "at" ) ) {
+
+			lexer saved = item.lex;
+			token saved_token = item.current;
+
+			advance ( item );
+
+			if ( !token_is ( item.current, "time" ) ) {
+
+				item.lex = saved;
+				item.current = saved_token;
+
+				break;
+
+			}
+
+			advance ( item );
+
+			if ( !expect_word ( item, "zone" ) ) {
+
+				result = nullptr;
+
+				break;
+
+			}
+
+			expression* zone = parse_primary ( item );
+			expression* call = new_expression ( item, EXPRESSION_FUNCTION );
+			expression** list = item.memory->make < expression* > ( 2 );
+
+			if ( !zone || !call || !list ) {
+
+				result = nullptr;
+
+				break;
+
+			}
+
+			list [ 0 ] = zone;
+			list [ 1 ] = result;
+			call->name = "timezone";
+			call->list = list;
+			call->count = 2;
+			result = call;
+
+		}
+
 		if ( result && accept_word ( item, "collate" ) ) {
 
 			const char* collation = take_name ( item, "a collation name" );

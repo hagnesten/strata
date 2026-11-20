@@ -108,6 +108,7 @@ namespace engine {
 		FUNCTION_ARRAY_ANY,
 		FUNCTION_DATE_PART,
 		FUNCTION_DATE_TRUNC,
+		FUNCTION_TIMEZONE,
 		FUNCTION_DATE,
 		FUNCTION_TIME,
 		FUNCTION_DATETIME,
@@ -864,7 +865,9 @@ namespace engine {
 
 	const sql::returning_clause* returning_of ( const sql::statement* item, const char*& table );
 
-	returning_plan* plan_returning ( run_context& ctx, const char* name, const sql::returning_clause& returning );
+	const char* returning_alias ( const sql::statement* item );
+
+	returning_plan* plan_returning ( run_context& ctx, const char* name, const char* alias, const sql::returning_clause& returning );
 
 	void start_returning ( run_context& ctx, returning_plan* plan );
 

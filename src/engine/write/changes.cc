@@ -4,6 +4,24 @@
 
 namespace engine {
 
+	static const char* item_alias ( const sql::insert_statement* ) {
+
+		return nullptr;
+
+	}
+
+	static const char* item_alias ( const sql::update_statement* item ) {
+
+		return item->alias;
+
+	}
+
+	static const char* item_alias ( const sql::delete_statement* item ) {
+
+		return item->alias;
+
+	}
+
 	static bool is_rowid_name ( const char* name ) {
 
 		return base::same_folded ( name, "rowid" ) || base::same_folded ( name, "oid" ) || base::same_folded ( name, "_rowid_" );
@@ -1356,7 +1374,7 @@ namespace engine {
 			return false;
 
 		table_info* table = plan->table;
-		returning_plan* back = plan_returning ( ctx, item->table, item->returning );
+		returning_plan* back = plan_returning ( ctx, item->table, item_alias ( item ), item->returning );
 
 		if ( item->returning.count && !back )
 			return false;
@@ -1532,9 +1550,9 @@ namespace engine {
 
 	}
 
-	static bool build_target ( run_context& ctx, table_info& table, sql::expression* where, prepared_select*& plan ) {
+	static bool build_target ( run_context& ctx, table_info& table, sql::expression* where, prepared_select*& plan, const char* alias = nullptr ) {
 
-		plan = prepare_table_scope ( ctx, &table, table.name, nullptr, nullptr );
+		plan = prepare_table_scope ( ctx, &table, alias ? alias : table.name, nullptr, nullptr );
 
 		if ( !plan )
 			return false;
@@ -1566,7 +1584,7 @@ namespace engine {
 
 	}
 
-	static target_plan* plan_change ( run_context& ctx, const char* name, sql::expression* where, void*& cached ) {
+	static target_plan* plan_change ( run_context& ctx, const char* name, const char* alias, sql::expression* where, void*& cached ) {
 
 		if ( cached )
 			return static_cast < target_plan* > ( cached );
@@ -1592,7 +1610,7 @@ namespace engine {
 
 		made->table = table;
 
-		if ( !build_target ( ctx, *table, where, made->plan ) )
+		if ( !build_target ( ctx, *table, where, made->plan, alias ) )
 			return nullptr;
 
 		cached = made;
@@ -1793,7 +1811,7 @@ namespace engine {
 	bool run_update ( run_context& ctx, const sql::update_statement* item ) {
 
 		bool fresh = !item->prepared;
-		target_plan* target = plan_change ( ctx, item->table, item->where, item->prepared );
+		target_plan* target = plan_change ( ctx, item->table, item->alias, item->where, item->prepared );
 
 		if ( !target )
 			return false;
@@ -1810,7 +1828,7 @@ namespace engine {
 		prepared_select* plan = target->plan;
 		const int32_t* columns = target->columns;
 		query_state state;
-		returning_plan* back = plan_returning ( ctx, item->table, item->returning );
+		returning_plan* back = plan_returning ( ctx, item->table, item_alias ( item ), item->returning );
 
 		if ( item->returning.count && !back )
 			return false;
@@ -1858,7 +1876,7 @@ namespace engine {
 
 	bool run_delete ( run_context& ctx, const sql::delete_statement* item ) {
 
-		target_plan* target = plan_change ( ctx, item->table, item->where, item->prepared );
+		target_plan* target = plan_change ( ctx, item->table, item->alias, item->where, item->prepared );
 
 		if ( !target )
 			return false;
@@ -1867,7 +1885,7 @@ namespace engine {
 		query_state state;
 		int64_t* rowids = nullptr;
 		uint32_t count = 0;
-		returning_plan* back = plan_returning ( ctx, item->table, item->returning );
+		returning_plan* back = plan_returning ( ctx, item->table, item_alias ( item ), item->returning );
 
 		if ( item->returning.count && !back )
 			return false;

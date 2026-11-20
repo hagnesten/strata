@@ -301,6 +301,28 @@ namespace sql {
 
 	}
 
+	static bool take_target_alias ( parser& item, const char*& alias ) {
+
+		if ( accept_word ( item, "as" ) ) {
+
+			alias = take_name ( item, "an alias" );
+
+			return alias != nullptr;
+
+		}
+
+		if ( item.current.kind == TOKEN_NAME && !reserved_word ( item.current ) && !token_is ( item.current, "returning" ) ) {
+
+			alias = take_name ( item, "an alias" );
+
+			return alias != nullptr;
+
+		}
+
+		return true;
+
+	}
+
 	static bool parse_returning ( parser& item, returning_clause& out ) {
 
 		out = { };
@@ -1294,7 +1316,10 @@ namespace sql {
 			out.kind = STATEMENT_UPDATE;
 			out.update = made;
 			made->conflict = parse_or_conflict ( item );
-			made->table = item.error->failed ? nullptr : take_table ( item, "a table name" );
+			made->table = item.error->failed ? nullptr : take_table ( item, "a table name", &made->alias );
+
+			if ( made->table && !take_target_alias ( item, made->alias ) )
+				return false;
 
 			if ( !made->table || !expect_word ( item, "set" ) || !parse_assignments ( item, made->assignments, made->assignment_count ) )
 				return false;
@@ -1325,9 +1350,9 @@ namespace sql {
 			if ( !expect_word ( item, "from" ) )
 				return false;
 
-			made->table = take_table ( item, "a table name" );
+			made->table = take_table ( item, "a table name", &made->alias );
 
-			if ( !made->table )
+			if ( !made->table || !take_target_alias ( item, made->alias ) )
 				return false;
 
 			if ( accept_word ( item, "where" ) ) {

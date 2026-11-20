@@ -61,6 +61,7 @@ namespace engine {
 		{ "strata_any", 2, 2, false, FUNCTION_ARRAY_ANY },
 		{ "date_part", 2, 2, false, FUNCTION_DATE_PART },
 		{ "date_trunc", 2, 3, false, FUNCTION_DATE_TRUNC },
+		{ "timezone", 2, 2, false, FUNCTION_TIMEZONE },
 		{ "statement_timestamp", 0, 0, false, FUNCTION_NOW },
 		{ "transaction_timestamp", 0, 0, false, FUNCTION_NOW },
 		{ "clock_timestamp", 0, 0, false, FUNCTION_NOW },
@@ -1241,6 +1242,57 @@ namespace engine {
 
 			case FUNCTION_ARRAY_ANY:
 				return array_contains ( ctx, args [ 0 ], args [ 1 ], out );
+
+			case FUNCTION_TIMEZONE: {
+
+				if ( args [ 0 ].kind == storage::VALUE_NULL || args [ 1 ].kind == storage::VALUE_NULL )
+					return true;
+
+				storage::value zone = text_of ( *ctx.scratch, args [ 0 ] );
+				storage::value moment = text_of ( *ctx.scratch, args [ 1 ] );
+				const char* name = reinterpret_cast < const char* > ( zone.bytes );
+				bool utc = ( zone.size == 3 && ( base::same_folded_size ( name, "utc", 3 ) || base::same_folded_size ( name, "gmt", 3 ) ) ) || ( zone.size == 1 && ( name [ 0 ] == 'Z' || name [ 0 ] == 'z' ) ) || ( zone.size == 7 && base::same_folded_size ( name, "Etc/UTC", 7 ) );
+				base::text shifted;
+				moment_parts parts = { };
+
+				if ( !utc ) {
+
+					base::text probe;
+
+					probe.add ( "2000-01-01 00:00:00" ).add ( name, zone.size );
+
+					if ( zone.size < 1 || ( name [ 0 ] != '+' && name [ 0 ] != '-' ) || !parse_moment ( reinterpret_cast < const uint8_t* > ( probe.value ( ) ), probe.size, true, parts ) ) {
+
+						base::text message;
+
+						message.add ( "time zone \"" ).add ( name, zone.size ).add ( "\" is not recognized, use UTC or an offset like +02:00" );
+
+						return fail_run ( ctx, message.value ( ) );
+
+					}
+
+					int64_t east = moment_days_from_civil ( 2000, 1, 1 ) * 86400000000ll - ( parts.days * 86400000000ll + parts.micros );
+
+					if ( !parse_moment ( moment.bytes, moment.size, false, parts ) )
+						return fail_run ( ctx, "invalid input syntax for type timestamp" );
+
+					int64_t total = parts.days * 86400000000ll + parts.micros - east;
+					int64_t days = total >= 0 ? total / 86400000000ll : ( total - 86400000000ll + 1 ) / 86400000000ll;
+
+					parts.days = days;
+					parts.micros = total - days * 86400000000ll;
+					write_moment ( parts, MOMENT_TIMESTAMP, shifted );
+
+					return make_text ( ctx, shifted, out );
+
+				}
+
+				if ( !canonical_moment ( moment.bytes, moment.size, MOMENT_TIMESTAMP, shifted ) )
+					return fail_run ( ctx, "invalid input syntax for type timestamp" );
+
+				return make_text ( ctx, shifted, out );
+
+			}
 
 			case FUNCTION_DATE_PART:
 			case FUNCTION_DATE_TRUNC: {

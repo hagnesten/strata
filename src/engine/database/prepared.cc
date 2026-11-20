@@ -207,7 +207,7 @@ namespace engine {
 
 			const char* table = nullptr;
 			const sql::returning_clause* clause = returning_of ( item.statement, table );
-			returning_plan* back = plan_returning ( ctx, table, *clause );
+			returning_plan* back = plan_returning ( ctx, table, returning_alias ( item.statement ), *clause );
 
 			plan = back ? back->scope : nullptr;
 
