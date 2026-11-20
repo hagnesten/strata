@@ -1171,10 +1171,20 @@ namespace engine {
 			source.right = syntax.join == sql::JOIN_RIGHT || syntax.join == sql::JOIN_FULL;
 
 			sql::select_statement* view = nullptr;
+			const char** view_columns = nullptr;
+			uint32_t view_column_count = 0;
+			bool stored_view = false;
 
 			if ( !syntax.query && syntax.name && !find_cte ( ctx, syntax.name ) && !find_table ( *ctx.schema, syntax.name ) ) {
 
 				view = catalog_view ( ctx, syntax.name );
+
+				if ( !view && !ctx.problem->size ) {
+
+					view = user_view ( ctx, syntax.name, view_columns, view_column_count );
+					stored_view = view != nullptr;
+
+				}
 
 				if ( !view && ctx.problem->size )
 					return nullptr;
@@ -1183,7 +1193,7 @@ namespace engine {
 
 			if ( syntax.query || view ) {
 
-				source.query = prepare_select ( ctx, view ? view : syntax.query, parent );
+				source.query = prepare_select ( ctx, view ? view : syntax.query, stored_view ? nullptr : parent );
 
 				if ( !source.query || !add_child ( ctx, plan, source.query, CHILD_FROM ) )
 					return nullptr;
@@ -1194,6 +1204,25 @@ namespace engine {
 				source.alias = syntax.alias || !view ? syntax.alias : catalog_view_alias ( syntax.name );
 				source.width = source.query->output_count;
 				source.names = source.query->names;
+
+				if ( view_column_count ) {
+
+					const char** names = ctx.lasting->make < const char* > ( source.width + 1 );
+
+					if ( !names ) {
+
+						fail_run ( ctx, "out of memory" );
+
+						return nullptr;
+
+					}
+
+					for ( uint32_t c = 0; c < source.width; c++ )
+						names [ c ] = c < view_column_count ? view_columns [ c ] : source.query->names [ c ];
+
+					source.names = names;
+
+				}
 				source.affinities = ctx.lasting->make < sql::affinity_kind > ( source.width + 1 );
 				source.hidden = ctx.lasting->make < bool > ( source.width + 1 );
 

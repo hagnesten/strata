@@ -31,6 +31,8 @@ namespace engine {
 
 	bool canonical_moment ( const uint8_t* text, size_t size, moment_kind kind, base::text& out );
 
+	int32_t moment_infinity ( const uint8_t* text, size_t size );
+
 	bool moment_field ( const char* field, size_t field_size, const moment_parts& parts, double& out );
 
 	bool truncate_moment ( const char* field, size_t field_size, moment_parts& parts );

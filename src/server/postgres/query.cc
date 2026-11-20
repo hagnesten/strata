@@ -134,6 +134,7 @@ namespace server {
 			{ "comment", "COMMENT" },
 			{ "grant", "GRANT" },
 			{ "revoke", "REVOKE" },
+			{ "refresh", "REFRESH MATERIALIZED VIEW" },
 
 		};
 
@@ -314,7 +315,7 @@ namespace server {
 				case sql::STATEMENT_CREATE_INDEX: tag.add ( "CREATE INDEX" ); break;
 				case sql::STATEMENT_DROP_TABLE: tag.add ( "DROP TABLE" ); break;
 				case sql::STATEMENT_DROP_INDEX: tag.add ( "DROP INDEX" ); break;
-				case sql::STATEMENT_ALTER_TABLE: tag.add ( "ALTER TABLE" ); break;
+				case sql::STATEMENT_ALTER_TABLE: tag.add ( prepared->statement->alter->kind == sql::ALTER_RENAME_INDEX ? "ALTER INDEX" : "ALTER TABLE" ); break;
 				case sql::STATEMENT_BEGIN: tag.add ( "BEGIN" ); break;
 				case sql::STATEMENT_COMMIT: tag.add ( "COMMIT" ); break;
 				case sql::STATEMENT_ROLLBACK: tag.add ( "ROLLBACK" ); break;
@@ -325,6 +326,11 @@ namespace server {
 				case sql::STATEMENT_RELEASE: tag.add ( "RELEASE" ); break;
 				case sql::STATEMENT_CREATE_SCHEMA: tag.add ( "CREATE SCHEMA" ); break;
 				case sql::STATEMENT_DROP_SCHEMA: tag.add ( "DROP SCHEMA" ); break;
+				case sql::STATEMENT_CREATE_VIEW: tag.add ( "CREATE VIEW" ); break;
+				case sql::STATEMENT_DROP_VIEW: tag.add ( "DROP VIEW" ); break;
+				case sql::STATEMENT_CREATE_SEQUENCE: tag.add ( "CREATE SEQUENCE" ); break;
+				case sql::STATEMENT_ALTER_SEQUENCE: tag.add ( "ALTER SEQUENCE" ); break;
+				case sql::STATEMENT_DROP_SEQUENCE: tag.add ( "DROP SEQUENCE" ); break;
 				default: tag.add ( "OK" ); break;
 
 			}

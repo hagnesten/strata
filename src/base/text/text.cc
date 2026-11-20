@@ -203,6 +203,15 @@ namespace base {
 
 	}
 
+	bool ends_with_folded ( const char* value, const char* suffix ) {
+
+		size_t have = length ( value );
+		size_t want = length ( suffix );
+
+		return have >= want && same_folded_size ( value + have - want, suffix, want );
+
+	}
+
 	void copy_span ( char* out, size_t room, const char* value, size_t size ) {
 
 		if ( !room )

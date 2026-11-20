@@ -63,6 +63,10 @@ namespace engine {
 		{ "date_trunc", 2, 3, false, FUNCTION_DATE_TRUNC },
 		{ "timezone", 2, 2, false, FUNCTION_TIMEZONE },
 		{ "pg_terminate_backend", 1, 2, false, FUNCTION_TERMINATE },
+		{ "nextval", 1, 1, false, FUNCTION_NEXTVAL },
+		{ "currval", 1, 1, false, FUNCTION_CURRVAL },
+		{ "setval", 2, 3, false, FUNCTION_SETVAL },
+		{ "pg_get_serial_sequence", 2, 2, false, FUNCTION_SERIAL_SEQUENCE },
 		{ "statement_timestamp", 0, 0, false, FUNCTION_NOW },
 		{ "transaction_timestamp", 0, 0, false, FUNCTION_NOW },
 		{ "clock_timestamp", 0, 0, false, FUNCTION_NOW },
@@ -1263,6 +1267,91 @@ namespace engine {
 				out.subtype = LITERAL_BOOLEAN;
 
 				return true;
+
+			}
+
+			case FUNCTION_NEXTVAL:
+			case FUNCTION_CURRVAL:
+			case FUNCTION_SETVAL: {
+
+				function_kind kind = static_cast < function_kind > ( item->column );
+
+				if ( args [ 0 ].kind == storage::VALUE_NULL || ( kind == FUNCTION_SETVAL && args [ 1 ].kind == storage::VALUE_NULL ) )
+					return true;
+
+				if ( kind != FUNCTION_CURRVAL && !ctx.pages->wal.writing )
+					return fail_run ( ctx, "nextval and setval can only run in a statement that is allowed to write" );
+
+				storage::value name = text_of ( *ctx.scratch, args [ 0 ] );
+				base::text bare;
+				int64_t value = 0;
+				int64_t result = 0;
+				bool called = true;
+
+				bare.add ( reinterpret_cast < const char* > ( name.bytes ), name.size );
+
+				if ( kind == FUNCTION_SETVAL && !integer_of ( args [ 1 ], value ) )
+					return fail_run ( ctx, "setval needs a whole number" );
+
+				if ( kind == FUNCTION_SETVAL && count > 2 && args [ 2 ].kind != storage::VALUE_NULL ) {
+
+					int64_t flag = 1;
+
+					integer_of ( args [ 2 ], flag );
+					called = flag != 0;
+
+				}
+
+				if ( !sequence_step ( ctx, bare.value ( ), kind == FUNCTION_NEXTVAL ? 0 : kind == FUNCTION_CURRVAL ? 1 : 2, value, called, result ) )
+					return false;
+
+				out = storage::integer_value ( result );
+
+				return true;
+
+			}
+
+			case FUNCTION_SERIAL_SEQUENCE: {
+
+				if ( args [ 0 ].kind == storage::VALUE_NULL || args [ 1 ].kind == storage::VALUE_NULL )
+					return true;
+
+				storage::value table_text = text_of ( *ctx.scratch, args [ 0 ] );
+				storage::value column_text = text_of ( *ctx.scratch, args [ 1 ] );
+				base::text table_name;
+				base::text column_name;
+
+				for ( uint32_t i = 0; i < table_text.size; i++ )
+					if ( table_text.bytes [ i ] != '"' )
+						table_name.add ( static_cast < char > ( table_text.bytes [ i ] ) );
+
+				for ( uint32_t i = 0; i < column_text.size; i++ )
+					if ( column_text.bytes [ i ] != '"' )
+						column_name.add ( static_cast < char > ( column_text.bytes [ i ] ) );
+
+				const char* bare_table = table_name.value ( );
+
+				if ( base::starts_with ( bare_table, "public." ) )
+					bare_table += 7;
+
+				table_info* table = find_table ( *ctx.schema, bare_table );
+
+				if ( !table )
+					return fail_named ( ctx, "no such table: ", bare_table, "" );
+
+				int32_t column = find_column ( *table, column_name.value ( ) );
+
+				if ( column < 0 )
+					return fail_named ( ctx, "no such column: ", column_name.value ( ), "" );
+
+				if ( column != table->rowid_column || !table->autoincrement )
+					return true;
+
+				base::text made;
+
+				made.add ( "public." ).add ( catalog_view_alias ( table->name ) ).add ( '_' ).add ( table->columns [ column ].name ).add ( "_seq" );
+
+				return make_text ( ctx, made, out );
 
 			}
 

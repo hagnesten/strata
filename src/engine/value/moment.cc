@@ -316,9 +316,49 @@ namespace engine {
 
 	}
 
+	int32_t moment_infinity ( const uint8_t* text, size_t size ) {
+
+		while ( size && ( *text == ' ' || *text == '\t' ) ) {
+
+			text++;
+			size--;
+
+		}
+
+		while ( size && ( text [ size - 1 ] == ' ' || text [ size - 1 ] == '\t' ) )
+			size--;
+
+		int32_t sign = 1;
+
+		if ( size && ( *text == '-' || *text == '+' ) ) {
+
+			sign = *text == '-' ? -1 : 1;
+			text++;
+			size--;
+
+		}
+
+		return size == 8 && base::same_folded_size ( reinterpret_cast < const char* > ( text ), "infinity", 8 ) ? sign : 0;
+
+	}
+
 	bool canonical_moment ( const uint8_t* text, size_t size, moment_kind kind, base::text& out ) {
 
 		moment_parts parts = { };
+
+		if ( kind != MOMENT_NONE && kind != MOMENT_TIME ) {
+
+			int32_t infinite = moment_infinity ( text, size );
+
+			if ( infinite ) {
+
+				out.add ( infinite > 0 ? "infinity" : "-infinity" );
+
+				return true;
+
+			}
+
+		}
 
 		if ( kind == MOMENT_NONE || !parse_moment ( text, size, kind == MOMENT_ZONED, parts ) )
 			return false;

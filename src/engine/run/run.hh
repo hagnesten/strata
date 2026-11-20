@@ -110,6 +110,10 @@ namespace engine {
 		FUNCTION_DATE_TRUNC,
 		FUNCTION_TIMEZONE,
 		FUNCTION_TERMINATE,
+		FUNCTION_NEXTVAL,
+		FUNCTION_CURRVAL,
+		FUNCTION_SETVAL,
+		FUNCTION_SERIAL_SEQUENCE,
 		FUNCTION_DATE,
 		FUNCTION_TIME,
 		FUNCTION_DATETIME,
@@ -574,6 +578,7 @@ namespace engine {
 		uint32_t hint_slot;
 		int64_t hint_rowid;
 		uint64_t hint_layout;
+		bool skip_parents;
 
 	};
 
@@ -857,6 +862,28 @@ namespace engine {
 	bool keep_high_water ( run_context& ctx, const table_info& table );
 
 	bool forget_sequence ( run_context& ctx, const table_info& table );
+
+	bool read_counter ( run_context& ctx, const char* name, int64_t& value, bool& found );
+
+	bool write_counter ( run_context& ctx, const char* name, int64_t value );
+
+	bool remove_counter ( run_context& ctx, const char* name );
+
+	bool run_create_view ( run_context& ctx, const sql::statement* item );
+
+	bool run_drop_view ( run_context& ctx, const sql::drop_statement* item );
+
+	bool run_create_sequence ( run_context& ctx, const sql::statement* item );
+
+	bool run_alter_sequence ( run_context& ctx, const sql::sequence_statement* item );
+
+	bool run_drop_sequence ( run_context& ctx, const sql::drop_statement* item );
+
+	bool sequence_step ( run_context& ctx, const char* name, int32_t action, int64_t value, bool called, int64_t& out );
+
+	sql::select_statement* user_view ( run_context& ctx, const char* name, const char**& columns, uint32_t& column_count );
+
+	bool check_parents_of ( run_context& ctx, table_info& table, const storage::value* values );
 
 	typedef void ( *activity_writer ) ( base::text& rows, uint32_t& count );
 

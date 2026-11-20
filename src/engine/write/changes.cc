@@ -986,9 +986,58 @@ namespace engine {
 
 	}
 
+	static bool fill_identity ( run_context& ctx, table_info& table, storage::value* values ) {
+
+		base::text key;
+
+		if ( !begin_writes ( ctx, true ) )
+			return false;
+
+		for ( uint32_t c = 0; c < table.column_count; c++ ) {
+
+			if ( !table.columns [ c ].identity )
+				continue;
+
+			key.clear ( );
+			key.add ( "strata_identity:" ).add ( table.name ).add ( '.' ).add ( table.columns [ c ].name );
+
+			int64_t last = 0;
+			bool found = false;
+
+			if ( !read_counter ( ctx, key.value ( ), last, found ) )
+				return false;
+
+			if ( values [ c ].kind == storage::VALUE_NULL ) {
+
+				if ( last == 0x7FFFFFFFFFFFFFFFll )
+					return fail_named ( ctx, "identity column ", table.columns [ c ].name, " has run out of values" );
+
+				values [ c ] = storage::integer_value ( last + 1 );
+
+				if ( !write_counter ( ctx, key.value ( ), last + 1 ) )
+					return false;
+
+				continue;
+
+			}
+
+			storage::value number = apply_affinity ( *ctx.scratch, values [ c ], sql::AFFINITY_INTEGER );
+
+			if ( number.kind == storage::VALUE_INTEGER && number.integer > last && !write_counter ( ctx, key.value ( ), number.integer ) )
+				return false;
+
+		}
+
+		return true;
+
+	}
+
 	bool insert_values ( run_context& ctx, table_info& table, storage::value* values, const storage::value* explicit_rowid, sql::conflict_kind conflict, upsert_plan* upsert, bool& written ) {
 
 		written = false;
+
+		if ( table.identity_count && !fill_identity ( ctx, table, values ) )
+			return false;
 
 		int64_t rowid = 0;
 		bool chosen = false;
@@ -1048,7 +1097,7 @@ namespace engine {
 		if ( skipped )
 			return true;
 
-		if ( !check_parents ( ctx, table, values, nullptr ) )
+		if ( !ctx.skip_parents && !check_parents ( ctx, table, values, nullptr ) )
 			return false;
 
 		auto clash = [ & ] ( int32_t target, const index_info* index, int64_t other, bool& stop ) {
@@ -1138,6 +1187,12 @@ namespace engine {
 		written = true;
 
 		return true;
+
+	}
+
+	bool check_parents_of ( run_context& ctx, table_info& table, const storage::value* values ) {
+
+		return check_parents ( ctx, table, values, nullptr );
 
 	}
 

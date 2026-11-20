@@ -59,7 +59,7 @@ namespace engine {
 
 			bool index = base::same ( kind.value ( ), "index" );
 
-			if ( !storage::copy_btree ( from, static_cast < uint32_t > ( values [ 3 ].integer ), index, to, root ) ) {
+			if ( values [ 3 ].integer && !storage::copy_btree ( from, static_cast < uint32_t > ( values [ 3 ].integer ), index, to, root ) ) {
 
 				problem.add ( "the contents of " ).add ( name.value ( ) ).add ( " could not be copied: " ).add ( from.problem [ 0 ] ? from.problem : to.problem );
 

@@ -23,6 +23,7 @@ namespace sql {
 		common_table* pending_with;
 		uint32_t pending_count;
 		bool pending_recursive;
+		bool writes;
 
 	};
 

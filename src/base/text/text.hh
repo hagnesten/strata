@@ -16,6 +16,8 @@ namespace base {
 
 	bool starts_with ( const char* value, const char* prefix );
 
+	bool ends_with_folded ( const char* value, const char* suffix );
+
 	void copy_text ( char* out, size_t room, const char* value );
 
 	void copy_span ( char* out, size_t room, const char* value, size_t size );

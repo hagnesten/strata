@@ -593,6 +593,14 @@ namespace sql {
 
 			out.add ( ", " );
 
+			if ( constraint.name ) {
+
+				out.add ( "CONSTRAINT " );
+				print_name ( out, constraint.name );
+				out.add ( ' ' );
+
+			}
+
 			if ( constraint.primary ) {
 
 				out.add ( "PRIMARY KEY " );

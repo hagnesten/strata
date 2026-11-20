@@ -1,4 +1,5 @@
 #include "server/server.hh"
+#include "engine/value/moment.hh"
 
 #define PG_EPOCH_DAYS 10957
 
@@ -140,6 +141,12 @@ namespace server {
 
 				if ( base::same_folded ( name, "date_part" ) )
 					return PG_FLOAT8;
+
+				if ( base::same_folded ( name, "nextval" ) || base::same_folded ( name, "currval" ) || base::same_folded ( name, "setval" ) )
+					return PG_INT8;
+
+				if ( base::same_folded ( name, "pg_get_serial_sequence" ) )
+					return PG_TEXT;
 
 				if ( base::same_folded ( name, "timezone" ) && item->count > 1 )
 					return expression_type ( plan, item->list [ 1 ] ) == PG_TIMESTAMPTZ ? PG_TIMESTAMP : PG_TIMESTAMPTZ;
@@ -748,6 +755,20 @@ namespace server {
 				int64_t days = 0;
 				int64_t micros = 0;
 				bool has_time = false;
+				int32_t infinite = item.kind == storage::VALUE_TEXT ? engine::moment_infinity ( item.bytes, item.size ) : 0;
+
+				if ( infinite ) {
+
+					put_length ( out, type == PG_DATE ? 4 : 8 );
+
+					if ( type == PG_DATE )
+						put_big ( out, infinite > 0 ? 0x7FFFFFFFull : 0x80000000ull, 4 );
+					else
+						put_big ( out, infinite > 0 ? 0x7FFFFFFFFFFFFFFFull : 0x8000000000000000ull, 8 );
+
+					return true;
+
+				}
 
 				if ( !read_moment ( item, days, micros, has_time ) )
 					return false;
@@ -1133,8 +1154,12 @@ namespace server {
 					return false;
 
 				base::text made;
+				int32_t days = static_cast < int32_t > ( read_big ( data, 4 ) );
 
-				add_civil ( made, static_cast < int32_t > ( read_big ( data, 4 ) ) );
+				if ( days == 0x7FFFFFFF || days == static_cast < int32_t > ( 0x80000000u ) )
+					made.add ( days > 0 ? "infinity" : "-infinity" );
+				else
+					add_civil ( made, days );
 
 				return keep_text ( memory, made, out );
 
@@ -1149,6 +1174,14 @@ namespace server {
 				int64_t micros = static_cast < int64_t > ( read_big ( data, 8 ) );
 				int64_t days = micros >= 0 ? micros / 86400000000ll : ( micros - 86399999999ll ) / 86400000000ll;
 				base::text made;
+
+				if ( micros == static_cast < int64_t > ( 0x7FFFFFFFFFFFFFFFull ) || micros == static_cast < int64_t > ( 0x8000000000000000ull ) ) {
+
+					made.add ( micros > 0 ? "infinity" : "-infinity" );
+
+					return keep_text ( memory, made, out );
+
+				}
 
 				add_civil ( made, days );
 				made.add ( ' ' );
@@ -1298,6 +1331,24 @@ namespace server {
 		if ( base::starts_with ( message, "the name " ) )
 			return "42P07";
 
+		if ( base::starts_with ( message, "no such view" ) || base::starts_with ( message, "no such sequence" ) || ( base::starts_with ( message, "relation \"" ) && base::find_folded ( message, "does not exist" ) ) )
+			return "42P01";
+
+		if ( base::starts_with ( message, "no such index" ) || ( base::starts_with ( message, "constraint \"" ) && base::find_folded ( message, "does not exist" ) ) )
+			return "42704";
+
+		if ( base::starts_with ( message, "nextval: reached" ) )
+			return "2200H";
+
+		if ( base::starts_with ( message, "currval of sequence" ) )
+			return "55000";
+
+		if ( base::starts_with ( message, "setval: value" ) )
+			return "22003";
+
+		if ( base::find_folded ( message, "is not supported" ) )
+			return "0A000";
+
 		if ( base::starts_with ( message, "division by zero" ) )
 			return "22012";
 
@@ -1307,7 +1358,7 @@ namespace server {
 		if ( base::starts_with ( message, "numeric field overflow" ) || base::starts_with ( message, "integer overflow" ) )
 			return "22003";
 
-		if ( base::starts_with ( message, "cannot drop schema" ) )
+		if ( base::starts_with ( message, "cannot drop schema" ) || base::starts_with ( message, "cannot drop constraint" ) )
 			return "2BP01";
 
 		if ( base::find_folded ( message, "busy" ) || base::find_folded ( message, "locked" ) )

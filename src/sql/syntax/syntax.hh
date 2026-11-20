@@ -80,6 +80,11 @@ namespace sql {
 		STATEMENT_RELEASE,
 		STATEMENT_CREATE_SCHEMA,
 		STATEMENT_DROP_SCHEMA,
+		STATEMENT_CREATE_VIEW,
+		STATEMENT_DROP_VIEW,
+		STATEMENT_CREATE_SEQUENCE,
+		STATEMENT_DROP_SEQUENCE,
+		STATEMENT_ALTER_SEQUENCE,
 
 	};
 
@@ -131,6 +136,17 @@ namespace sql {
 		ALTER_RENAME_TABLE,
 		ALTER_RENAME_COLUMN,
 		ALTER_DROP_COLUMN,
+		ALTER_SET_DEFAULT,
+		ALTER_DROP_DEFAULT,
+		ALTER_SET_NOT_NULL,
+		ALTER_DROP_NOT_NULL,
+		ALTER_COLUMN_TYPE,
+		ALTER_ADD_CONSTRAINT,
+		ALTER_DROP_CONSTRAINT,
+		ALTER_ADD_IDENTITY,
+		ALTER_DROP_IDENTITY,
+		ALTER_RENAME_INDEX,
+		ALTER_RENAME_CONSTRAINT,
 
 	};
 
@@ -302,6 +318,7 @@ namespace sql {
 
 	struct table_constraint {
 
+		const char* name;
 		bool primary;
 		bool unique;
 		const char** columns;
@@ -408,6 +425,42 @@ namespace sql {
 		const char* old_name;
 		const char* new_name;
 		column_definition* column;
+		table_constraint* constraint;
+		expression* value;
+		const char* value_text;
+		bool if_exists;
+		bool table_if_exists;
+
+	};
+
+	struct create_view_statement {
+
+		const char* name;
+		const char** columns;
+		uint32_t column_count;
+		select_statement* query;
+		bool replace;
+		bool if_not_exists;
+
+	};
+
+	struct sequence_statement {
+
+		const char* name;
+		bool if_not_exists;
+		bool has_start;
+		bool has_increment;
+		bool has_minimum;
+		bool has_maximum;
+		bool has_cycle;
+		bool has_restart;
+		bool restart_given;
+		bool cycle;
+		int64_t start;
+		int64_t increment;
+		int64_t minimum;
+		int64_t maximum;
+		int64_t restart;
 
 	};
 
@@ -422,7 +475,10 @@ namespace sql {
 		create_index_statement* create_index;
 		drop_statement* drop;
 		alter_statement* alter;
+		create_view_statement* create_view;
+		sequence_statement* sequence;
 		statement* inner;
+		bool writes;
 		bool query_plan;
 		bool immediate;
 		const char* savepoint;

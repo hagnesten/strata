@@ -37,9 +37,68 @@ namespace engine {
 
 	}
 
-	bool read_sequence ( run_context& ctx, const table_info& table, int64_t& value ) {
+	bool read_counter ( run_context& ctx, const char* name, int64_t& value, bool& found ) {
 
 		value = 0;
+		found = false;
+
+		table_info* sequences = find_table ( *ctx.schema, SEQUENCE_TABLE );
+
+		if ( !sequences )
+			return true;
+
+		storage::btree tree = { ctx.pages, sequences->root, false };
+		bool present = false;
+
+		if ( !storage::table_find ( tree, sequence_key ( name ), ctx.row_bytes, present ) )
+			return fail_storage ( ctx, "the sequence table could not be read" );
+
+		if ( !present )
+			return true;
+
+		storage::value values [ SEQUENCE_COLUMNS + 1 ];
+
+		if ( !decode_row ( ctx, *sequences, reinterpret_cast < const uint8_t* > ( ctx.row_bytes.value ( ) ), ctx.row_bytes.size, 0, values ) )
+			return false;
+
+		if ( values [ 0 ].kind != storage::VALUE_TEXT || values [ 0 ].size != base::length ( name ) || !base::same_folded_size ( reinterpret_cast < const char* > ( values [ 0 ].bytes ), name, values [ 0 ].size ) )
+			return true;
+
+		if ( values [ 1 ].kind == storage::VALUE_INTEGER ) {
+
+			value = values [ 1 ].integer;
+			found = true;
+
+		}
+
+		return true;
+
+	}
+
+	bool write_counter ( run_context& ctx, const char* name, int64_t value ) {
+
+		table_info* sequences = find_table ( *ctx.schema, SEQUENCE_TABLE );
+
+		if ( !sequences )
+			return fail_run ( ctx, "the sequence table is missing" );
+
+		storage::btree tree = { ctx.pages, sequences->root, false };
+		storage::value values [ SEQUENCE_COLUMNS ];
+		base::text record;
+		bool existed = false;
+
+		values [ 0 ] = storage::text_value ( name, base::length ( name ) );
+		values [ 1 ] = storage::integer_value ( value );
+		storage::encode_record ( values, SEQUENCE_COLUMNS, record );
+
+		if ( !begin_writes ( ctx, false ) || !storage::table_insert ( tree, sequence_key ( name ), reinterpret_cast < const uint8_t* > ( record.value ( ) ), record.size, true, existed ) )
+			return fail_storage ( ctx, "the sequence could not be written" );
+
+		return true;
+
+	}
+
+	bool remove_counter ( run_context& ctx, const char* name ) {
 
 		table_info* sequences = find_table ( *ctx.schema, SEQUENCE_TABLE );
 
@@ -49,24 +108,18 @@ namespace engine {
 		storage::btree tree = { ctx.pages, sequences->root, false };
 		bool found = false;
 
-		if ( !storage::table_find ( tree, sequence_key ( table.name ), ctx.row_bytes, found ) )
-			return fail_storage ( ctx, "the sequence table could not be read" );
-
-		if ( !found )
-			return true;
-
-		storage::value values [ SEQUENCE_COLUMNS + 1 ];
-
-		if ( !decode_row ( ctx, *sequences, reinterpret_cast < const uint8_t* > ( ctx.row_bytes.value ( ) ), ctx.row_bytes.size, 0, values ) )
-			return false;
-
-		if ( values [ 0 ].kind != storage::VALUE_TEXT || values [ 0 ].size != base::length ( table.name ) || !base::same_folded_size ( reinterpret_cast < const char* > ( values [ 0 ].bytes ), table.name, values [ 0 ].size ) )
-			return true;
-
-		if ( values [ 1 ].kind == storage::VALUE_INTEGER )
-			value = values [ 1 ].integer;
+		if ( !storage::table_delete ( tree, sequence_key ( name ), found ) )
+			return fail_storage ( ctx, "the sequence could not be removed" );
 
 		return true;
+
+	}
+
+	bool read_sequence ( run_context& ctx, const table_info& table, int64_t& value ) {
+
+		bool found = false;
+
+		return read_counter ( ctx, table.name, value, found );
 
 	}
 
@@ -80,24 +133,10 @@ namespace engine {
 		if ( value <= current )
 			return true;
 
-		table_info* sequences = find_table ( *ctx.schema, SEQUENCE_TABLE );
-
-		if ( !sequences )
+		if ( !find_table ( *ctx.schema, SEQUENCE_TABLE ) )
 			return fail_run ( ctx, "the sequence table is missing" );
 
-		storage::btree tree = { ctx.pages, sequences->root, false };
-		storage::value values [ SEQUENCE_COLUMNS ];
-		base::text record;
-		bool existed = false;
-
-		values [ 0 ] = storage::text_value ( table.name, base::length ( table.name ) );
-		values [ 1 ] = storage::integer_value ( value );
-		storage::encode_record ( values, SEQUENCE_COLUMNS, record );
-
-		if ( !storage::table_insert ( tree, sequence_key ( table.name ), reinterpret_cast < const uint8_t* > ( record.value ( ) ), record.size, true, existed ) )
-			return fail_storage ( ctx, "the sequence could not be written" );
-
-		return true;
+		return write_counter ( ctx, table.name, value );
 
 	}
 

@@ -250,6 +250,21 @@ namespace engine {
 			case sql::STATEMENT_ALTER_TABLE:
 				return run_alter ( ctx, item->alter );
 
+			case sql::STATEMENT_CREATE_VIEW:
+				return run_create_view ( ctx, item );
+
+			case sql::STATEMENT_DROP_VIEW:
+				return run_drop_view ( ctx, item->drop );
+
+			case sql::STATEMENT_CREATE_SEQUENCE:
+				return run_create_sequence ( ctx, item );
+
+			case sql::STATEMENT_ALTER_SEQUENCE:
+				return run_alter_sequence ( ctx, item->sequence );
+
+			case sql::STATEMENT_DROP_SEQUENCE:
+				return run_drop_sequence ( ctx, item->drop );
+
 			case sql::STATEMENT_EXPLAIN:
 				return explain_statement ( ctx, item, sink );
 
@@ -311,6 +326,11 @@ namespace engine {
 			case sql::STATEMENT_DROP_INDEX:
 			case sql::STATEMENT_DROP_SCHEMA:
 			case sql::STATEMENT_ALTER_TABLE:
+			case sql::STATEMENT_CREATE_VIEW:
+			case sql::STATEMENT_DROP_VIEW:
+			case sql::STATEMENT_CREATE_SEQUENCE:
+			case sql::STATEMENT_ALTER_SEQUENCE:
+			case sql::STATEMENT_DROP_SEQUENCE:
 			case sql::STATEMENT_ANALYZE:
 			case sql::STATEMENT_VACUUM:
 				return true;
@@ -335,7 +355,7 @@ namespace engine {
 		sql::statement_kind kind = statement->kind;
 		bool control = kind == sql::STATEMENT_BEGIN || kind == sql::STATEMENT_COMMIT || kind == sql::STATEMENT_ROLLBACK || kind == sql::STATEMENT_SAVEPOINT || kind == sql::STATEMENT_RELEASE;
 
-		bool writing = writes ( kind ) && !( kind == sql::STATEMENT_VACUUM && statement->into );
+		bool writing = ( writes ( kind ) || statement->writes ) && !( kind == sql::STATEMENT_VACUUM && statement->into );
 
 		if ( item.read_committed && item.in_transaction && !control && !item.pages.wal.writing )
 			storage::end_read ( item.pages );

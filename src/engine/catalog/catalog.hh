@@ -15,6 +15,8 @@
 #define SEQUENCE_COLUMNS 2
 #define CATALOG_SEARCH_ROOM 64
 #define CATALOG_NAME_ROOM 256
+#define CATALOG_VIEWS 256
+#define CATALOG_SEQUENCES 256
 
 namespace engine {
 
@@ -28,6 +30,7 @@ namespace engine {
 		bool nocase;
 		bool exact;
 		bool binary_json;
+		bool identity;
 		uint8_t moment;
 		int32_t precision;
 		int32_t scale;
@@ -80,12 +83,34 @@ namespace engine {
 		sql::expression* checks [ CATALOG_CHECKS ];
 		uint32_t check_count;
 		uint32_t generated_count;
+		uint32_t identity_count;
 		foreign_key foreign [ CATALOG_FOREIGN ];
 		uint32_t foreign_count;
 		sql::create_table_statement* definition;
 		const char* sql;
 		uint64_t stat_rows;
 		bool stat_known;
+
+	};
+
+	struct view_info {
+
+		const char* name;
+		const char* sql;
+		int64_t schema_rowid;
+
+	};
+
+	struct sequence_info {
+
+		const char* name;
+		const char* sql;
+		int64_t schema_rowid;
+		int64_t start;
+		int64_t increment;
+		int64_t minimum;
+		int64_t maximum;
+		bool cycle;
 
 	};
 
@@ -96,6 +121,10 @@ namespace engine {
 		uint32_t table_count;
 		index_info indexes [ CATALOG_INDEXES ];
 		uint32_t index_count;
+		view_info views [ CATALOG_VIEWS ];
+		uint32_t view_count;
+		sequence_info sequences [ CATALOG_SEQUENCES ];
+		uint32_t sequence_count;
 		uint32_t version;
 		uint64_t loads;
 		char search [ CATALOG_SEARCH_ROOM ];
@@ -125,6 +154,12 @@ namespace engine {
 	void setting_value ( const catalog& item, const char* name, base::text& out );
 
 	index_info* find_index ( catalog& item, const char* name );
+
+	view_info* find_view ( catalog& item, const char* name );
+
+	sequence_info* find_sequence ( catalog& item, const char* name );
+
+	void sequence_limits ( const sql::sequence_statement& item, sequence_info& out );
 
 	int32_t find_column ( const table_info& table, const char* name );
 

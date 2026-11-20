@@ -278,12 +278,24 @@ namespace server {
 
 				break;
 
+			case sql::STATEMENT_CREATE_VIEW:
+				need ( list, "*", ACCESS_CREATE );
+
+				if ( item->create_view && item->create_view->query )
+					walk_select ( list, item->create_view->query, 0 );
+
+				break;
+
 			case sql::STATEMENT_CREATE_INDEX:
 			case sql::STATEMENT_DROP_TABLE:
 			case sql::STATEMENT_DROP_INDEX:
 			case sql::STATEMENT_ALTER_TABLE:
 			case sql::STATEMENT_CREATE_SCHEMA:
 			case sql::STATEMENT_DROP_SCHEMA:
+			case sql::STATEMENT_DROP_VIEW:
+			case sql::STATEMENT_CREATE_SEQUENCE:
+			case sql::STATEMENT_ALTER_SEQUENCE:
+			case sql::STATEMENT_DROP_SEQUENCE:
 			case sql::STATEMENT_VACUUM:
 			case sql::STATEMENT_ANALYZE:
 				need ( list, "*", ACCESS_CREATE );

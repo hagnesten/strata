@@ -16,10 +16,13 @@ namespace sql {
 			if ( !name || !names.push ( item, name ) )
 				return false;
 
+			if ( accept_word ( item, "collate" ) && !take_name ( item, "a collation name" ) )
+				return false;
+
 			if ( !accept_word ( item, "asc" ) )
 				accept_word ( item, "desc" );
 
-			if ( accept_word ( item, "collate" ) && !take_name ( item, "a collation name" ) )
+			if ( accept_word ( item, "nulls" ) && !accept_word ( item, "first" ) && !expect_word ( item, "last" ) )
 				return false;
 
 		} while ( accept_symbol ( item, "," ) );
@@ -625,17 +628,11 @@ namespace sql {
 
 	}
 
-	static bool parse_column ( parser& item, column_definition& out ) {
-
-		out = { };
-		out.name = take_name ( item, "a column name" );
-
-		if ( !out.name )
-			return false;
+	static bool parse_type ( parser& item, column_definition& out ) {
 
 		base::text type;
 
-		while ( item.current.kind == TOKEN_NAME && !reserved_word ( item.current ) && !token_is ( item.current, "not" ) && !token_is ( item.current, "constraint" ) && !token_is ( item.current, "generated" ) ) {
+		while ( item.current.kind == TOKEN_NAME && !reserved_word ( item.current ) && !token_is ( item.current, "not" ) && !token_is ( item.current, "constraint" ) && !token_is ( item.current, "generated" ) && !token_is ( item.current, "using" ) && !token_is ( item.current, "collate" ) ) {
 
 			if ( type.size )
 				type.add ( ' ' );
@@ -679,6 +676,18 @@ namespace sql {
 
 		out.type = item.memory->keep ( type.value ( ), type.size );
 		out.affinity = affinity_of ( type.value ( ) );
+
+		return true;
+
+	}
+
+	static bool parse_column ( parser& item, column_definition& out ) {
+
+		out = { };
+		out.name = take_name ( item, "a column name" );
+
+		if ( !out.name || !parse_type ( item, out ) )
+			return false;
 
 		for ( ;; ) {
 
@@ -918,8 +927,14 @@ namespace sql {
 
 		out = { };
 
-		if ( accept_word ( item, "constraint" ) && !take_name ( item, "a constraint name" ) )
-			return false;
+		if ( accept_word ( item, "constraint" ) ) {
+
+			out.name = take_name ( item, "a constraint name" );
+
+			if ( !out.name )
+				return false;
+
+		}
 
 		if ( accept_word ( item, "primary" ) ) {
 
@@ -978,7 +993,216 @@ namespace sql {
 
 	}
 
+	static bool take_signed ( parser& item, int64_t& out ) {
+
+		bool negative = accept_symbol ( item, "-" );
+
+		if ( !negative )
+			accept_symbol ( item, "+" );
+
+		if ( item.current.kind != TOKEN_INTEGER )
+			return fail_here ( item, "expected a whole number" );
+
+		uint64_t value = 0;
+
+		for ( uint32_t i = 0; i < item.current.size; i++ ) {
+
+			char digit = item.current.start [ i ];
+
+			if ( digit < '0' || digit > '9' || value > ( 0x8000000000000000ull - static_cast < uint64_t > ( digit - '0' ) ) / 10 )
+				return fail_here ( item, "the number is out of range" );
+
+			value = value * 10 + static_cast < uint64_t > ( digit - '0' );
+
+		}
+
+		if ( !negative && value > 0x7FFFFFFFFFFFFFFFull )
+			return fail_here ( item, "the number is out of range" );
+
+		out = negative ? static_cast < int64_t > ( 0 - value ) : static_cast < int64_t > ( value );
+		advance ( item );
+
+		return true;
+
+	}
+
+	static bool parse_sequence_options ( parser& item, sequence_statement& out ) {
+
+		for ( ;; ) {
+
+			if ( accept_word ( item, "as" ) ) {
+
+				if ( item.current.kind != TOKEN_NAME )
+					return fail_here ( item, "expected a type name" );
+
+				advance ( item );
+
+			} else if ( accept_word ( item, "increment" ) ) {
+
+				accept_word ( item, "by" );
+				out.has_increment = true;
+
+				if ( !take_signed ( item, out.increment ) )
+					return false;
+
+				if ( !out.increment )
+					return fail_here ( item, "INCREMENT must not be zero" );
+
+			} else if ( accept_word ( item, "minvalue" ) ) {
+
+				out.has_minimum = true;
+
+				if ( !take_signed ( item, out.minimum ) )
+					return false;
+
+			} else if ( accept_word ( item, "maxvalue" ) ) {
+
+				out.has_maximum = true;
+
+				if ( !take_signed ( item, out.maximum ) )
+					return false;
+
+			} else if ( accept_word ( item, "start" ) ) {
+
+				accept_word ( item, "with" );
+				out.has_start = true;
+
+				if ( !take_signed ( item, out.start ) )
+					return false;
+
+			} else if ( accept_word ( item, "restart" ) ) {
+
+				accept_word ( item, "with" );
+				out.has_restart = true;
+
+				if ( item.current.kind == TOKEN_INTEGER || symbol_is ( item.current, "-" ) ) {
+
+					out.restart_given = true;
+
+					if ( !take_signed ( item, out.restart ) )
+						return false;
+
+				}
+
+			} else if ( accept_word ( item, "cache" ) ) {
+
+				int64_t ignored = 0;
+
+				if ( !take_signed ( item, ignored ) )
+					return false;
+
+			} else if ( accept_word ( item, "cycle" ) ) {
+
+				out.has_cycle = true;
+				out.cycle = true;
+
+			} else if ( accept_word ( item, "no" ) ) {
+
+				if ( accept_word ( item, "minvalue" ) )
+					out.has_minimum = false;
+				else if ( accept_word ( item, "maxvalue" ) )
+					out.has_maximum = false;
+				else if ( accept_word ( item, "cycle" ) ) {
+
+					out.has_cycle = true;
+					out.cycle = false;
+
+				} else
+					return fail_here ( item, "expected MINVALUE, MAXVALUE or CYCLE after NO" );
+
+			} else if ( accept_word ( item, "owned" ) ) {
+
+				if ( !expect_word ( item, "by" ) || !take_table ( item, "a column or NONE" ) )
+					return false;
+
+			} else
+				return true;
+
+		}
+
+	}
+
 	static bool parse_create ( parser& item, statement& out ) {
+
+		bool replace = false;
+
+		if ( accept_word ( item, "or" ) ) {
+
+			if ( !expect_word ( item, "replace" ) )
+				return false;
+
+			replace = true;
+
+		}
+
+		if ( replace || token_is ( item.current, "view" ) || token_is ( item.current, "materialized" ) ) {
+
+			accept_word ( item, "materialized" );
+
+			if ( !expect_word ( item, "view" ) )
+				return false;
+
+			create_view_statement* made = item.memory->make < create_view_statement > ( 1 );
+
+			if ( !made )
+				return fail_here ( item, "out of memory" );
+
+			out.kind = STATEMENT_CREATE_VIEW;
+			out.create_view = made;
+			made->replace = replace;
+
+			if ( accept_word ( item, "if" ) ) {
+
+				if ( !expect_word ( item, "not" ) || !expect_word ( item, "exists" ) )
+					return false;
+
+				made->if_not_exists = true;
+
+			}
+
+			made->name = take_table ( item, "a view name" );
+
+			if ( !made->name )
+				return false;
+
+			if ( symbol_is ( item.current, "(" ) && !parse_names ( item, made->columns, made->column_count ) )
+				return false;
+
+			if ( !expect_word ( item, "as" ) )
+				return false;
+
+			made->query = parse_select ( item );
+
+			return made->query != nullptr;
+
+		}
+
+		accept_word ( item, "temp" ) || accept_word ( item, "temporary" );
+
+		if ( accept_word ( item, "sequence" ) ) {
+
+			sequence_statement* made = item.memory->make < sequence_statement > ( 1 );
+
+			if ( !made )
+				return fail_here ( item, "out of memory" );
+
+			out.kind = STATEMENT_CREATE_SEQUENCE;
+			out.sequence = made;
+
+			if ( accept_word ( item, "if" ) ) {
+
+				if ( !expect_word ( item, "not" ) || !expect_word ( item, "exists" ) )
+					return false;
+
+				made->if_not_exists = true;
+
+			}
+
+			made->name = take_table ( item, "a sequence name" );
+
+			return made->name && parse_sequence_options ( item, *made );
+
+		}
 
 		if ( accept_word ( item, "schema" ) ) {
 
@@ -1020,6 +1244,7 @@ namespace sql {
 			out.create_index = made;
 			made->unique = unique;
 			made->fulltext = fulltext;
+			accept_word ( item, "concurrently" );
 
 			if ( accept_word ( item, "if" ) ) {
 
@@ -1037,7 +1262,50 @@ namespace sql {
 
 			made->table = take_table ( item, "a table name" );
 
-			return made->table && parse_names ( item, made->columns, made->column_count );
+			if ( !made->table )
+				return false;
+
+			if ( accept_word ( item, "using" ) ) {
+
+				const char* method = take_name ( item, "an index method" );
+
+				if ( !method )
+					return false;
+
+				if ( !base::same_folded ( method, "btree" ) && !base::same_folded ( method, "hash" ) )
+					return fail_here ( item, "only btree and hash indexes are supported" );
+
+			}
+
+			if ( !parse_names ( item, made->columns, made->column_count ) )
+				return false;
+
+			if ( accept_word ( item, "include" ) ) {
+
+				const char** extra = nullptr;
+				uint32_t extra_count = 0;
+
+				if ( !parse_names ( item, extra, extra_count ) )
+					return false;
+
+			}
+
+			if ( accept_word ( item, "nulls" ) && !( expect_word ( item, "not" ) && expect_word ( item, "distinct" ) ) )
+				return false;
+
+			if ( token_is ( item.current, "where" ) ) {
+
+				if ( unique )
+					return fail_here ( item, "a UNIQUE index with a WHERE filter is not supported" );
+
+				advance ( item );
+
+				if ( !parse_expression ( item ) )
+					return false;
+
+			}
+
+			return true;
 
 		}
 
@@ -1375,8 +1643,14 @@ namespace sql {
 
 			bool schema = accept_word ( item, "schema" );
 			bool index = !schema && accept_word ( item, "index" );
+			bool view = !schema && !index && ( accept_word ( item, "view" ) || ( accept_word ( item, "materialized" ) && expect_word ( item, "view" ) ) );
 
-			if ( !index && !schema && !expect_word ( item, "table" ) )
+			if ( item.error->failed )
+				return false;
+
+			bool sequence = !schema && !index && !view && accept_word ( item, "sequence" );
+
+			if ( !index && !schema && !view && !sequence && !expect_word ( item, "table" ) )
 				return false;
 
 			drop_statement* made = item.memory->make < drop_statement > ( 1 );
@@ -1384,14 +1658,18 @@ namespace sql {
 			if ( !made )
 				return fail_here ( item, "out of memory" );
 
-			out.kind = schema ? STATEMENT_DROP_SCHEMA : index ? STATEMENT_DROP_INDEX : STATEMENT_DROP_TABLE;
+			out.kind = schema ? STATEMENT_DROP_SCHEMA : index ? STATEMENT_DROP_INDEX : view ? STATEMENT_DROP_VIEW : sequence ? STATEMENT_DROP_SEQUENCE : STATEMENT_DROP_TABLE;
 			out.drop = made;
+
+			if ( index )
+				accept_word ( item, "concurrently" );
+
 			made->if_exists = if_exists ( item );
 
 			if ( item.error->failed )
 				return false;
 
-			made->name = schema ? take_name ( item, "a schema name" ) : take_table ( item, index ? "an index name" : "a table name" );
+			made->name = schema ? take_name ( item, "a schema name" ) : take_table ( item, index ? "an index name" : view ? "a view name" : sequence ? "a sequence name" : "a table name" );
 			made->cascade = accept_word ( item, "cascade" );
 
 			if ( !made->cascade )
@@ -1403,19 +1681,77 @@ namespace sql {
 
 		if ( accept_word ( item, "alter" ) ) {
 
+			if ( accept_word ( item, "sequence" ) ) {
+
+				sequence_statement* made = item.memory->make < sequence_statement > ( 1 );
+
+				if ( !made )
+					return fail_here ( item, "out of memory" );
+
+				out.kind = STATEMENT_ALTER_SEQUENCE;
+				out.sequence = made;
+				made->if_not_exists = if_exists ( item );
+
+				if ( item.error->failed )
+					return false;
+
+				made->name = take_table ( item, "a sequence name" );
+
+				return made->name && parse_sequence_options ( item, *made );
+
+			}
+
 			alter_statement* made = item.memory->make < alter_statement > ( 1 );
 
-			if ( !made || !expect_word ( item, "table" ) )
-				return made ? false : fail_here ( item, "out of memory" );
+			if ( !made )
+				return fail_here ( item, "out of memory" );
 
 			out.kind = STATEMENT_ALTER_TABLE;
 			out.alter = made;
+
+			if ( accept_word ( item, "index" ) ) {
+
+				made->table_if_exists = if_exists ( item );
+
+				if ( item.error->failed )
+					return false;
+
+				made->kind = ALTER_RENAME_INDEX;
+				made->table = take_table ( item, "an index name" );
+
+				if ( !made->table || !expect_word ( item, "rename" ) || !expect_word ( item, "to" ) )
+					return false;
+
+				made->new_name = take_name ( item, "an index name" );
+
+				return made->new_name != nullptr;
+
+			}
+
+			if ( !expect_word ( item, "table" ) )
+				return false;
+
+			made->table_if_exists = if_exists ( item );
+
+			if ( item.error->failed )
+				return false;
+
+			accept_word ( item, "only" );
 			made->table = take_table ( item, "a table name" );
 
 			if ( !made->table )
 				return false;
 
 			if ( accept_word ( item, "add" ) ) {
+
+				if ( token_is ( item.current, "constraint" ) || token_is ( item.current, "primary" ) || token_is ( item.current, "unique" ) || token_is ( item.current, "check" ) || token_is ( item.current, "foreign" ) ) {
+
+					made->kind = ALTER_ADD_CONSTRAINT;
+					made->constraint = item.memory->make < table_constraint > ( 1 );
+
+					return made->constraint ? parse_constraint ( item, *made->constraint ) : fail_here ( item, "out of memory" );
+
+				}
 
 				accept_word ( item, "column" );
 				made->kind = ALTER_ADD_COLUMN;
@@ -1427,16 +1763,171 @@ namespace sql {
 
 			if ( accept_word ( item, "drop" ) ) {
 
-				accept_word ( item, "column" );
-				made->kind = ALTER_DROP_COLUMN;
-				made->old_name = take_name ( item, "a column name" );
+				bool constraint = accept_word ( item, "constraint" );
+
+				if ( !constraint )
+					accept_word ( item, "column" );
+
+				made->kind = constraint ? ALTER_DROP_CONSTRAINT : ALTER_DROP_COLUMN;
+				made->if_exists = if_exists ( item );
+
+				if ( item.error->failed )
+					return false;
+
+				made->old_name = take_name ( item, constraint ? "a constraint name" : "a column name" );
+
+				if ( !accept_word ( item, "cascade" ) )
+					accept_word ( item, "restrict" );
 
 				return made->old_name != nullptr;
 
 			}
 
+			if ( accept_word ( item, "alter" ) ) {
+
+				accept_word ( item, "column" );
+				made->old_name = take_name ( item, "a column name" );
+
+				if ( !made->old_name )
+					return false;
+
+				bool typed = false;
+
+				if ( accept_word ( item, "set" ) ) {
+
+					if ( accept_word ( item, "default" ) ) {
+
+						const char* start = item.current.start;
+
+						made->kind = ALTER_SET_DEFAULT;
+						made->value = parse_expression ( item );
+
+						if ( !made->value )
+							return false;
+
+						made->value_text = item.memory->keep ( start, static_cast < size_t > ( item.current.start - start ) );
+
+						return true;
+
+					}
+
+					if ( accept_word ( item, "not" ) ) {
+
+						made->kind = ALTER_SET_NOT_NULL;
+
+						return expect_word ( item, "null" );
+
+					}
+
+					if ( !expect_word ( item, "data" ) || !expect_word ( item, "type" ) )
+						return false;
+
+					typed = true;
+
+				} else if ( accept_word ( item, "drop" ) ) {
+
+					if ( accept_word ( item, "default" ) ) {
+
+						made->kind = ALTER_DROP_DEFAULT;
+
+						return true;
+
+					}
+
+					if ( accept_word ( item, "not" ) ) {
+
+						made->kind = ALTER_DROP_NOT_NULL;
+
+						return expect_word ( item, "null" );
+
+					}
+
+					if ( !expect_word ( item, "identity" ) )
+						return false;
+
+					made->kind = ALTER_DROP_IDENTITY;
+					made->if_exists = if_exists ( item );
+
+					return !item.error->failed;
+
+				} else if ( accept_word ( item, "add" ) ) {
+
+					if ( !expect_word ( item, "generated" ) )
+						return false;
+
+					if ( accept_word ( item, "by" ) ) {
+
+						if ( !expect_word ( item, "default" ) )
+							return false;
+
+					} else if ( !expect_word ( item, "always" ) )
+						return false;
+
+					if ( !expect_word ( item, "as" ) || !expect_word ( item, "identity" ) )
+						return false;
+
+					if ( accept_symbol ( item, "(" ) ) {
+
+						sequence_statement ignored = { };
+
+						if ( !parse_sequence_options ( item, ignored ) || !expect_symbol ( item, ")" ) )
+							return false;
+
+					}
+
+					made->kind = ALTER_ADD_IDENTITY;
+
+					return true;
+
+				} else
+					typed = expect_word ( item, "type" );
+
+				if ( !typed )
+					return false;
+
+				made->kind = ALTER_COLUMN_TYPE;
+				made->column = item.memory->make < column_definition > ( 1 );
+
+				if ( !made->column )
+					return fail_here ( item, "out of memory" );
+
+				made->column->name = made->old_name;
+
+				if ( !parse_type ( item, *made->column ) )
+					return false;
+
+				if ( accept_word ( item, "collate" ) && !take_name ( item, "a collation name" ) )
+					return false;
+
+				if ( accept_word ( item, "using" ) ) {
+
+					made->value = parse_expression ( item );
+
+					if ( !made->value )
+						return false;
+
+				}
+
+				return true;
+
+			}
+
 			if ( !expect_word ( item, "rename" ) )
 				return false;
+
+			if ( accept_word ( item, "constraint" ) ) {
+
+				made->kind = ALTER_RENAME_CONSTRAINT;
+				made->old_name = take_name ( item, "a constraint name" );
+
+				if ( !made->old_name || !expect_word ( item, "to" ) )
+					return false;
+
+				made->new_name = take_name ( item, "a constraint name" );
+
+				return made->new_name != nullptr;
+
+			}
 
 			if ( accept_word ( item, "to" ) ) {
 
@@ -1616,6 +2107,7 @@ namespace sql {
 
 		made->text = memory.keep ( start, static_cast < size_t > ( item.current.start - start ) );
 		made->text_size = static_cast < uint32_t > ( item.current.start - start );
+		made->writes = item.writes;
 		made->parameter_count = item.parameters;
 		made->parameter_names = memory.make < const char* > ( item.parameters + 1 );
 

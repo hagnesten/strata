@@ -185,6 +185,7 @@
     <ClCompile Include="src\engine\schema\schema.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\index_build.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\alter.cc"><Filter>src\engine\schema</Filter></ClCompile>
+    <ClCompile Include="src\engine\schema\objects.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\analyze.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\engine\database\database.cc"><Filter>src\engine\database</Filter></ClCompile>
     <ClCompile Include="src\engine\database\prepared.cc"><Filter>src\engine\database</Filter></ClCompile>

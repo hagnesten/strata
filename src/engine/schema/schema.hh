@@ -17,6 +17,23 @@ namespace engine {
 
 	};
 
+	struct kept_index {
+
+		const char* name;
+		const char* sql;
+		uint32_t root;
+		int64_t schema_rowid;
+		bool automatic;
+
+	};
+
+	struct highest_value {
+
+		int32_t column;
+		int64_t value;
+
+	};
+
 	bool fill_index ( run_context& ctx, table_info& table, index_info& index, storage::btree& tree );
 
 	bool reserved_name ( const char* name );
@@ -36,5 +53,7 @@ namespace engine {
 	bool write_definition ( run_context& ctx, const sql::create_table_statement* definition, uint32_t root, int64_t& rowid );
 
 	bool mentions_column ( const sql::expression* item, const char* table, const char* column );
+
+	bool add_key_indexes ( run_context& ctx, const sql::create_table_statement* definition, const table_info& info );
 
 }

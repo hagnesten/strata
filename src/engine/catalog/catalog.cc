@@ -10,6 +10,8 @@ namespace engine {
 		item.memory.reset ( );
 		item.table_count = 0;
 		item.index_count = 0;
+		item.view_count = 0;
+		item.sequence_count = 0;
 		item.loads++;
 
 	}
@@ -138,6 +140,58 @@ namespace engine {
 				return &item.indexes [ i ];
 
 		return nullptr;
+
+	}
+
+	template < typename entry > static entry* find_named ( catalog& item, entry* list, uint32_t count, const char* name ) {
+
+		char qualified [ CATALOG_NAME_ROOM ];
+
+		if ( search_name ( item, name, qualified, sizeof ( qualified ) ) )
+			for ( uint32_t i = 0; i < count; i++ )
+				if ( base::same_folded ( list [ i ].name, qualified ) )
+					return &list [ i ];
+
+		for ( uint32_t i = 0; i < count; i++ )
+			if ( base::same_folded ( list [ i ].name, name ) )
+				return &list [ i ];
+
+		return nullptr;
+
+	}
+
+	view_info* find_view ( catalog& item, const char* name ) {
+
+		return find_named ( item, item.views, item.view_count, name );
+
+	}
+
+	sequence_info* find_sequence ( catalog& item, const char* name ) {
+
+		return find_named ( item, item.sequences, item.sequence_count, name );
+
+	}
+
+	void sequence_limits ( const sql::sequence_statement& item, sequence_info& out ) {
+
+		if ( item.has_increment )
+			out.increment = item.increment;
+
+		if ( !out.increment )
+			out.increment = 1;
+
+		if ( item.has_cycle )
+			out.cycle = item.cycle;
+
+		bool rising = out.increment > 0;
+
+		out.minimum = item.has_minimum ? item.minimum : rising ? 1 : static_cast < int64_t > ( 0x8000000000000000ull );
+		out.maximum = item.has_maximum ? item.maximum : rising ? 0x7FFFFFFFFFFFFFFFll : -1;
+
+		if ( item.has_start )
+			out.start = item.start;
+		else if ( !out.start )
+			out.start = rising ? out.minimum : out.maximum;
 
 	}
 
@@ -367,13 +421,10 @@ namespace engine {
 
 		for ( uint32_t i = 0; i < definition->column_count; i++ ) {
 
-			if ( definition->columns [ i ].identity && !out.columns [ i ].rowid ) {
+			out.columns [ i ].identity = definition->columns [ i ].identity && !out.columns [ i ].rowid;
 
-				problem.add ( "an IDENTITY or serial column must be the table's single PRIMARY KEY" );
-
-				return false;
-
-			}
+			if ( out.columns [ i ].identity )
+				out.identity_count++;
 
 		}
 
@@ -565,6 +616,41 @@ namespace engine {
 				info.automatic = base::starts_with ( name, "strata_auto_" );
 				info.sql = text;
 				info.column_count = parsed->create_index->column_count;
+
+			} else if ( base::same ( kind, "view" ) && parsed->kind == sql::STATEMENT_CREATE_VIEW ) {
+
+				if ( out.view_count == CATALOG_VIEWS ) {
+
+					problem.add ( "too many views" );
+
+					return false;
+
+				}
+
+				view_info& info = out.views [ out.view_count++ ];
+
+				info = { };
+				info.name = name;
+				info.sql = text;
+				info.schema_rowid = rowid;
+
+			} else if ( base::same ( kind, "sequence" ) && parsed->kind == sql::STATEMENT_CREATE_SEQUENCE ) {
+
+				if ( out.sequence_count == CATALOG_SEQUENCES ) {
+
+					problem.add ( "too many sequences" );
+
+					return false;
+
+				}
+
+				sequence_info& info = out.sequences [ out.sequence_count++ ];
+
+				info = { };
+				info.name = name;
+				info.sql = text;
+				info.schema_rowid = rowid;
+				sequence_limits ( *parsed->sequence, info );
 
 			} else {
 

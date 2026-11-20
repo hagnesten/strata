@@ -24,7 +24,7 @@ namespace engine {
 
 		skip = false;
 
-		if ( !find_table ( *ctx.schema, name ) && !find_index ( *ctx.schema, name ) )
+		if ( !find_table ( *ctx.schema, name ) && !find_index ( *ctx.schema, name ) && !find_view ( *ctx.schema, name ) && !find_sequence ( *ctx.schema, name ) )
 			return true;
 
 		if ( if_not_exists ) {
@@ -35,7 +35,7 @@ namespace engine {
 
 		}
 
-		return fail_named ( ctx, "the name ", name, " is already used by a table or an index" );
+		return fail_named ( ctx, "the name ", name, " is already used by a table, index, view or sequence" );
 
 	}
 
@@ -272,6 +272,34 @@ namespace engine {
 
 	}
 
+	bool add_key_indexes ( run_context& ctx, const sql::create_table_statement* definition, const table_info& info ) {
+
+		uint32_t number = 0;
+
+		for ( uint32_t i = 0; i < definition->column_count; i++ ) {
+
+			const sql::column_definition& column = definition->columns [ i ];
+			bool keyed = ( column.primary && !info.columns [ i ].rowid ) || column.unique;
+
+			if ( keyed && !add_automatic_index ( ctx, definition->name, &column.name, 1, number ) )
+				return false;
+
+		}
+
+		for ( uint32_t i = 0; i < definition->constraint_count; i++ ) {
+
+			const sql::table_constraint& constraint = definition->constraints [ i ];
+			bool rowid_key = constraint.primary && constraint.column_count == 1 && info.rowid_column >= 0 && base::same_folded ( constraint.columns [ 0 ], info.columns [ info.rowid_column ].name );
+
+			if ( ( constraint.primary || constraint.unique ) && !rowid_key && !add_automatic_index ( ctx, definition->name, constraint.columns, constraint.column_count, number ) )
+				return false;
+
+		}
+
+		return true;
+
+	}
+
 	static sql::create_table_statement* definition_from_query ( run_context& ctx, const sql::create_table_statement* item, prepared_select* plan ) {
 
 		sql::create_table_statement* made = ctx.lasting->make < sql::create_table_statement > ( 1 );
@@ -389,32 +417,10 @@ namespace engine {
 		if ( !write_definition ( ctx, definition, root, rowid ) )
 			return false;
 
-		if ( info.autoincrement && !ensure_sequence_table ( ctx ) )
+		if ( ( info.autoincrement || info.identity_count ) && !ensure_sequence_table ( ctx ) )
 			return false;
 
-		uint32_t number = 0;
-
-		for ( uint32_t i = 0; i < definition->column_count; i++ ) {
-
-			const sql::column_definition& column = definition->columns [ i ];
-			bool keyed = ( column.primary && !info.columns [ i ].rowid ) || column.unique;
-
-			if ( keyed && !add_automatic_index ( ctx, definition->name, &column.name, 1, number ) )
-				return false;
-
-		}
-
-		for ( uint32_t i = 0; i < definition->constraint_count; i++ ) {
-
-			const sql::table_constraint& constraint = definition->constraints [ i ];
-			bool rowid_key = constraint.primary && constraint.column_count == 1 && info.rowid_column >= 0 && base::same_folded ( constraint.columns [ 0 ], info.columns [ info.rowid_column ].name );
-
-			if ( ( constraint.primary || constraint.unique ) && !rowid_key && !add_automatic_index ( ctx, definition->name, constraint.columns, constraint.column_count, number ) )
-				return false;
-
-		}
-
-		if ( !refresh_schema ( ctx ) )
+		if ( !add_key_indexes ( ctx, definition, info ) || !refresh_schema ( ctx ) )
 			return false;
 
 		if ( !item->query )

@@ -1037,6 +1037,9 @@ namespace sql {
 
 				made->name = first;
 
+				if ( base::ends_with_folded ( first, "nextval" ) || base::ends_with_folded ( first, "setval" ) )
+					item.writes = true;
+
 				if ( accept_symbol ( item, "*" ) )
 					made->star = true;
 				else if ( !symbol_is ( item.current, ")" ) ) {

@@ -93,6 +93,7 @@ ENGINE := \
 	src/engine/schema/schema.cc \
 	src/engine/schema/index_build.cc \
 	src/engine/schema/alter.cc \
+	src/engine/schema/objects.cc \
 	src/engine/schema/analyze.cc \
 	src/engine/database/database.cc \
 	src/engine/database/prepared.cc \
