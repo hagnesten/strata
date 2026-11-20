@@ -178,6 +178,18 @@
     <Filter Include="docs">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D11}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\server">
+      <UniqueIdentifier>{7B2E4C11-3A90-4D6E-8F21-5C0A9E1B7D01}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\server\loop">
+      <UniqueIdentifier>{7B2E4C11-3A90-4D6E-8F21-5C0A9E1B7D02}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\server\users">
+      <UniqueIdentifier>{7B2E4C11-3A90-4D6E-8F21-5C0A9E1B7D03}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\server\postgres">
+      <UniqueIdentifier>{7B2E4C11-3A90-4D6E-8F21-5C0A9E1B7D04}</UniqueIdentifier>
+    </Filter>
     <Filter Include="src\app">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D06}</UniqueIdentifier>
     </Filter>
@@ -330,6 +342,11 @@
     <ClCompile Include="src\test\engine\join_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\test\engine\vacuum_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\app\shell\shell.cc"><Filter>src\app\shell</Filter></ClCompile>
+    <ClCompile Include="src\server\loop\loop.cc"><Filter>src\server\loop</Filter></ClCompile>
+    <ClCompile Include="src\server\users\users.cc"><Filter>src\server\users</Filter></ClCompile>
+    <ClCompile Include="src\server\postgres\startup.cc"><Filter>src\server\postgres</Filter></ClCompile>
+    <ClCompile Include="src\server\postgres\query.cc"><Filter>src\server\postgres</Filter></ClCompile>
+    <ClCompile Include="src\server\postgres\types.cc"><Filter>src\server\postgres</Filter></ClCompile>
     <ClCompile Include="src\base\png\png.cc"><Filter>src\base\png</Filter></ClCompile>
     <ClCompile Include="src\ui\render\render.cc"><Filter>src\ui\render</Filter></ClCompile>
     <ClCompile Include="src\base\clipboard\clipboard.cc"><Filter>src\base\clipboard</Filter></ClCompile>
@@ -397,6 +414,7 @@
     <ClInclude Include="src\engine\database\database.hh"><Filter>src\engine\database</Filter></ClInclude>
     <ClInclude Include="src\engine\database\prepared.hh"><Filter>src\engine\database</Filter></ClInclude>
     <ClInclude Include="src\app\shell\shell.hh"><Filter>src\app\shell</Filter></ClInclude>
+    <ClInclude Include="src\server\server.hh"><Filter>src\server</Filter></ClInclude>
     <ClInclude Include="src\base\png\png.hh"><Filter>src\base\png</Filter></ClInclude>
     <ClInclude Include="src\ui\render\render.hh"><Filter>src\ui\render</Filter></ClInclude>
     <ClInclude Include="src\base\clipboard\clipboard.hh"><Filter>src\base\clipboard</Filter></ClInclude>

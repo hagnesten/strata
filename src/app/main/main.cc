@@ -3,6 +3,7 @@
 #include "base/platform/os.hh"
 #include "test/harness/harness.hh"
 #include "app/shell/shell.hh"
+#include "server/server.hh"
 
 #if STRATA_WINDOWS
 #include "studio/app/studio.hh"
@@ -63,6 +64,43 @@ namespace app {
 
 	}
 
+	static int32_t run_serve ( int32_t count, char** arguments ) {
+
+		server::server_settings settings = { };
+
+		settings.path = arguments [ 2 ];
+		settings.host = "0.0.0.0";
+		settings.port = 5432;
+
+		for ( int32_t i = 3; i < count; i++ ) {
+
+			uint64_t number = 0;
+
+			if ( base::same ( arguments [ i ], "--trust" ) )
+				settings.trust = true;
+			else if ( base::same ( arguments [ i ], "--quiet" ) )
+				settings.quiet = true;
+			else if ( base::same ( arguments [ i ], "--host" ) && i + 1 < count )
+				settings.host = arguments [ ++i ];
+			else if ( base::same ( arguments [ i ], "--port" ) && i + 1 < count && base::read_number ( arguments [ i + 1 ], number ) && number && number < 65536 ) {
+
+				settings.port = static_cast < uint16_t > ( number );
+				i++;
+
+			} else {
+
+				base::write_error ( "strata --serve <file> [--port 5432] [--host 0.0.0.0] [--trust]\n" );
+
+				return 2;
+
+			}
+
+		}
+
+		return server::run_server ( settings );
+
+	}
+
 	int32_t run ( int32_t count, char** arguments, bool windowed ) {
 
 		bool handled = false;
@@ -70,6 +108,12 @@ namespace app {
 
 		if ( handled )
 			return code;
+
+		if ( named ( count, arguments, 1, "--serve" ) && count > 2 )
+			return run_serve ( count, arguments );
+
+		if ( named ( count, arguments, 1, "--user" ) && count > 3 )
+			return server::manage_user ( arguments [ 2 ], arguments [ 3 ], count > 4 ? arguments [ 4 ] : nullptr );
 
 		if ( named ( count, arguments, 1, "--test" ) )
 			return test::run_all ( count > 2 ? arguments [ 2 ] : nullptr );
@@ -84,6 +128,8 @@ namespace app {
 		base::write ( "  strata <file>            open a database in the SQL shell\n" );
 		base::write ( "  strata <file> \"<sql>\"    run SQL against a database and print the rows\n" );
 		base::write ( "  strata --test [part]     run the self test (pager, btree, crash, parser, engine)\n" );
+		base::write ( "  strata --serve <file>    serve a database to Postgres clients (--port, --host, --trust)\n" );
+		base::write ( "  strata --user <file> <name> [password]   add, change or remove a server user\n" );
 
 		if ( STRATA_WINDOWS ) {
 

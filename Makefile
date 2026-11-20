@@ -27,6 +27,7 @@ BASE := \
 	src/base/clock/clock.cc \
 	src/base/text/unicode.cc \
 	src/base/platform/linux/system.cc \
+	src/base/platform/linux/network.cc \
 	src/base/platform/linux/heap.cc \
 	src/base/platform/linux/zone.cc \
 	src/base/platform/linux/coroutine.cc \
@@ -117,7 +118,12 @@ TESTS := \
 
 APP := \
 	src/app/main/main.cc \
-	src/app/shell/shell.cc
+	src/app/shell/shell.cc \
+	src/server/loop/loop.cc \
+	src/server/users/users.cc \
+	src/server/postgres/startup.cc \
+	src/server/postgres/query.cc \
+	src/server/postgres/types.cc
 
 PROGRAM := $(BASE) $(START) $(STORAGE) $(SQL) $(ENGINE) $(API) $(TESTS) $(APP)
 PROGRAM_OBJECTS := $(patsubst src/%.cc,$(BUILD)/objects/%.o,$(PROGRAM))
