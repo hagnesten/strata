@@ -249,7 +249,11 @@ namespace server {
 
 			}
 
-			if ( !base::os::poll_sockets ( polls, count, waiting ? 2 : 1000 ) )
+			bool released = state->released;
+
+			state->released = false;
+
+			if ( !base::os::poll_sockets ( polls, count, waiting ? ( released ? 0 : 1 ) : 1000 ) )
 				break;
 
 			if ( polls [ 0 ].readable )
@@ -363,19 +367,36 @@ namespace server {
 
 	bool wait_busy ( server_connection& link ) {
 
-		uint64_t now = now_ms ( );
+		server_state& state = *link.owner;
 
 		if ( !link.busy_since )
-			link.busy_since = now;
+			link.busy_since = now_ms ( );
 
-		if ( now - link.busy_since > SERVER_BUSY_LIMIT )
-			return false;
+		if ( !link.ticket )
+			link.ticket = ++state.next_ticket;
 
-		link.busy_wait = true;
-		base::leave_coroutine ( link.routine );
-		link.busy_wait = false;
+		for ( ;; ) {
 
-		return !link.closed;
+			if ( now_ms ( ) - link.busy_since > SERVER_BUSY_LIMIT )
+				return false;
+
+			link.busy_wait = true;
+			base::leave_coroutine ( link.routine );
+			link.busy_wait = false;
+
+			if ( link.closed )
+				return false;
+
+			uint64_t first = link.ticket;
+
+			for ( uint32_t i = 0; i < state.connection_count; i++ )
+				if ( state.connections [ i ]->ticket && state.connections [ i ]->ticket < first && !state.connections [ i ]->closed )
+					first = state.connections [ i ]->ticket;
+
+			if ( first == link.ticket )
+				return true;
+
+		}
 
 	}
 

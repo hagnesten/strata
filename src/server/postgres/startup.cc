@@ -295,6 +295,7 @@ namespace server {
 		base::copy_text ( session.session_database, sizeof ( session.session_database ), link.database [ 0 ] ? link.database : link.user );
 		session.session_id = link.id;
 		session.postgres = true;
+		link.db->database.read_committed = true;
 		send_auth ( link, 0, nullptr, 0 );
 		parameter ( link, "server_version", "17.0" );
 		parameter ( link, "server_encoding", "UTF8" );
@@ -321,8 +322,12 @@ namespace server {
 
 		bool open = link.db && strata_in_transaction ( link.db );
 
-		if ( !open )
+		if ( !open ) {
+
 			link.failed = false;
+			link.owner->released = true;
+
+		}
 
 		begin_message ( link, 'Z' );
 		put_bytes ( link, link.failed ? "E" : open ? "T" : "I", 1 );

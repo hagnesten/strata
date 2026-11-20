@@ -140,6 +140,9 @@ namespace server {
 				if ( base::same_folded ( name, "date_part" ) )
 					return PG_FLOAT8;
 
+				if ( base::same_folded ( name, "timezone" ) && item->count > 1 )
+					return expression_type ( plan, item->list [ 1 ] ) == PG_TIMESTAMPTZ ? PG_TIMESTAMP : PG_TIMESTAMPTZ;
+
 				if ( base::same_folded ( name, "date_trunc" ) && item->count > 1 ) {
 
 					uint32_t inner = expression_type ( plan, item->list [ 1 ] );

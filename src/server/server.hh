@@ -14,7 +14,7 @@
 #define SERVER_PARAMETERS 1024
 #define SERVER_ITERATIONS 4096
 #define SERVER_SALT 16
-#define SERVER_BUSY_LIMIT 10000
+#define SERVER_BUSY_LIMIT 120000
 
 #define PG_PROTOCOL 196608
 #define PG_SSL_REQUEST 80877103
@@ -111,6 +111,7 @@ namespace server {
 		bool finished;
 		bool busy_wait;
 		uint64_t busy_since;
+		uint64_t ticket;
 		strata_db* db;
 		char user [ SERVER_NAME_ROOM ];
 		char database [ SERVER_NAME_ROOM ];
@@ -133,6 +134,8 @@ namespace server {
 		server_user users [ SERVER_USERS ];
 		uint32_t user_count;
 		uint32_t next_id;
+		uint64_t next_ticket;
+		bool released;
 		bool running;
 
 	};

@@ -335,6 +335,9 @@ namespace engine {
 		sql::statement_kind kind = statement->kind;
 		bool control = kind == sql::STATEMENT_BEGIN || kind == sql::STATEMENT_COMMIT || kind == sql::STATEMENT_ROLLBACK || kind == sql::STATEMENT_SAVEPOINT || kind == sql::STATEMENT_RELEASE;
 
+		if ( item.read_committed && item.in_transaction && !control && !item.pages.wal.writing )
+			storage::end_read ( item.pages );
+
 		if ( writes ( kind ) && !item.in_transaction && !storage::begin_write ( item.pages ) ) {
 
 			storage::end_read ( item.pages );

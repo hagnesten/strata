@@ -539,6 +539,7 @@ namespace server {
 			if ( code != STRATA_BUSY || rows ) {
 
 				link.busy_since = 0;
+				link.ticket = 0;
 
 				return code;
 
@@ -549,6 +550,7 @@ namespace server {
 			if ( !wait_busy ( link ) ) {
 
 				link.busy_since = 0;
+				link.ticket = 0;
 
 				return STRATA_BUSY;
 
@@ -630,6 +632,9 @@ namespace server {
 		const char* at = sql;
 		const char* end = sql + size;
 		bool any = false;
+
+		if ( link.portal.statement && link.portal.statement->stmt )
+			strata_reset ( link.portal.statement->stmt );
 
 		drop_statement ( link, "" );
 		link.portal = { };
@@ -798,6 +803,11 @@ namespace server {
 		const char* portal = read_string ( reader );
 		const char* name = read_string ( reader );
 		server_statement* statement = name ? find_statement ( link, name, nullptr ) : nullptr;
+
+		if ( link.portal.statement && link.portal.statement->stmt )
+			strata_reset ( link.portal.statement->stmt );
+
+		link.portal = { };
 
 		if ( !statement ) {
 

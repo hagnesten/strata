@@ -33,6 +33,7 @@ namespace engine {
 		catalog* schema;
 		bool open;
 		bool in_transaction;
+		bool read_committed;
 		savepoint_stack savepoints;
 		int64_t last_rowid;
 		int64_t changes;
