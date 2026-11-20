@@ -65,4 +65,6 @@ namespace test {
 
 	void api_tests ( );
 
+	void hash_tests ( );
+
 }

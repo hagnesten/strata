@@ -40,6 +40,9 @@ namespace bench {
 
 		const char* name;
 		const char* version;
+		const char* detail;
+		const char* note;
+		const char* schema;
 		void* state;
 		bool ( *open ) ( void* state, const char* path );
 		void ( *close ) ( void* state );
@@ -48,6 +51,7 @@ namespace bench {
 		bool ( *run ) ( void* state, void* statement, const bench_value* values, uint32_t count, bench_tally& tally );
 		void ( *finish ) ( void* state, void* statement );
 		const char* ( *problem ) ( void* state );
+		void ( *release ) ( void* state );
 
 	};
 
@@ -108,6 +112,7 @@ namespace bench {
 
 		uint32_t rows;
 		const char* sqlite;
+		const char* postgres;
 		const char* out;
 		const char* only;
 		const char* profile;

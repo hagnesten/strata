@@ -438,6 +438,29 @@ namespace base {
 
 		}
 
+		bool random_bytes ( void* out, size_t size ) {
+
+			uint8_t* at = static_cast < uint8_t* > ( out );
+
+			while ( size ) {
+
+				long got = call3 ( LINUX_GETRANDOM, reinterpret_cast < long > ( at ), static_cast < long > ( size ), 0 );
+
+				if ( got == -4 )
+					continue;
+
+				if ( got <= 0 )
+					return false;
+
+				at += got;
+				size -= static_cast < size_t > ( got );
+
+			}
+
+			return true;
+
+		}
+
 		void exit_process ( int32_t code ) {
 
 			for ( ;; )

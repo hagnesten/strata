@@ -97,6 +97,9 @@ namespace test {
 
 		};
 
+		if ( chosen ( "hash" ) )
+			hash_tests ( );
+
 		if ( chosen ( "pager" ) )
 			pager_tests ( );
 

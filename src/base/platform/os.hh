@@ -86,6 +86,16 @@ namespace base {
 
 		uint32_t process_id ( );
 
+		bool random_bytes ( void* out, size_t size );
+
+		bool connect_tcp ( void*& out, const char* host, uint16_t port );
+
+		bool send_all ( void* socket, const void* data, size_t size );
+
+		bool receive_some ( void* socket, void* out, size_t room, size_t& got );
+
+		void close_socket ( void* socket );
+
 		[[ noreturn ]] void exit_process ( int32_t code );
 
 	}

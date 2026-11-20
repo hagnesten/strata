@@ -220,10 +220,18 @@
     <Filter Include="src\bench\profile">
       <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F05}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\bench\postgres">
+      <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F06}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\test\base">
+      <UniqueIdentifier>{7B2C4E91-3A5D-4F60-8D12-6C9E0A4B2F07}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\base\platform\windows\start.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
     <ClCompile Include="src\base\platform\windows\system.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
+    <ClCompile Include="src\base\platform\windows\network.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
+    <ClCompile Include="src\base\platform\windows\random.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
     <ClCompile Include="src\base\platform\windows\heap.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
     <ClCompile Include="src\base\platform\windows\coroutine.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
     <ClCompile Include="src\base\platform\windows\probe.cc"><Filter>src\base\platform\windows</Filter></ClCompile>
@@ -239,6 +247,7 @@
     <ClCompile Include="src\api\columns.cc"><Filter>src\api</Filter></ClCompile>
     <ClCompile Include="src\api\batch.cc"><Filter>src\api</Filter></ClCompile>
     <ClCompile Include="src\test\api\api_test.cc"><Filter>src\test\api</Filter></ClCompile>
+    <ClCompile Include="src\test\base\hash_test.cc"><Filter>src\test\base</Filter></ClCompile>
     <ClInclude Include="src\engine\version.hh"><Filter>src\engine</Filter></ClInclude>
     <None Include="src\base\platform\linux\coroutine.cc"><Filter>src\base\platform\linux</Filter></None>
     <None Include="src\base\platform\linux\runtime.cc"><Filter>src\base\platform\linux</Filter></None>
@@ -249,6 +258,9 @@
     <ClCompile Include="src\base\text\text.cc"><Filter>src\base\text</Filter></ClCompile>
     <ClCompile Include="src\base\file\file.cc"><Filter>src\base\file</Filter></ClCompile>
     <ClCompile Include="src\base\hash\crc32c.cc"><Filter>src\base\hash</Filter></ClCompile>
+    <ClCompile Include="src\base\hash\sha256.cc"><Filter>src\base\hash</Filter></ClCompile>
+    <ClCompile Include="src\base\hash\scram.cc"><Filter>src\base\hash</Filter></ClCompile>
+    <ClCompile Include="src\base\text\base64.cc"><Filter>src\base\text</Filter></ClCompile>
     <ClCompile Include="src\storage\pager\pager.cc"><Filter>src\storage\pager</Filter></ClCompile>
     <ClCompile Include="src\storage\pager\wal.cc"><Filter>src\storage\pager</Filter></ClCompile>
     <ClCompile Include="src\storage\pager\marks.cc"><Filter>src\storage\pager</Filter></ClCompile>
@@ -350,6 +362,9 @@
     <ClInclude Include="src\base\text\text.hh"><Filter>src\base\text</Filter></ClInclude>
     <ClInclude Include="src\base\file\file.hh"><Filter>src\base\file</Filter></ClInclude>
     <ClInclude Include="src\base\hash\crc32c.hh"><Filter>src\base\hash</Filter></ClInclude>
+    <ClInclude Include="src\base\hash\sha256.hh"><Filter>src\base\hash</Filter></ClInclude>
+    <ClInclude Include="src\base\hash\scram.hh"><Filter>src\base\hash</Filter></ClInclude>
+    <ClInclude Include="src\base\text\base64.hh"><Filter>src\base\text</Filter></ClInclude>
     <ClInclude Include="src\base\bytes\bytes.hh"><Filter>src\base\bytes</Filter></ClInclude>
     <ClInclude Include="src\storage\pager\pager.hh"><Filter>src\storage\pager</Filter></ClInclude>
     <ClInclude Include="src\storage\record\record.hh"><Filter>src\storage\record</Filter></ClInclude>
@@ -393,6 +408,7 @@
     <ClInclude Include="src\engine\check\check.hh"><Filter>src\engine\check</Filter></ClInclude>
     <ClInclude Include="src\base\file\folder.hh"><Filter>src\base\file</Filter></ClInclude>
     <ClInclude Include="src\bench\harness\bench.hh"><Filter>src\bench\harness</Filter></ClInclude>
+    <ClInclude Include="src\bench\postgres\wire.hh"><Filter>src\bench\postgres</Filter></ClInclude>
     <ClInclude Include="src\bench\drivers\drivers.hh"><Filter>src\bench\drivers</Filter></ClInclude>
     <ClInclude Include="src\bench\drivers\sqlite_api.hh"><Filter>src\bench\drivers</Filter></ClInclude>
     <ClInclude Include="src\bench\workloads\workloads.hh"><Filter>src\bench\workloads</Filter></ClInclude>
@@ -401,6 +417,10 @@
     <ClCompile Include="src\bench\harness\tally.cc"><Filter>src\bench\harness</Filter></ClCompile>
     <ClCompile Include="src\bench\drivers\sqlite_api.cc"><Filter>src\bench\drivers</Filter></ClCompile>
     <ClCompile Include="src\bench\drivers\sqlite_driver.cc"><Filter>src\bench\drivers</Filter></ClCompile>
+    <ClCompile Include="src\bench\drivers\postgres_driver.cc"><Filter>src\bench\drivers</Filter></ClCompile>
+    <ClCompile Include="src\bench\postgres\wire.cc"><Filter>src\bench\postgres</Filter></ClCompile>
+    <ClCompile Include="src\bench\postgres\settings.cc"><Filter>src\bench\postgres</Filter></ClCompile>
+    <ClCompile Include="src\bench\postgres\sign_in.cc"><Filter>src\bench\postgres</Filter></ClCompile>
     <ClCompile Include="src\bench\drivers\strata_driver.cc"><Filter>src\bench\drivers</Filter></ClCompile>
     <ClCompile Include="src\bench\workloads\data.cc"><Filter>src\bench\workloads</Filter></ClCompile>
     <ClCompile Include="src\bench\workloads\cases.cc"><Filter>src\bench\workloads</Filter></ClCompile>

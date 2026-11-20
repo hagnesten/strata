@@ -171,6 +171,12 @@ namespace bench {
 
 	}
 
+	static void sqlite_release ( void* state ) {
+
+		unload_sqlite ( static_cast < sqlite_side* > ( state )->api );
+
+	}
+
 	bool make_sqlite_driver ( bench_driver& out, const char* path ) {
 
 		sqlite_side* side = base::make < sqlite_side > ( 1 );
@@ -190,6 +196,8 @@ namespace bench {
 
 		out.name = "SQLite";
 		out.version = side->api.libversion ( );
+		out.detail = path;
+		out.note = "both engines: 4 KB pages, write-ahead log, a sync on every commit, 2048 cached pages, prepared statements";
 		out.state = side;
 		out.open = sqlite_open;
 		out.close = sqlite_close;
@@ -198,6 +206,7 @@ namespace bench {
 		out.run = sqlite_run;
 		out.finish = sqlite_finish;
 		out.problem = sqlite_problem;
+		out.release = sqlite_release;
 
 		return true;
 
@@ -210,10 +219,8 @@ namespace bench {
 
 		item.close ( item.state );
 
-		if ( base::same ( item.name, "SQLite" ) )
-			unload_sqlite ( static_cast < sqlite_side* > ( item.state )->api );
-		else
-			static_cast < strata_side* > ( item.state )->~strata_side ( );
+		if ( item.release )
+			item.release ( item.state );
 
 		base::release ( item.state );
 		item = { };

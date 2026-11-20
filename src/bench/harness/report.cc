@@ -183,7 +183,7 @@ namespace bench {
 		base::text out;
 
 		summarize ( report, wins, compared, mean, differ );
-		out.add ( "| Workload | Operations | Strata | SQLite " ).add ( report.versions [ 1 ] ).add ( " | Strata vs SQLite |\n" );
+		out.add ( "| Workload | Operations | Strata | " ).add ( report.names [ 1 ] ).add ( ' ' ).add ( report.versions [ 1 ] ).add ( " | Strata vs " ).add ( report.names [ 1 ] ).add ( " |\n" );
 		out.add ( "|---|---:|---:|---:|---:|\n" );
 
 		for ( uint32_t i = 0; i < report.count; i++ ) {

@@ -96,6 +96,12 @@ namespace bench {
 
 	}
 
+	static void strata_release ( void* state ) {
+
+		static_cast < strata_side* > ( state )->~strata_side ( );
+
+	}
+
 	bool make_strata_driver ( bench_driver& out ) {
 
 		strata_side* side = base::make < strata_side > ( 1 );
@@ -115,6 +121,7 @@ namespace bench {
 		out.run = strata_run;
 		out.finish = strata_finish;
 		out.problem = strata_problem;
+		out.release = strata_release;
 
 		return true;
 

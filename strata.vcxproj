@@ -34,6 +34,8 @@
   <ItemGroup>
     <ClCompile Include="src\base\platform\windows\start.cc" />
     <ClCompile Include="src\base\platform\windows\system.cc" />
+    <ClCompile Include="src\base\platform\windows\network.cc" />
+    <ClCompile Include="src\base\platform\windows\random.cc" />
     <ClCompile Include="src\base\platform\windows\heap.cc" />
     <ClCompile Include="src\base\platform\windows\coroutine.cc" />
     <ClCompile Include="src\base\platform\windows\probe.cc" />
@@ -49,6 +51,7 @@
     <ClCompile Include="src\api\columns.cc" />
     <ClCompile Include="src\api\batch.cc" />
     <ClCompile Include="src\test\api\api_test.cc" />
+    <ClCompile Include="src\test\base\hash_test.cc" />
     <ClInclude Include="src\engine\version.hh" />
     <None Include="src\base\platform\linux\coroutine.cc" />
     <None Include="src\base\platform\linux\runtime.cc" />
@@ -59,6 +62,9 @@
     <ClCompile Include="src\base\text\text.cc" />
     <ClCompile Include="src\base\file\file.cc" />
     <ClCompile Include="src\base\hash\crc32c.cc" />
+    <ClCompile Include="src\base\hash\sha256.cc" />
+    <ClCompile Include="src\base\hash\scram.cc" />
+    <ClCompile Include="src\base\text\base64.cc" />
     <ClCompile Include="src\storage\pager\pager.cc" />
     <ClCompile Include="src\storage\pager\wal.cc" />
     <ClCompile Include="src\storage\pager\marks.cc" />
@@ -160,6 +166,9 @@
     <ClInclude Include="src\base\text\text.hh" />
     <ClInclude Include="src\base\file\file.hh" />
     <ClInclude Include="src\base\hash\crc32c.hh" />
+    <ClInclude Include="src\base\hash\sha256.hh" />
+    <ClInclude Include="src\base\hash\scram.hh" />
+    <ClInclude Include="src\base\text\base64.hh" />
     <ClInclude Include="src\base\bytes\bytes.hh" />
     <ClInclude Include="src\storage\pager\pager.hh" />
     <ClInclude Include="src\storage\record\record.hh" />
@@ -203,6 +212,7 @@
     <ClInclude Include="src\base\file\folder.hh" />
     <ClInclude Include="src\app\main\main.hh" />
     <ClInclude Include="src\bench\harness\bench.hh" />
+    <ClInclude Include="src\bench\postgres\wire.hh" />
     <ClInclude Include="src\bench\drivers\drivers.hh" />
     <ClInclude Include="src\bench\drivers\sqlite_api.hh" />
     <ClInclude Include="src\bench\workloads\workloads.hh" />
@@ -211,6 +221,10 @@
     <ClCompile Include="src\bench\harness\tally.cc" />
     <ClCompile Include="src\bench\drivers\sqlite_api.cc" />
     <ClCompile Include="src\bench\drivers\sqlite_driver.cc" />
+    <ClCompile Include="src\bench\drivers\postgres_driver.cc" />
+    <ClCompile Include="src\bench\postgres\wire.cc" />
+    <ClCompile Include="src\bench\postgres\settings.cc" />
+    <ClCompile Include="src\bench\postgres\sign_in.cc" />
     <ClCompile Include="src\bench\drivers\strata_driver.cc" />
     <ClCompile Include="src\bench\workloads\data.cc" />
     <ClCompile Include="src\bench\workloads\cases.cc" />

@@ -59,6 +59,8 @@ namespace bench {
 
 			if ( base::same ( item, "--sqlite" ) && i + 1 < count )
 				out.sqlite = arguments [ ++i ];
+			else if ( base::same ( item, "--postgres" ) && i + 1 < count )
+				out.postgres = arguments [ ++i ];
 			else if ( base::same ( item, "--out" ) && i + 1 < count )
 				out.out = arguments [ ++i ];
 			else if ( base::same ( item, "--only" ) && i + 1 < count )
@@ -67,13 +69,16 @@ namespace bench {
 				out.profile = arguments [ ++i ];
 			else if ( !read_number ( item, out.rows ) ) {
 
-				base::write_error ( "usage: strata --bench [rows] [--sqlite <sqlite3.dll>] [--out <results.md>] [--only <words>]\n" );
+				base::write_error ( "usage: strata --bench [rows] [--sqlite <sqlite3.dll> | --postgres <connection>] [--out <results.md>] [--only <words>]\n" );
 
 				return false;
 
 			}
 
 		}
+
+		if ( out.postgres )
+			return true;
 
 		if ( !out.sqlite ) {
 
@@ -221,7 +226,7 @@ namespace bench {
 
 			erase_database ( paths [ e ] );
 
-			if ( !drivers [ e ].open ( drivers [ e ].state, paths [ e ] ) || !drivers [ e ].exec ( drivers [ e ].state, BENCH_SCHEMA ) ) {
+			if ( !drivers [ e ].open ( drivers [ e ].state, paths [ e ] ) || !drivers [ e ].exec ( drivers [ e ].state, drivers [ e ].schema ? drivers [ e ].schema : BENCH_SCHEMA ) ) {
 
 				base::text line;
 
@@ -238,15 +243,22 @@ namespace bench {
 
 	}
 
-	static void print_heading ( const bench_report& report, const bench_options& options, char paths [ BENCH_ENGINES ] [ FILE_PATH_ROOM ] ) {
+	static void print_heading ( const bench_report& report, const bench_driver* drivers, char paths [ BENCH_ENGINES ] [ FILE_PATH_ROOM ] ) {
 
 		base::text line;
+		const bench_driver& other = drivers [ 1 ];
 
 		line.add ( "strata benchmark, " ).number ( report.rows ).add ( " rows\n" );
 		line.add ( "  Strata " ).add ( report.versions [ 0 ] ).add ( "  " ).add ( paths [ 0 ] ).add ( '\n' );
-		line.add ( "  SQLite " ).add ( report.versions [ 1 ] ).add ( "  " ).add ( paths [ 1 ] ).add ( "\n         " ).add ( options.sqlite ).add ( '\n' );
-		line.add ( "  both engines: 4 KB pages, write-ahead log, a sync on every commit, 2048 cached pages, prepared statements\n\n" );
-		line.add ( "  workload" ).pad_to ( 38 ).add ( "operations" ).pad_to ( 50 ).add ( "Strata" ).pad_to ( 64 ).add ( "SQLite" ).pad_to ( 78 ).add ( "Strata vs SQLite\n" );
+		line.add ( "  " ).add ( other.name ).add ( ' ' ).add ( other.version ).add ( "  " );
+
+		if ( other.schema )
+			line.add ( other.detail ).add ( '\n' );
+		else
+			line.add ( paths [ 1 ] ).add ( "\n         " ).add ( other.detail ).add ( '\n' );
+
+		line.add ( "  " ).add ( other.note ).add ( "\n\n" );
+		line.add ( "  workload" ).pad_to ( 38 ).add ( "operations" ).pad_to ( 50 ).add ( "Strata" ).pad_to ( 64 ).add ( other.name ).pad_to ( 78 ).add ( "Strata vs " ).add ( other.name ).add ( '\n' );
 		base::write ( line );
 
 	}
@@ -262,13 +274,20 @@ namespace bench {
 
 		bench_driver drivers [ BENCH_ENGINES ] = { };
 
-		if ( !make_strata_driver ( drivers [ 0 ] ) || !make_sqlite_driver ( drivers [ 1 ], options.sqlite ) ) {
+		bool other = options.postgres ? make_postgres_driver ( drivers [ 1 ], options.postgres ) : make_sqlite_driver ( drivers [ 1 ], options.sqlite );
+
+		if ( !make_strata_driver ( drivers [ 0 ] ) || !other ) {
 
 			base::text line;
 
-			line.add ( "SQLite could not be loaded from " ).add ( options.sqlite ).add ( '\n' );
+			if ( options.postgres )
+				line.add ( "the Postgres connection could not be read: use host=... port=... user=... password=... dbname=... or postgresql://user:password@host:port/database\n" );
+			else
+				line.add ( "SQLite could not be loaded from " ).add ( options.sqlite ).add ( '\n' );
+
 			base::write_error ( line.value ( ) );
 			free_driver ( drivers [ 0 ] );
+			free_driver ( drivers [ 1 ] );
 
 			return 1;
 
@@ -297,7 +316,7 @@ namespace bench {
 			base::write_error ( "out of memory for the benchmark data\n" );
 		else if ( open_engines ( drivers, paths ) ) {
 
-			print_heading ( report, options, paths );
+			print_heading ( report, drivers, paths );
 
 			sampler watch;
 
