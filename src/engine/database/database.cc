@@ -381,7 +381,8 @@ namespace engine {
 			storage::end_write ( item.pages );
 			storage::end_read ( item.pages );
 
-		}
+		} else if ( item.read_committed && !item.pages.wal.writing )
+			storage::end_read ( item.pages );
 
 		return fine;
 

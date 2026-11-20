@@ -15,6 +15,7 @@
 #define SERVER_ITERATIONS 4096
 #define SERVER_SALT 16
 #define SERVER_BUSY_LIMIT 120000
+#define SERVER_LOCK_RETRY 5
 
 #define PG_PROTOCOL 196608
 #define PG_SSL_REQUEST 80877103
@@ -113,6 +114,7 @@ namespace server {
 		bool closed;
 		bool finished;
 		bool busy_wait;
+		bool lock_wait;
 		uint64_t busy_since;
 		uint64_t ticket;
 		strata_db* db;
@@ -138,6 +140,7 @@ namespace server {
 		uint32_t user_count;
 		uint32_t next_id;
 		uint64_t next_ticket;
+		uint64_t last_retry;
 		bool released;
 		bool running;
 

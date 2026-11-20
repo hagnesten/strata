@@ -41,6 +41,33 @@ namespace server {
 
 	}
 
+	static void pump_output ( server_connection& link );
+
+	static void wake_head ( server_state& state ) {
+
+		server_connection* head = nullptr;
+
+		state.released = false;
+
+		for ( uint32_t i = 0; i < state.connection_count; i++ ) {
+
+			server_connection* link = state.connections [ i ];
+
+			if ( link->lock_wait && !link->closed && ( !head || link->ticket < head->ticket ) )
+				head = link;
+
+		}
+
+		if ( !head )
+			return;
+
+		resume ( *head );
+
+		if ( head->output_sent < head->output.size && !head->closed )
+			pump_output ( *head );
+
+	}
+
 	static void accept_waiting ( server_state& state ) {
 
 		for ( ;; ) {
@@ -237,6 +264,7 @@ namespace server {
 
 			uint32_t count = 0;
 			bool waiting = false;
+			bool locked = false;
 
 			polls [ count++ ] = { state->listener, true, false, false, false, false };
 
@@ -246,14 +274,14 @@ namespace server {
 
 				polls [ count++ ] = { link.socket, link.reading, link.output_sent < link.output.size, false, false, false };
 				waiting = waiting || link.busy_wait;
+				locked = locked || link.lock_wait;
 
 			}
 
-			bool released = state->released;
+			if ( state->released && locked )
+				wake_head ( *state );
 
-			state->released = false;
-
-			if ( !base::os::poll_sockets ( polls, count, waiting ? ( released ? 0 : 1 ) : 1000 ) )
+			if ( !base::os::poll_sockets ( polls, count, waiting ? 0 : locked ? SERVER_LOCK_RETRY : 1000 ) )
 				break;
 
 			if ( polls [ 0 ].readable )
@@ -283,6 +311,16 @@ namespace server {
 
 				if ( link.output_sent < link.output.size && !link.closed )
 					pump_output ( link );
+
+				if ( state->released )
+					wake_head ( *state );
+
+			}
+
+			if ( locked && now_ms ( ) - state->last_retry >= SERVER_LOCK_RETRY ) {
+
+				state->last_retry = now_ms ( );
+				wake_head ( *state );
 
 			}
 
@@ -380,9 +418,9 @@ namespace server {
 			if ( now_ms ( ) - link.busy_since > SERVER_BUSY_LIMIT )
 				return false;
 
-			link.busy_wait = true;
+			link.lock_wait = true;
 			base::leave_coroutine ( link.routine );
-			link.busy_wait = false;
+			link.lock_wait = false;
 
 			if ( link.closed )
 				return false;

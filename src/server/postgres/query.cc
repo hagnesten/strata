@@ -553,6 +553,11 @@ namespace server {
 
 			strata_reset ( stmt );
 
+			engine::database& base_db = link.db->database;
+
+			if ( base_db.read_committed && !base_db.pages.wal.writing )
+				storage::end_read ( base_db.pages );
+
 			if ( !wait_busy ( link ) ) {
 
 				link.busy_since = 0;
