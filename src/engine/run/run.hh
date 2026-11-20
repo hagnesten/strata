@@ -363,6 +363,8 @@ namespace engine {
 		uint32_t row_page;
 		uint32_t row_slot;
 		bool whole;
+		struct output_pipe* early_pipe;
+		int32_t early_column;
 		sql::expression** residual;
 		uint32_t residual_count;
 
@@ -717,6 +719,8 @@ namespace engine {
 	bool append_json ( run_context& ctx, base::text& out, const storage::value& item );
 
 	bool run_child ( run_context& ctx, query_state* scope, const sql::expression* item, storage::value& out );
+
+	bool sort_rejects ( output_pipe& pipe, const storage::value& key );
 
 	semi_plan* semi_join ( run_context& ctx, prepared_select* child );
 

@@ -245,6 +245,23 @@ namespace engine {
 
 	}
 
+	bool sort_rejects ( output_pipe& pipe, const storage::value& key ) {
+
+		if ( !pipe.row_count || pipe.row_count < static_cast < uint64_t > ( pipe.bound ) )
+			return false;
+
+		storage::value keys [ 1 ] = { key };
+		sorted_row probe = { nullptr, keys, pipe.arrivals };
+
+		if ( compare_sorted ( &pipe, &probe, pipe.rows [ 0 ] ) < 0 )
+			return false;
+
+		pipe.arrivals++;
+
+		return true;
+
+	}
+
 	static bool output_row ( run_context& ctx, query_state& scope, output_pipe& pipe, const storage::value* given ) {
 
 		prepared_select* plan = scope.plan;
@@ -814,6 +831,19 @@ namespace engine {
 			return false;
 
 		ctx.scratch->rewind ( mark );
+
+		if ( plan->source_count == 1 && plan->sources [ 0 ].table && !plan->grouping && !plan->window_count && pipe.sorting && pipe.bound > 0 && !pipe.distinct && pipe.key_count == 1 ) {
+
+			const sql::expression* key = plan->order_output && plan->order_output [ 0 ] >= 0 ? plan->outputs [ plan->order_output [ 0 ] ] : plan->order_values [ 0 ];
+
+			if ( key && key->kind == sql::EXPRESSION_COLUMN && key->depth == 0 && key->source == 0 ) {
+
+				scope.sources [ 0 ].early_pipe = &pipe;
+				scope.sources [ 0 ].early_column = key->column;
+
+			}
+
+		}
 
 		if ( fine && !run_level ( ctx, scope, 0, pipe, groups ) )
 			return false;

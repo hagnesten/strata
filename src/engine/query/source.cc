@@ -941,6 +941,36 @@ namespace engine {
 
 	}
 
+	static bool sorts_in ( run_context& ctx, source_state& source, int64_t rowid, const uint8_t* data, size_t size, bool& pass ) {
+
+		const table_info& table = *source.plan->table;
+		storage::value key;
+
+		pass = true;
+
+		if ( source.early_pipe->row_count < static_cast < uint64_t > ( source.early_pipe->bound ) )
+			return true;
+
+		if ( source.early_column < 0 || source.early_column == table.rowid_column )
+			key = storage::integer_value ( rowid );
+		else {
+
+			bool present = false;
+
+			if ( !storage::field_at ( data, size, static_cast < uint32_t > ( source.early_column ), key, present ) )
+				return fail_named ( ctx, "a row of table ", table.name, " is damaged" );
+
+			if ( !present && !fallback_value ( ctx, table.columns [ source.early_column ], key ) )
+				return false;
+
+		}
+
+		pass = !sort_rejects ( *source.early_pipe, key );
+
+		return true;
+
+	}
+
 	bool read_row ( run_context& ctx, const table_info& table, int64_t rowid, storage::value*& values, bool& found ) {
 
 		storage::btree tree = { ctx.pages, table.root, false };
@@ -1666,10 +1696,16 @@ namespace engine {
 
 					}
 
-					if ( source.quick_ready && source.quick_count ) {
+					bool checked = source.quick_ready && source.quick_count;
+					bool early = source.early_pipe && ( source.quick_ready ? !source.residual_count : !plan.filter_count );
+
+					if ( checked || early ) {
 
 						bool pass = true;
-						bool fine = quick_passes ( ctx, source, rowid, data, size, pass );
+						bool fine = !checked || quick_passes ( ctx, source, rowid, data, size, pass );
+
+						if ( fine && pass && early )
+							fine = sorts_in ( ctx, source, rowid, data, size, pass );
 
 						if ( held && ( !fine || !pass ) )
 							storage::release_page ( held );
