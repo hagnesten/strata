@@ -75,6 +75,8 @@ namespace server {
 		char tag [ 32 ];
 		bool control;
 		char control_text [ 256 ];
+		char* body;
+		size_t body_size;
 
 	};
 
@@ -116,6 +118,7 @@ namespace server {
 		uint32_t statement_count;
 		server_portal portal;
 		bool skipping;
+		bool failed;
 		uint32_t secret;
 		uint32_t id;
 
@@ -215,5 +218,9 @@ namespace server {
 	bool control_statement ( const char* sql, size_t size, char* tag, size_t tag_room, char* show, size_t show_room, bool& handled );
 
 	bool wait_busy ( server_connection& link );
+
+	bool dollar_body ( const char* sql, size_t size, size_t& body, size_t& body_size, size_t& after );
+
+	bool run_do_block ( server_connection& link, const char* body, size_t size, base::text& problem );
 
 }

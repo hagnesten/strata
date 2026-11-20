@@ -130,7 +130,7 @@ namespace Strata.Wire {
 		private static void Handshake ( PgWire wire ) {
 
 			Console.WriteLine ( "Npgsql handshake" );
-			Expect ( wire.Settings.ContainsKey ( "server_version" ) && wire.Settings [ "server_version" ].StartsWith ( "16", StringComparison.Ordinal ), "the server reports a Postgres 16 version" );
+			Expect ( wire.Settings.ContainsKey ( "server_version" ) && wire.Settings [ "server_version" ].StartsWith ( "17", StringComparison.Ordinal ), "the server reports a Postgres 17 version" );
 			Expect ( wire.Settings.ContainsKey ( "integer_datetimes" ) && wire.Settings [ "integer_datetimes" ] == "on", "the server uses integer timestamps" );
 
 			List < PgResult > types = wire.Query ( NpgsqlTypes );
@@ -152,8 +152,8 @@ namespace Strata.Wire {
 
 			PgResult version = wire.Query ( "SELECT version(), current_database(), current_schema(), current_setting('server_version_num')::int" ) [ 0 ];
 
-			Expect ( ( ( string ) version.Rows [ 0 ] [ 0 ] ).StartsWith ( "PostgreSQL 16", StringComparison.Ordinal ), "version() looks like Postgres" );
-			Expect ( ( string ) version.Rows [ 0 ] [ 3 ] == "160000", "current_setting casts to int" );
+			Expect ( ( ( string ) version.Rows [ 0 ] [ 0 ] ).StartsWith ( "PostgreSQL 17", StringComparison.Ordinal ), "version() looks like Postgres" );
+			Expect ( ( string ) version.Rows [ 0 ] [ 3 ] == "170000", "current_setting casts to int" );
 
 		}
 

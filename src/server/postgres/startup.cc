@@ -294,8 +294,9 @@ namespace server {
 		base::copy_text ( session.session_user, sizeof ( session.session_user ), link.user );
 		base::copy_text ( session.session_database, sizeof ( session.session_database ), link.database [ 0 ] ? link.database : link.user );
 		session.session_id = link.id;
+		session.postgres = true;
 		send_auth ( link, 0, nullptr, 0 );
-		parameter ( link, "server_version", "16.0" );
+		parameter ( link, "server_version", "17.0" );
 		parameter ( link, "server_encoding", "UTF8" );
 		parameter ( link, "client_encoding", "UTF8" );
 		parameter ( link, "DateStyle", "ISO, MDY" );
@@ -318,13 +319,21 @@ namespace server {
 
 	void send_ready ( server_connection& link ) {
 
+		bool open = link.db && strata_in_transaction ( link.db );
+
+		if ( !open )
+			link.failed = false;
+
 		begin_message ( link, 'Z' );
-		put_bytes ( link, link.db && strata_in_transaction ( link.db ) ? "T" : "I", 1 );
+		put_bytes ( link, link.failed ? "E" : open ? "T" : "I", 1 );
 		end_message ( link );
 
 	}
 
 	void send_error ( server_connection& link, const char* code, const char* message ) {
+
+		if ( link.db && strata_in_transaction ( link.db ) )
+			link.failed = true;
 
 		begin_message ( link, 'E' );
 		put_bytes ( link, "S", 1 );

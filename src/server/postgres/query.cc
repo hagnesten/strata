@@ -184,15 +184,29 @@ namespace server {
 
 		at = 0;
 
-		if ( word_at ( sql, size, at, "start" ) || ( word_at ( sql, size, at, "begin" ) && at < size && !word_at ( sql, size, at, "transaction" ) && sql [ at ] != ';' && sql [ at ] != 0 && !word_at ( sql, size, at, "deferred" ) && !word_at ( sql, size, at, "immediate" ) && !word_at ( sql, size, at, "exclusive" ) ) ) {
-
-			bool only_space = true;
-
-			for ( size_t i = at; i < size && only_space; i++ )
-				only_space = sql [ i ] == ' ' || sql [ i ] == ';' || sql [ i ] == '\n' || sql [ i ] == '\r' || sql [ i ] == '\t' || !sql [ i ];
+		if ( word_at ( sql, size, at, "start" ) || word_at ( sql, size, at, "begin" ) ) {
 
 			base::copy_text ( tag, tag_room, "BEGIN" );
-			show [ 0 ] = only_space ? 0 : 1;
+
+			return true;
+
+		}
+
+		at = 0;
+
+		if ( word_at ( sql, size, at, "end" ) ) {
+
+			base::copy_text ( tag, tag_room, "COMMIT" );
+
+			return true;
+
+		}
+
+		at = 0;
+
+		if ( word_at ( sql, size, at, "abort" ) ) {
+
+			base::copy_text ( tag, tag_room, "ROLLBACK" );
 
 			return true;
 
@@ -302,6 +316,9 @@ namespace server {
 		if ( statement->stmt )
 			strata_finalize ( statement->stmt );
 
+		if ( statement->body )
+			base::release ( statement->body );
+
 		base::release ( statement );
 
 	}
@@ -320,6 +337,31 @@ namespace server {
 
 		char show [ 256 ];
 		bool handled = false;
+		size_t body = 0;
+		size_t body_size = 0;
+		size_t after = 0;
+
+		if ( dollar_body ( sql, size, body, body_size, after ) ) {
+
+			statement.control = true;
+			statement.body = base::make < char > ( body_size + 1 );
+
+			if ( !statement.body )
+				return false;
+
+			base::copy ( statement.body, sql + body, body_size );
+			statement.body [ body_size ] = 0;
+			statement.body_size = body_size;
+			base::copy_text ( statement.tag, sizeof ( statement.tag ), "DO" );
+
+			while ( after < size && ( sql [ after ] == ' ' || sql [ after ] == '\r' || sql [ after ] == '\n' || sql [ after ] == '\t' ) )
+				after++;
+
+			tail = sql + ( after < size && sql [ after ] == ';' ? after + 1 : after );
+
+			return true;
+
+		}
 
 		control_statement ( sql, size, statement.tag, sizeof ( statement.tag ), show, sizeof ( show ), handled );
 
@@ -367,6 +409,41 @@ namespace server {
 
 	}
 
+	static bool aborted_block ( server_connection& link, server_statement& statement ) {
+
+		if ( !link.failed )
+			return false;
+
+		sql::statement_kind kind = statement.stmt && statement.stmt->prepared && statement.stmt->prepared->statement ? statement.stmt->prepared->statement->kind : sql::STATEMENT_SELECT;
+		bool rollback = statement.control ? base::same ( statement.tag, "ROLLBACK" ) : statement.stmt && kind == sql::STATEMENT_ROLLBACK;
+		bool commit = statement.control ? base::same ( statement.tag, "COMMIT" ) : statement.stmt && kind == sql::STATEMENT_COMMIT;
+
+		if ( rollback ) {
+
+			link.failed = false;
+
+			return false;
+
+		}
+
+		if ( commit ) {
+
+			strata_exec ( link.db, "ROLLBACK" );
+			link.failed = false;
+			begin_message ( link, 'C' );
+			put_string ( link, "ROLLBACK" );
+			end_message ( link );
+
+			return true;
+
+		}
+
+		send_error ( link, "25P02", "current transaction is aborted, commands ignored until end of transaction block" );
+
+		return true;
+
+	}
+
 	static bool run_control ( server_connection& link, server_statement& statement, bool describe ) {
 
 		if ( base::same ( statement.tag, "SET" ) && statement.control_text [ 0 ] && !engine::set_search ( *link.db->database.schema, statement.control_text ) ) {
@@ -374,6 +451,20 @@ namespace server {
 			send_error ( link, "42602", "the schema name in search_path is too long" );
 
 			return false;
+
+		}
+
+		if ( statement.body ) {
+
+			base::text problem;
+
+			if ( !run_do_block ( link, statement.body, statement.body_size, problem ) ) {
+
+				send_error ( link, error_code ( problem.value ( ), false ), problem.size ? problem.value ( ) : "the DO block failed" );
+
+				return false;
+
+			}
 
 		}
 
@@ -396,6 +487,18 @@ namespace server {
 		if ( base::same ( statement.tag, "BEGIN" ) ) {
 
 			if ( !strata_in_transaction ( link.db ) && strata_exec ( link.db, "BEGIN" ) != STRATA_OK ) {
+
+				report ( link );
+
+				return false;
+
+			}
+
+		}
+
+		if ( base::same ( statement.tag, "COMMIT" ) || base::same ( statement.tag, "ROLLBACK" ) ) {
+
+			if ( strata_in_transaction ( link.db ) && strata_exec ( link.db, statement.tag ) != STRATA_OK ) {
 
 				report ( link );
 
@@ -558,7 +661,9 @@ namespace server {
 
 			bool fine = true;
 
-			if ( statement->control )
+			if ( aborted_block ( link, *statement ) )
+				fine = !link.failed;
+			else if ( statement->control )
 				fine = run_control ( link, *statement, true );
 			else if ( statement->stmt ) {
 
@@ -842,6 +947,9 @@ namespace server {
 		}
 
 		server_statement& statement = *portal.statement;
+
+		if ( aborted_block ( link, statement ) )
+			return !link.failed;
 
 		if ( statement.control )
 			return run_control ( link, statement, false );

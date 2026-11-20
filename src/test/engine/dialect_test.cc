@@ -80,7 +80,7 @@ namespace test {
 		rows ( db, "SELECT '42'::int + 1, 7::text || 'x', 'TRUE'::boolean, 'off'::bool, '2024-01-02'::timestamp with time zone, 1.5::numeric ( 10, 2 )", "43|7x|1|0|2024-01-02|1.5" );
 		rows ( db, "SELECT 'Apple' ILIKE 'a%', 'Apple' NOT ILIKE 'b%'", "1|1" );
 		rows ( db, "SELECT current_database ( ), current_schema, current_user, length ( gen_random_uuid ( ) ), substr ( gen_random_uuid ( ), 15, 1 )", "strata|public|strata|36|4" );
-		rows ( db, "SELECT version ( ) LIKE 'PostgreSQL 16%', length ( now ( ) ), current_setting ( 'server_version_num' )", "1|23|160000" );
+		rows ( db, "SELECT version ( ) LIKE 'PostgreSQL 17%', length ( now ( ) ), current_setting ( 'server_version_num' )", "1|23|170000" );
 		fails ( db, "SELECT 'maybe'::boolean", "boolean" );
 
 	}
