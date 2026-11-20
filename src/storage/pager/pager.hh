@@ -22,6 +22,7 @@
 #define PAGER_LEAVES 8
 #define PAGER_PATH 4
 #define WAL_KEEP_BYTES ( 64ull * 1024 * 1024 )
+#define WAL_GROW_BYTES ( 4ull * 1024 * 1024 )
 
 namespace storage {
 

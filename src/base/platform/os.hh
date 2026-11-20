@@ -39,7 +39,7 @@ namespace base {
 
 		void release_pages ( void* at, size_t size );
 
-		bool open_file ( void*& out, const char* path, bool write, bool create );
+		bool open_file ( void*& out, const char* path, bool write, bool create, bool through = false );
 
 		bool read_at ( void* file, uint64_t offset, void* out, size_t size, size_t& got );
 

@@ -43,7 +43,7 @@ namespace base {
 
 		}
 
-		bool open_file ( void*& out, const char* path, bool write, bool create ) {
+		bool open_file ( void*& out, const char* path, bool write, bool create, bool through ) {
 
 			wchar_t wide [ FILE_PATH_ROOM ];
 
@@ -52,7 +52,7 @@ namespace base {
 			if ( !wide_path ( path, wide, FILE_PATH_ROOM ) )
 				return false;
 
-			HANDLE handle = write ? CreateFileW ( wide, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, create ? OPEN_ALWAYS : OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS, nullptr ) : CreateFileW ( wide, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr );
+			HANDLE handle = write ? CreateFileW ( wide, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, create ? OPEN_ALWAYS : OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS | ( through ? FILE_FLAG_WRITE_THROUGH : 0 ), nullptr ) : CreateFileW ( wide, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr );
 
 			if ( handle == INVALID_HANDLE_VALUE )
 				return false;

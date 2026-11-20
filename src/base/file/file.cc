@@ -53,6 +53,14 @@ namespace base {
 
 	}
 
+	bool open_log ( file_handle& out, const char* path ) {
+
+		out.handle = nullptr;
+
+		return os::open_file ( out.handle, path, true, true, true );
+
+	}
+
 	bool open_reading ( file_handle& out, const char* path ) {
 
 		out.handle = nullptr;

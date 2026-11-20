@@ -49,9 +49,9 @@ namespace base {
 
 		}
 
-		bool open_file ( void*& out, const char* path, bool write, bool create ) {
+		bool open_file ( void*& out, const char* path, bool write, bool create, bool through ) {
 
-			long flags = ( write ? LINUX_READ_WRITE : LINUX_READ_ONLY ) | ( create ? LINUX_CREATE : 0 ) | LINUX_CLOSE_ON_EXEC;
+			long flags = ( write ? LINUX_READ_WRITE : LINUX_READ_ONLY ) | ( create ? LINUX_CREATE : 0 ) | ( through ? LINUX_DATA_SYNC : 0 ) | LINUX_CLOSE_ON_EXEC;
 			long made = call4 ( LINUX_OPENAT, LINUX_AT_CWD, reinterpret_cast < long > ( path ), flags, 0644 );
 
 			out = nullptr;

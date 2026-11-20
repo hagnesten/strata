@@ -174,7 +174,7 @@ namespace storage {
 		wal.checkpoint_frames = WAL_CHECKPOINT_FRAMES;
 		wal.busy_milliseconds = SHARED_BUSY_MILLISECONDS;
 
-		if ( !base::open_file ( wal.file, wal.path, true ) ) {
+		if ( !base::open_log ( wal.file, wal.path ) ) {
 
 			fail ( item, PAGER_IO, "the log file could not be opened", 0, nullptr );
 
@@ -446,6 +446,21 @@ namespace storage {
 		uint32_t pending = 0;
 		uint64_t at_offset = snapshot.wal_end;
 		bool fine = true;
+		uint64_t needed = at_offset + static_cast < uint64_t > ( item.frame_count + 1 ) * WAL_FRAME;
+
+		if ( base::file_size ( wal.file ) < needed ) {
+
+			uint64_t grown = ( needed + WAL_GROW_BYTES - 1 ) / WAL_GROW_BYTES * WAL_GROW_BYTES;
+
+			if ( !base::truncate_file ( wal.file, grown ) || !base::sync_file ( wal.file ) ) {
+
+				fail ( item, PAGER_IO, "the log could not grow", 0, nullptr );
+
+				return false;
+
+			}
+
+		}
 
 		for ( uint32_t i = 0; i <= item.frame_count && fine; i++ ) {
 
@@ -494,8 +509,6 @@ namespace storage {
 			}
 
 		}
-
-		fine = fine && base::sync_file ( wal.file );
 
 		if ( !fine ) {
 
