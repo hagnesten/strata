@@ -263,7 +263,24 @@ namespace engine {
 
 				state.count++;
 
-				if ( number.kind == storage::VALUE_INTEGER ) {
+				if ( number.kind == storage::VALUE_INTEGER || number.kind == storage::VALUE_DECIMAL ) {
+
+					decimal_number exact = { };
+
+					if ( !state.decimal_broken && ( !decimal_of ( number, exact ) || !decimal_add ( state.sum_decimal, exact, false, state.sum_decimal ) ) )
+						state.decimal_broken = true;
+
+				}
+
+				if ( number.kind == storage::VALUE_DECIMAL ) {
+
+					decimal_number exact = { };
+
+					decimal_of ( number, exact );
+					state.decimal_seen = true;
+					state.sum_real += decimal_real ( exact );
+
+				} else if ( number.kind == storage::VALUE_INTEGER ) {
 
 					state.sum_real += static_cast < double > ( number.integer );
 
@@ -347,6 +364,10 @@ namespace engine {
 					out = storage::null_value ( );
 				else if ( state.real_seen )
 					out = storage::real_value ( state.sum_real );
+				else if ( state.decimal_seen && !state.decimal_broken )
+					out = decimal_result ( state.sum_decimal );
+				else if ( state.overflow && !state.decimal_broken && ctx.schema->postgres )
+					out = decimal_result ( state.sum_decimal );
 				else if ( state.overflow )
 					return fail_run ( ctx, "integer overflow in sum(), use total() for a real sum" );
 				else
@@ -359,10 +380,27 @@ namespace engine {
 
 				return true;
 
-			case AGGREGATE_AVG:
-				out = state.count ? storage::real_value ( state.sum_real / static_cast < double > ( state.count ) ) : storage::null_value ( );
+			case AGGREGATE_AVG: {
+
+				if ( !state.count ) {
+
+					out = storage::null_value ( );
+
+					return true;
+
+				}
+
+				decimal_number count = { static_cast < __int128 > ( state.count ), 0 };
+				decimal_number average = { };
+
+				if ( !state.real_seen && !state.decimal_broken && ( state.decimal_seen || ctx.schema->postgres ) && decimal_divide ( state.sum_decimal, count, average ) )
+					out = decimal_result ( average );
+				else
+					out = storage::real_value ( state.sum_real / static_cast < double > ( state.count ) );
 
 				return true;
+
+			}
 
 			case AGGREGATE_MIN:
 			case AGGREGATE_MAX:

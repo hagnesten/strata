@@ -131,7 +131,7 @@ namespace engine {
 			fine = evaluate ( ctx, &scope->state, table.columns [ column ].generated, out );
 
 			if ( fine )
-				values [ column ] = apply_affinity ( *ctx.scratch, out, table.columns [ column ].affinity );
+				fine = column_value ( ctx, table.columns [ column ], out, values [ column ] );
 
 		}
 

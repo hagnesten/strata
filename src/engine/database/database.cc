@@ -112,6 +112,10 @@ namespace engine {
 				out.real ( item.real );
 				break;
 
+			case storage::VALUE_DECIMAL:
+				storage::write_decimal ( item, out );
+				break;
+
 			case storage::VALUE_TEXT:
 				out.add ( reinterpret_cast < const char* > ( item.bytes ), item.size );
 				break;

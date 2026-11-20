@@ -2,6 +2,8 @@
 
 #include "engine/catalog/catalog.hh"
 #include "engine/value/value.hh"
+#include "engine/value/decimal.hh"
+#include "engine/value/moment.hh"
 
 #define RUN_DEPTH 48
 #define SORT_BOUND 100000
@@ -104,6 +106,8 @@ namespace engine {
 		FUNCTION_NOTHING,
 		FUNCTION_NOW,
 		FUNCTION_ARRAY_ANY,
+		FUNCTION_DATE_PART,
+		FUNCTION_DATE_TRUNC,
 		FUNCTION_DATE,
 		FUNCTION_TIME,
 		FUNCTION_DATETIME,
@@ -680,7 +684,10 @@ namespace engine {
 		uint64_t count;
 		int64_t sum_integer;
 		double sum_real;
+		decimal_number sum_decimal;
 		bool real_seen;
+		bool decimal_seen;
+		bool decimal_broken;
 		bool overflow;
 		bool has_best;
 		bool improved;
@@ -834,6 +841,8 @@ namespace engine {
 	bool run_drop_schema ( run_context& ctx, const sql::drop_statement* item );
 
 	bool array_contains ( run_context& ctx, const storage::value& probe, const storage::value& list, storage::value& out );
+
+	bool column_value ( run_context& ctx, const column_info& column, const storage::value& item, storage::value& out );
 
 	bool ensure_sequence_table ( run_context& ctx );
 

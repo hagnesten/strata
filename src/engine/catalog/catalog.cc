@@ -1,4 +1,6 @@
 #include "engine/catalog/catalog.hh"
+#include "engine/value/decimal.hh"
+#include "engine/value/moment.hh"
 #include "sql/print/print.hh"
 
 namespace engine {
@@ -221,6 +223,8 @@ namespace engine {
 			info.affinity = column.affinity;
 			info.not_null = column.not_null || column.primary;
 			info.nocase = column.nocase;
+			info.exact = decimal_type ( column.type, info.precision, info.scale );
+			info.moment = moment_type ( column.type );
 			info.fallback = column.fallback;
 			info.check = column.check;
 			info.generated = column.generated;

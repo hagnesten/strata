@@ -726,10 +726,68 @@ namespace engine {
 
 	}
 
+	static const char* postgres_name ( run_context& ctx, const sql::expression* item ) {
+
+		if ( !item )
+			return nullptr;
+
+		switch ( item->kind ) {
+
+			case sql::EXPRESSION_COLUMN:
+				return item->name;
+
+			case sql::EXPRESSION_CAST: {
+
+				const char* inner = postgres_name ( ctx, item->left );
+
+				if ( inner )
+					return inner;
+
+				base::text type;
+
+				for ( const char* at = item->name; at && *at && *at != '(' && *at != ' '; at++ )
+					type.add ( base::lower ( *at ) );
+
+				return ctx.lasting->keep ( type.value ( ), type.size );
+
+			}
+
+			case sql::EXPRESSION_FUNCTION: {
+
+				base::text name;
+
+				for ( const char* at = item->name; at && *at; at++ )
+					name.add ( base::lower ( *at ) );
+
+				return ctx.lasting->keep ( name.value ( ), name.size );
+
+			}
+
+			case sql::EXPRESSION_CASE:
+				return "case";
+
+			case sql::EXPRESSION_EXISTS:
+				return "exists";
+
+			default:
+				return nullptr;
+
+		}
+
+	}
+
 	static const char* output_name ( run_context& ctx, const sql::result_column& column ) {
 
 		if ( column.alias )
 			return column.alias;
+
+		if ( ctx.schema->postgres ) {
+
+			const char* name = postgres_name ( ctx, column.value );
+
+			return name ? name : "?column?";
+
+		}
 
 		if ( column.value->kind == sql::EXPRESSION_COLUMN && column.value->name )
 			return column.value->name;

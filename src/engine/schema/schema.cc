@@ -435,7 +435,8 @@ namespace engine {
 				return fail_run ( ctx, "out of memory" );
 
 			for ( uint32_t c = 0; c < table->column_count; c++ )
-				values [ c ] = apply_affinity ( *ctx.scratch, rows.values [ static_cast < size_t > ( r ) * rows.width + c ], table->columns [ c ].affinity );
+				if ( !column_value ( ctx, table->columns [ c ], rows.values [ static_cast < size_t > ( r ) * rows.width + c ], values [ c ] ) )
+					return false;
 
 			if ( !insert_values ( ctx, *table, values, nullptr, sql::CONFLICT_ABORT, nullptr, written ) )
 				return false;

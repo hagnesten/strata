@@ -26,6 +26,10 @@ namespace engine {
 		bool not_null;
 		bool rowid;
 		bool nocase;
+		bool exact;
+		uint8_t moment;
+		int32_t precision;
+		int32_t scale;
 		sql::expression* fallback;
 		sql::expression* check;
 		sql::expression* generated;

@@ -59,6 +59,8 @@ namespace engine {
 		{ "set_config", 3, 3, false, FUNCTION_NOTHING },
 		{ "now", 0, 0, false, FUNCTION_NOW },
 		{ "strata_any", 2, 2, false, FUNCTION_ARRAY_ANY },
+		{ "date_part", 2, 2, false, FUNCTION_DATE_PART },
+		{ "date_trunc", 2, 3, false, FUNCTION_DATE_TRUNC },
 		{ "statement_timestamp", 0, 0, false, FUNCTION_NOW },
 		{ "transaction_timestamp", 0, 0, false, FUNCTION_NOW },
 		{ "clock_timestamp", 0, 0, false, FUNCTION_NOW },
@@ -345,6 +347,10 @@ namespace engine {
 
 			case storage::VALUE_REAL:
 				out.real ( item.real );
+				break;
+
+			case storage::VALUE_DECIMAL:
+				storage::write_decimal ( item, out );
 				break;
 
 			case storage::VALUE_TEXT:
@@ -866,6 +872,16 @@ namespace engine {
 
 				storage::value number = numeric_of ( args [ 0 ] );
 
+				if ( number.kind == storage::VALUE_DECIMAL ) {
+
+					__int128 mantissa = storage::decimal_mantissa ( number );
+
+					out = storage::decimal_raw ( mantissa < 0 ? -mantissa : mantissa, number.subtype );
+
+					return true;
+
+				}
+
 				if ( number.kind == storage::VALUE_INTEGER ) {
 
 					if ( number.integer == static_cast < int64_t > ( 0x8000000000000000ull ) )
@@ -1226,6 +1242,43 @@ namespace engine {
 			case FUNCTION_ARRAY_ANY:
 				return array_contains ( ctx, args [ 0 ], args [ 1 ], out );
 
+			case FUNCTION_DATE_PART:
+			case FUNCTION_DATE_TRUNC: {
+
+				if ( args [ 0 ].kind == storage::VALUE_NULL || args [ 1 ].kind == storage::VALUE_NULL )
+					return true;
+
+				storage::value field = text_of ( *ctx.scratch, args [ 0 ] );
+				storage::value moment = text_of ( *ctx.scratch, args [ 1 ] );
+				moment_parts parts = { };
+
+				if ( !parse_moment ( moment.bytes, moment.size, false, parts ) )
+					return fail_run ( ctx, "invalid input syntax for type timestamp" );
+
+				if ( static_cast < function_kind > ( item->column ) == FUNCTION_DATE_PART ) {
+
+					double number = 0;
+
+					if ( !moment_field ( reinterpret_cast < const char* > ( field.bytes ), field.size, parts, number ) )
+						return fail_run ( ctx, "unit is not recognized by date_part" );
+
+					out = storage::real_value ( number );
+
+					return true;
+
+				}
+
+				if ( !truncate_moment ( reinterpret_cast < const char* > ( field.bytes ), field.size, parts ) )
+					return fail_run ( ctx, "unit is not recognized by date_trunc" );
+
+				base::text made;
+
+				write_moment ( parts, parts.has_date ? MOMENT_TIMESTAMP : MOMENT_TIME, made );
+
+				return make_text ( ctx, made, out );
+
+			}
+
 			case FUNCTION_RANDOMBLOB:
 			case FUNCTION_ZEROBLOB: {
 
@@ -1301,6 +1354,22 @@ namespace engine {
 				if ( count > 1 )
 					integer_of ( args [ 1 ], places );
 
+				if ( args [ 0 ].kind == storage::VALUE_DECIMAL ) {
+
+					decimal_number exact = { };
+
+					decimal_of ( args [ 0 ], exact );
+
+					if ( decimal_round ( exact, static_cast < int32_t > ( base::max < int64_t > ( -36, base::min < int64_t > ( places, 30 ) ) ) ) ) {
+
+						out = decimal_result ( exact );
+
+						return true;
+
+					}
+
+				}
+
 				places = base::max < int64_t > ( 0, base::min < int64_t > ( places, 30 ) );
 
 				if ( number < 4503599627370496.0 && number > -4503599627370496.0 ) {
@@ -1352,7 +1421,7 @@ namespace engine {
 
 			case FUNCTION_TYPEOF: {
 
-				static const char* const names [ 5 ] = { "null", "integer", "real", "text", "blob" };
+				static const char* const names [ 6 ] = { "null", "integer", "real", "text", "blob", "numeric" };
 				const char* name = names [ args [ 0 ].kind ];
 
 				out = storage::text_value ( name, base::length ( name ) );

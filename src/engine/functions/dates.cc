@@ -525,7 +525,19 @@ namespace engine {
 				add_date ( made, moment );
 				made.add ( ' ' );
 				add_time ( made, moment );
-				made.add ( '.' ).add ( static_cast < char > ( '0' + milli / 100 ) ).add ( static_cast < char > ( '0' + milli / 10 % 10 ) ).add ( static_cast < char > ( '0' + milli % 10 ) );
+
+				if ( milli ) {
+
+					char digits [ 3 ] = { static_cast < char > ( '0' + milli / 100 ), static_cast < char > ( '0' + milli / 10 % 10 ), static_cast < char > ( '0' + milli % 10 ) };
+					size_t used = 3;
+
+					while ( used > 1 && digits [ used - 1 ] == '0' )
+						used--;
+
+					made.add ( '.' ).add ( digits, used );
+
+				}
+
 				break;
 
 			}

@@ -480,7 +480,84 @@ namespace engine {
 		if ( !bind_expression ( ctx, nullptr, column.fallback, BIND_CONSTANT ) || !evaluate ( ctx, nullptr, column.fallback, out ) )
 			return false;
 
-		out = apply_affinity ( *ctx.scratch, out, column.affinity );
+		storage::value raw = out;
+
+		return column_value ( ctx, column, raw, out );
+
+	}
+
+	bool column_value ( run_context& ctx, const column_info& column, const storage::value& item, storage::value& out ) {
+
+		decimal_number number = { };
+
+		if ( column.moment && ctx.schema->postgres && item.kind == storage::VALUE_TEXT ) {
+
+			base::text written;
+
+			if ( !canonical_moment ( item.bytes, item.size, static_cast < moment_kind > ( column.moment ), written ) ) {
+
+				base::text message;
+
+				message.add ( "invalid input syntax for type " ).add ( column.type ).add ( ": \"" ).add ( reinterpret_cast < const char* > ( item.bytes ), base::min < size_t > ( item.size, 64 ) ).add ( '"' );
+
+				return fail_run ( ctx, message.value ( ) );
+
+			}
+
+			char* kept = ctx.scratch->keep ( written.value ( ), written.size );
+
+			if ( !kept )
+				return fail_run ( ctx, "out of memory" );
+
+			out = storage::text_value ( kept, written.size );
+
+			return true;
+
+		}
+
+		if ( column.exact && item.kind == storage::VALUE_TEXT && parse_decimal ( item.bytes, item.size, number ) )
+			out = decimal_result ( number );
+		else
+			out = apply_affinity ( *ctx.scratch, item, column.affinity );
+
+		if ( !column.exact || out.kind == storage::VALUE_NULL )
+			return true;
+
+		if ( out.kind == storage::VALUE_TEXT || out.kind == storage::VALUE_BLOB ) {
+
+			if ( !ctx.schema->postgres )
+				return true;
+
+			base::text message;
+
+			message.add ( "invalid input syntax for type numeric: \"" ).add ( reinterpret_cast < const char* > ( out.bytes ), base::min < size_t > ( out.size, 64 ) ).add ( '"' );
+
+			return fail_run ( ctx, message.value ( ) );
+
+		}
+
+		if ( !decimal_of ( out, number ) )
+			return fail_named ( ctx, "numeric field overflow in column ", column.name, "" );
+
+		if ( column.scale >= 0 && !decimal_rescale ( number, static_cast < uint32_t > ( column.scale ) ) )
+			return fail_named ( ctx, "numeric field overflow in column ", column.name, "" );
+
+		if ( column.precision > 0 && static_cast < int32_t > ( decimal_whole_digits ( number ) ) > column.precision - base::max ( column.scale, 0 ) ) {
+
+			base::text message;
+
+			message.add ( "numeric field overflow: column " ).add ( column.name ).add ( " holds at most " ).number ( static_cast < uint64_t > ( column.precision - base::max ( column.scale, 0 ) ) ).add ( " digits before the point" );
+
+			return fail_run ( ctx, message.value ( ) );
+
+		}
+
+		int64_t whole = 0;
+
+		if ( ( column.scale <= 0 && number.scale == 0 && decimal_integral ( number, whole ) ) || ( !ctx.schema->postgres && column.scale < 0 && decimal_integral ( number, whole ) ) )
+			out = storage::integer_value ( whole );
+		else
+			out = decimal_result ( number );
 
 		return true;
 
@@ -1107,6 +1184,17 @@ namespace engine {
 	}
 
 	static storage::value number_from ( const storage::value& item ) {
+
+		if ( item.kind == storage::VALUE_DECIMAL ) {
+
+			decimal_number exact = { };
+			int64_t whole = 0;
+
+			decimal_of ( item, exact );
+
+			return decimal_integral ( exact, whole ) ? storage::integer_value ( whole ) : storage::real_value ( decimal_real ( exact ) );
+
+		}
 
 		if ( item.kind != storage::VALUE_TEXT )
 			return item;

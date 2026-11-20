@@ -659,6 +659,11 @@ namespace engine {
 
 				return true;
 
+			case storage::VALUE_DECIMAL:
+				storage::write_decimal ( item, out );
+
+				return true;
+
 			case storage::VALUE_TEXT:
 				if ( item.subtype == JSON_SUBTYPE ) {
 

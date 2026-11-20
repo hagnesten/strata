@@ -34,6 +34,11 @@ namespace engine {
 
 			}
 
+			case storage::VALUE_DECIMAL:
+				out.rank = 1;
+				out.exact = false;
+				break;
+
 			default: {
 
 				size_t take = item.size < 8 ? item.size : 8;

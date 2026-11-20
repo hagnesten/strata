@@ -528,6 +528,9 @@ namespace engine {
 			case storage::VALUE_REAL:
 				return base::same_bytes ( &a.real, &b.real, sizeof ( a.real ) );
 
+			case storage::VALUE_DECIMAL:
+				return a.subtype == b.subtype && storage::decimal_mantissa ( a ) == storage::decimal_mantissa ( b );
+
 			default:
 				return a.size == b.size && ( !a.size || base::same_bytes ( a.bytes, b.bytes, a.size ) );
 
@@ -949,7 +952,8 @@ namespace engine {
 			if ( !evaluate ( ctx, &state, upsert.syntax->updates [ i ].value, value ) )
 				return false;
 
-			now [ column ] = apply_affinity ( *ctx.scratch, value, table.columns [ column ].affinity );
+			if ( !column_value ( ctx, table.columns [ column ], value, now [ column ] ) )
+				return false;
 
 		}
 
@@ -1420,9 +1424,12 @@ namespace engine {
 
 				const storage::value& given = rows.values [ static_cast < size_t > ( r ) * rows.width + k ];
 
-				if ( targets [ k ] >= 0 )
-					values [ targets [ k ] ] = apply_affinity ( *ctx.scratch, given, table->columns [ targets [ k ] ].affinity );
-				else {
+				if ( targets [ k ] >= 0 ) {
+
+					if ( !column_value ( ctx, table->columns [ targets [ k ] ], given, values [ targets [ k ] ] ) )
+						return false;
+
+				} else {
 
 					explicit_rowid = given;
 					has_rowid = true;
@@ -1686,7 +1693,8 @@ namespace engine {
 			if ( !evaluate ( ctx, &state, item->assignments [ i ].value, value ) )
 				return false;
 
-			now [ columns [ i ] ] = apply_affinity ( *ctx.scratch, value, table.columns [ columns [ i ] ].affinity );
+			if ( !column_value ( ctx, table.columns [ columns [ i ] ], value, now [ columns [ i ] ] ) )
+				return false;
 
 		}
 

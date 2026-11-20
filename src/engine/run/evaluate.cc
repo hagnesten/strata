@@ -22,12 +22,12 @@ namespace engine {
 
 		} else if ( left == sql::AFFINITY_TEXT && right == sql::AFFINITY_ANY ) {
 
-			if ( b.kind == storage::VALUE_INTEGER || b.kind == storage::VALUE_REAL )
+			if ( b.kind == storage::VALUE_INTEGER || b.kind == storage::VALUE_REAL || b.kind == storage::VALUE_DECIMAL )
 				b = apply_affinity ( memory, b, sql::AFFINITY_TEXT );
 
 		} else if ( right == sql::AFFINITY_TEXT && left == sql::AFFINITY_ANY ) {
 
-			if ( a.kind == storage::VALUE_INTEGER || a.kind == storage::VALUE_REAL )
+			if ( a.kind == storage::VALUE_INTEGER || a.kind == storage::VALUE_REAL || a.kind == storage::VALUE_DECIMAL )
 				a = apply_affinity ( memory, a, sql::AFFINITY_TEXT );
 
 		}
@@ -481,7 +481,7 @@ namespace engine {
 
 					storage::value divisor = numeric_of ( b );
 
-					if ( ( divisor.kind == storage::VALUE_INTEGER && !divisor.integer ) || ( divisor.kind == storage::VALUE_REAL && divisor.real == 0 ) )
+					if ( ( divisor.kind == storage::VALUE_INTEGER && !divisor.integer ) || ( divisor.kind == storage::VALUE_REAL && divisor.real == 0 ) || ( divisor.kind == storage::VALUE_DECIMAL && !storage::decimal_mantissa ( divisor ) ) )
 						return fail_run ( ctx, "division by zero" );
 
 				}
@@ -522,6 +522,8 @@ namespace engine {
 
 				if ( number.kind == storage::VALUE_INTEGER )
 					out = number.integer == static_cast < int64_t > ( 0x8000000000000000ull ) ? storage::real_value ( 9223372036854775808.0 ) : storage::integer_value ( -number.integer );
+				else if ( number.kind == storage::VALUE_DECIMAL )
+					out = storage::decimal_raw ( -storage::decimal_mantissa ( number ), number.subtype );
 				else if ( number.real > 9223372036854774784.0 && number.real < 9223372036854777856.0 && item->left && item->left->kind == sql::EXPRESSION_LITERAL )
 					out = storage::integer_value ( static_cast < int64_t > ( 0x8000000000000000ull ) );
 				else
@@ -572,6 +574,9 @@ namespace engine {
 
 			case sql::EXPRESSION_LITERAL:
 				out = item->literal;
+
+				if ( out.kind == storage::VALUE_DECIMAL && !ctx.schema->postgres )
+					out = storage::real_value ( item->literal.real );
 
 				return true;
 
@@ -718,6 +723,60 @@ namespace engine {
 						return fail_run ( ctx, "invalid input syntax for type boolean" );
 
 					out = storage::integer_value ( truth );
+
+					return true;
+
+				}
+
+				int32_t precision = -1;
+				int32_t scale = -1;
+				moment_kind moment = ctx.schema->postgres ? moment_type ( item->name ) : MOMENT_NONE;
+
+				if ( moment && value.kind == storage::VALUE_TEXT ) {
+
+					base::text written;
+
+					if ( !canonical_moment ( value.bytes, value.size, moment, written ) ) {
+
+						base::text message;
+
+						message.add ( "invalid input syntax for type " ).add ( item->name ).add ( ": \"" ).add ( reinterpret_cast < const char* > ( value.bytes ), base::min < size_t > ( value.size, 64 ) ).add ( '"' );
+
+						return fail_run ( ctx, message.value ( ) );
+
+					}
+
+					char* kept = ctx.scratch->keep ( written.value ( ), written.size );
+
+					if ( !kept )
+						return fail_run ( ctx, "out of memory" );
+
+					out = storage::text_value ( kept, written.size );
+
+					return true;
+
+				}
+
+				if ( ctx.schema->postgres && value.kind != storage::VALUE_NULL && value.kind != storage::VALUE_BLOB && decimal_type ( item->name, precision, scale ) ) {
+
+					decimal_number exact = { };
+
+					if ( !decimal_of ( value, exact ) ) {
+
+						if ( value.kind == storage::VALUE_TEXT )
+							return cast_value ( ctx, value, item->cast, out );
+
+						return fail_run ( ctx, "numeric field overflow" );
+
+					}
+
+					if ( scale >= 0 && !decimal_rescale ( exact, static_cast < uint32_t > ( scale ) ) )
+						return fail_run ( ctx, "numeric field overflow" );
+
+					if ( precision > 0 && static_cast < int32_t > ( decimal_whole_digits ( exact ) ) > precision - base::max ( scale, 0 ) )
+						return fail_run ( ctx, "numeric field overflow" );
+
+					out = decimal_result ( exact );
 
 					return true;
 
