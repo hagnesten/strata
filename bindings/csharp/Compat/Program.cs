@@ -318,8 +318,21 @@ namespace Strata.Compat {
 
 			run.Note ( "dapper.aapl.count", aapl.Count );
 			run.Note ( "dapper.aapl.first", aapl.Count > 0 ? aapl [ 0 ].Id + " " + aapl [ 0 ].Quantity + " " + Show ( aapl [ 0 ].LimitPrice ) + " " + Show ( aapl [ 0 ].Placed ) : "none" );
-			run.Note ( "dapper.in_list", connection.Query < long > ( "SELECT id FROM dapper_orders WHERE id IN @ids ORDER BY id", new { ids = new long [ ] { 3, 5, 8, 400 } } ).ToList ( ) );
-			run.Note ( "dapper.any_array", connection.Query < long > ( "SELECT id FROM dapper_orders WHERE id = ANY ( @ids ) ORDER BY id", new { ids = new long [ ] { 2, 4, 6 } } ).ToList ( ) );
+			run.Note ( "dapper.in_list", connection.Query < long > ( "SELECT id FROM dapper_orders WHERE id = ANY ( @ids ) ORDER BY id", new { ids = new long [ ] { 3, 5, 8, 400 } } ).ToList ( ) );
+			using ( NpgsqlCommand any = new NpgsqlCommand ( "SELECT id FROM dapper_orders WHERE id = ANY ( @ids ) AND symbol <> ALL ( @skip ) ORDER BY id", connection ) ) {
+
+				List < long > found = new List < long > ( );
+
+				any.Parameters.AddWithValue ( "ids", new long [ ] { 2, 4, 6, 7 } );
+				any.Parameters.AddWithValue ( "skip", new [ ] { "NVDA", "x" } );
+
+				using ( NpgsqlDataReader reader = any.ExecuteReader ( ) )
+					while ( reader.Read ( ) )
+						found.Add ( reader.GetInt64 ( 0 ) );
+
+				run.Note ( "dapper.any_array", found );
+
+			}
 			run.Note ( "dapper.like", connection.Query < string > ( "SELECT DISTINCT symbol FROM dapper_orders WHERE symbol LIKE 'AA%' ORDER BY symbol" ).ToList ( ) );
 			run.Note ( "dapper.ilike", connection.Query < string > ( "SELECT DISTINCT symbol FROM dapper_orders WHERE symbol ILIKE 'aa%' ORDER BY symbol" ).ToList ( ) );
 			run.Note ( "dapper.scalar_sum", connection.ExecuteScalar < decimal > ( "SELECT sum ( limit_price * quantity ) FROM dapper_orders" ) );
