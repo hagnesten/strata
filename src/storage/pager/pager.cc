@@ -327,6 +327,10 @@ namespace storage {
 		base::release ( item.spare_cells );
 		item.spare_scratch = nullptr;
 		item.spare_cells = nullptr;
+
+		for ( uint32_t i = 0; i < PAGER_PATH; i++ )
+			item.descent [ i ] = nullptr;
+
 		base::close_file ( item.file );
 		item.frames = nullptr;
 		item.frame_count = 0;

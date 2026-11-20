@@ -223,6 +223,9 @@ namespace engine {
 			source.path.equal [ 0 ] = equal;
 			source.path.equal_count = 1;
 
+			if ( !outer )
+				consume_bounds ( source );
+
 			return;
 
 		}
@@ -798,7 +801,7 @@ namespace engine {
 		if ( !source.quick || !source.residual || !source.quick_wanted )
 			return fail_run ( ctx, "out of memory" );
 
-		for ( uint32_t t = 0; t < plan.filter_count; t++ ) {
+		for ( uint32_t t = 0; t < plan.filter_count - plan.path.consumed; t++ ) {
 
 			sql::expression* term = plan.filters [ t ];
 			const sql::expression* column = nullptr;

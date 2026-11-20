@@ -454,9 +454,42 @@ namespace engine {
 
 	}
 
+	static bool step_group ( run_context& ctx, query_state& scope, group_state& group ) {
+
+		prepared_select* plan = scope.plan;
+
+		for ( uint32_t a = 0; a < plan->aggregate_count; a++ ) {
+
+			const sql::expression* call = plan->aggregates [ a ];
+			storage::value local [ 4 ];
+			storage::value* args = call->count <= 4 ? local : static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * call->count ) );
+
+			if ( call->count && !args )
+				return fail_run ( ctx, "out of memory" );
+
+			for ( uint32_t i = 0; i < call->count; i++ )
+				if ( !evaluate ( ctx, &scope, call->list [ i ], args [ i ] ) )
+					return false;
+
+			if ( !step_aggregate ( ctx, group.states [ a ], args, call->count ) )
+				return false;
+
+			if ( static_cast < int32_t > ( a ) == plan->snapshot_aggregate && group.states [ a ].improved )
+				take_snapshot ( scope, group );
+
+		}
+
+		return true;
+
+	}
+
 	static bool group_step ( run_context& ctx, query_state& scope, group_table& table ) {
 
 		prepared_select* plan = scope.plan;
+
+		if ( !plan->group_count && table.count == 1 && table.first )
+			return step_group ( ctx, scope, *table.first );
+
 		storage::value* keys = static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * ( plan->group_count + 1 ) ) );
 
 		if ( !keys )
@@ -496,28 +529,7 @@ namespace engine {
 
 		}
 
-		for ( uint32_t a = 0; a < plan->aggregate_count; a++ ) {
-
-			const sql::expression* call = plan->aggregates [ a ];
-			storage::value local [ 4 ];
-			storage::value* args = call->count <= 4 ? local : static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * call->count ) );
-
-			if ( call->count && !args )
-				return fail_run ( ctx, "out of memory" );
-
-			for ( uint32_t i = 0; i < call->count; i++ )
-				if ( !evaluate ( ctx, &scope, call->list [ i ], args [ i ] ) )
-					return false;
-
-			if ( !step_aggregate ( ctx, group->states [ a ], args, call->count ) )
-				return false;
-
-			if ( static_cast < int32_t > ( a ) == plan->snapshot_aggregate && group->states [ a ].improved )
-				take_snapshot ( scope, *group );
-
-		}
-
-		return true;
+		return step_group ( ctx, scope, *group );
 
 	}
 

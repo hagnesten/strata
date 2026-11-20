@@ -20,6 +20,7 @@
 #define WAL_BATCH 64
 #define PAGER_TAILS 8
 #define PAGER_LEAVES 8
+#define PAGER_PATH 4
 #define WAL_KEEP_BYTES ( 64ull * 1024 * 1024 )
 
 namespace storage {
@@ -179,6 +180,7 @@ namespace storage {
 		uint32_t next_leaf;
 		uint8_t* spare_scratch;
 		void* spare_cells;
+		page_frame* descent [ PAGER_PATH ];
 
 	};
 

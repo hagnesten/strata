@@ -2022,10 +2022,13 @@ namespace storage {
 
 		for ( uint32_t depth = 0; depth <= BTREE_DEPTH; depth++ ) {
 
-			page_frame* frame = get_page ( owner, number );
+			page_frame* frame = depth < PAGER_PATH ? reuse_page ( owner, owner.descent [ depth ], number ) : get_page ( owner, number );
 
 			if ( !frame )
 				return false;
+
+			if ( depth < PAGER_PATH )
+				owner.descent [ depth ] = frame;
 
 			uint8_t kind = frame->data [ 0 ];
 
@@ -2478,10 +2481,13 @@ namespace storage {
 
 		for ( uint32_t depth = 0; depth <= BTREE_DEPTH; depth++ ) {
 
-			page_frame* frame = get_page ( owner, number );
+			page_frame* frame = depth < PAGER_PATH ? reuse_page ( owner, owner.descent [ depth ], number ) : get_page ( owner, number );
 
 			if ( !frame )
 				return false;
+
+			if ( depth < PAGER_PATH )
+				owner.descent [ depth ] = frame;
 
 			uint8_t kind = frame->data [ 0 ];
 
