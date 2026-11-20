@@ -100,6 +100,7 @@ strata --user <file> <name> [password]
                              add or change a server user, or remove it with no password
 strata --capture <folder>    render every studio view to PNG and play a scripted session
 strata --test [part]         run the self test (pager, btree, crash, parser, engine)
+strata --check <file>        check every page, tree, row and index entry; exits 0 when the file is clean
 ```
 
 ## Building
