@@ -808,6 +808,8 @@ namespace engine {
 
 	bool run_drop ( run_context& ctx, const sql::drop_statement* item, bool index );
 
+	bool run_drop_schema ( run_context& ctx, const sql::drop_statement* item );
+
 	bool run_alter ( run_context& ctx, const sql::alter_statement* item );
 
 	bool run_analyze ( run_context& ctx );

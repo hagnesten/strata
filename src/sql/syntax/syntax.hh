@@ -76,6 +76,8 @@ namespace sql {
 		STATEMENT_VACUUM,
 		STATEMENT_SAVEPOINT,
 		STATEMENT_RELEASE,
+		STATEMENT_CREATE_SCHEMA,
+		STATEMENT_DROP_SCHEMA,
 
 	};
 
@@ -292,6 +294,7 @@ namespace sql {
 		bool nocase;
 		expression* generated;
 		bool stored;
+		bool identity;
 
 	};
 
@@ -379,6 +382,7 @@ namespace sql {
 
 		const char* name;
 		bool if_exists;
+		bool cascade;
 
 	};
 

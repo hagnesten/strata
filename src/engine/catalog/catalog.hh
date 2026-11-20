@@ -11,6 +11,8 @@
 #define SCHEMA_COLUMNS 5
 #define STAT_TABLE "strata_stat"
 #define STAT_COLUMNS 3
+#define CATALOG_SEARCH_ROOM 64
+#define CATALOG_NAME_ROOM 256
 
 namespace engine {
 
@@ -89,6 +91,7 @@ namespace engine {
 		uint32_t index_count;
 		uint32_t version;
 		uint64_t loads;
+		char search [ CATALOG_SEARCH_ROOM ];
 
 	};
 
@@ -103,6 +106,10 @@ namespace engine {
 	void clear_catalog ( catalog& item );
 
 	table_info* find_table ( catalog& item, const char* name );
+
+	bool search_name ( const catalog& item, const char* name, char* out, size_t room );
+
+	bool set_search ( catalog& item, const char* schema );
 
 	index_info* find_index ( catalog& item, const char* name );
 

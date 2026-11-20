@@ -12,7 +12,68 @@ namespace engine {
 
 	}
 
+	bool search_name ( const catalog& item, const char* name, char* out, size_t room ) {
+
+		if ( !item.search [ 0 ] || !name )
+			return false;
+
+		for ( const char* at = name; *at; at++ )
+			if ( *at == '.' )
+				return false;
+
+		size_t used = 0;
+
+		for ( const char* at = item.search; *at; at++ )
+			if ( used + 1 < room )
+				out [ used++ ] = *at;
+
+		if ( used + 1 < room )
+			out [ used++ ] = '.';
+
+		for ( const char* at = name; *at; at++ ) {
+
+			if ( used + 1 >= room )
+				return false;
+
+			out [ used++ ] = *at;
+
+		}
+
+		out [ used ] = 0;
+
+		return true;
+
+	}
+
+	bool set_search ( catalog& item, const char* schema ) {
+
+		size_t size = 0;
+
+		while ( schema && schema [ size ] )
+			size++;
+
+		if ( size >= CATALOG_SEARCH_ROOM )
+			return false;
+
+		bool plain = !size || base::same_folded ( schema, "public" ) || base::same_folded ( schema, "main" );
+
+		for ( size_t i = 0; i < size; i++ )
+			item.search [ i ] = plain ? 0 : schema [ i ];
+
+		item.search [ plain ? 0 : size ] = 0;
+
+		return true;
+
+	}
+
 	table_info* find_table ( catalog& item, const char* name ) {
+
+		char qualified [ CATALOG_NAME_ROOM ];
+
+		if ( search_name ( item, name, qualified, sizeof ( qualified ) ) )
+			for ( uint32_t i = 0; i < item.table_count; i++ )
+				if ( base::same_folded ( item.tables [ i ].name, qualified ) )
+					return &item.tables [ i ];
 
 		for ( uint32_t i = 0; i < item.table_count; i++ )
 			if ( base::same_folded ( item.tables [ i ].name, name ) )
@@ -140,7 +201,7 @@ namespace engine {
 
 			}
 
-			if ( column.primary && column.affinity == sql::AFFINITY_INTEGER && base::same_folded ( column.type, "integer" ) && !column.descending ) {
+			if ( column.primary && column.affinity == sql::AFFINITY_INTEGER && ( base::same_folded ( column.type, "integer" ) || column.identity ) && !column.descending ) {
 
 				info.rowid = true;
 				info.not_null = false;
@@ -193,7 +254,7 @@ namespace engine {
 				base::copy ( out.primary, columns, sizeof ( uint32_t ) * constraint.column_count );
 				out.primary_count = constraint.column_count;
 
-				if ( constraint.column_count == 1 && out.columns [ columns [ 0 ] ].affinity == sql::AFFINITY_INTEGER && base::same_folded ( out.columns [ columns [ 0 ] ].type, "integer" ) ) {
+				if ( constraint.column_count == 1 && out.columns [ columns [ 0 ] ].affinity == sql::AFFINITY_INTEGER && ( base::same_folded ( out.columns [ columns [ 0 ] ].type, "integer" ) || definition->columns [ columns [ 0 ] ].identity ) ) {
 
 					out.rowid_column = static_cast < int32_t > ( columns [ 0 ] );
 					out.columns [ columns [ 0 ] ].rowid = true;
@@ -249,6 +310,18 @@ namespace engine {
 			problem.add ( "a table can have only one PRIMARY KEY" );
 
 			return false;
+
+		}
+
+		for ( uint32_t i = 0; i < definition->column_count; i++ ) {
+
+			if ( definition->columns [ i ].identity && !out.columns [ i ].rowid ) {
+
+				problem.add ( "an IDENTITY or serial column must be the table's single PRIMARY KEY" );
+
+				return false;
+
+			}
 
 		}
 

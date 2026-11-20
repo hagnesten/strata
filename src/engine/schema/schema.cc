@@ -8,6 +8,10 @@ namespace engine {
 
 		const char* prefix = "strata_";
 
+		for ( const char* at = name; *at; at++ )
+			if ( *at == '.' )
+				name = at + 1;
+
 		for ( uint32_t i = 0; prefix [ i ]; i++ )
 			if ( base::lower ( name [ i ] ) != prefix [ i ] )
 				return false;
@@ -322,6 +326,25 @@ namespace engine {
 
 	bool run_create_table ( run_context& ctx, const sql::create_table_statement* item ) {
 
+		char qualified [ CATALOG_NAME_ROOM ];
+
+		if ( search_name ( *ctx.schema, item->name, qualified, sizeof ( qualified ) ) ) {
+
+			sql::create_table_statement* moved = ctx.lasting->make < sql::create_table_statement > ( 1 );
+			size_t size = 0;
+
+			while ( qualified [ size ] )
+				size++;
+
+			if ( !moved )
+				return fail_run ( ctx, "out of memory" );
+
+			*moved = *item;
+			moved->name = ctx.lasting->keep ( qualified, size );
+			item = moved;
+
+		}
+
 		bool skip = false;
 
 		if ( !name_taken ( ctx, item->name, item->if_not_exists, skip ) )
@@ -585,6 +608,98 @@ namespace engine {
 			return fail_storage ( ctx, "the table could not be dropped" );
 
 		return refresh_schema ( ctx );
+
+	}
+
+	static bool in_schema ( const char* table, const char* schema ) {
+
+		size_t i = 0;
+
+		for ( ; schema [ i ]; i++ )
+			if ( base::lower ( table [ i ] ) != base::lower ( schema [ i ] ) )
+				return false;
+
+		return table [ i ] == '.';
+
+	}
+
+	static int32_t droppable_table ( catalog& schema, const char* name ) {
+
+		for ( uint32_t t = 0; t < schema.table_count; t++ ) {
+
+			table_info& table = schema.tables [ t ];
+
+			if ( !in_schema ( table.name, name ) )
+				continue;
+
+			bool held = false;
+
+			for ( uint32_t o = 0; o < schema.table_count && !held; o++ ) {
+
+				if ( o == t )
+					continue;
+
+				for ( uint32_t f = 0; f < schema.tables [ o ].foreign_count && !held; f++ )
+					held = base::same_folded ( schema.tables [ o ].foreign [ f ].parent, table.name );
+
+			}
+
+			if ( !held )
+				return static_cast < int32_t > ( t );
+
+		}
+
+		return -1;
+
+	}
+
+	bool run_drop_schema ( run_context& ctx, const sql::drop_statement* item ) {
+
+		bool any = false;
+
+		for ( uint32_t t = 0; t < ctx.schema->table_count && !any; t++ )
+			any = in_schema ( ctx.schema->tables [ t ].name, item->name );
+
+		if ( !any )
+			return true;
+
+		if ( !item->cascade )
+			return fail_named ( ctx, "cannot drop schema ", item->name, " because other objects depend on it, add CASCADE to drop its tables too" );
+
+		for ( ;; ) {
+
+			int32_t found = droppable_table ( *ctx.schema, item->name );
+
+			if ( found < 0 )
+				break;
+
+			char name [ CATALOG_NAME_ROOM ];
+			const char* from = ctx.schema->tables [ found ].name;
+			size_t size = 0;
+
+			while ( from [ size ] && size + 1 < sizeof ( name ) ) {
+
+				name [ size ] = from [ size ];
+				size++;
+
+			}
+
+			name [ size ] = 0;
+
+			sql::drop_statement single = { };
+
+			single.name = name;
+
+			if ( !run_drop ( ctx, &single, false ) )
+				return false;
+
+		}
+
+		for ( uint32_t t = 0; t < ctx.schema->table_count; t++ )
+			if ( in_schema ( ctx.schema->tables [ t ].name, item->name ) )
+				return fail_named ( ctx, "schema ", item->name, " has tables held by foreign keys from outside it" );
+
+		return true;
 
 	}
 

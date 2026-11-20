@@ -55,10 +55,14 @@ namespace sql {
 
 			} else {
 
-				source.name = take_name ( item, "a table name" );
+				const char* bare = nullptr;
+
+				source.name = take_table ( item, "a table name", &bare );
 
 				if ( !source.name )
 					return false;
+
+				source.alias = bare;
 
 			}
 
@@ -617,6 +621,20 @@ namespace sql {
 
 		}
 
+		if ( type.size && ( base::same_folded ( type.value ( ), "serial" ) || base::same_folded ( type.value ( ), "serial4" ) || base::same_folded ( type.value ( ), "smallserial" ) || base::same_folded ( type.value ( ), "serial2" ) ) ) {
+
+			type.clear ( );
+			type.add ( "integer" );
+			out.identity = true;
+
+		} else if ( type.size && ( base::same_folded ( type.value ( ), "bigserial" ) || base::same_folded ( type.value ( ), "serial8" ) ) ) {
+
+			type.clear ( );
+			type.add ( "bigint" );
+			out.identity = true;
+
+		}
+
 		out.type = item.memory->keep ( type.value ( ), type.size );
 		out.affinity = affinity_of ( type.value ( ) );
 
@@ -724,8 +742,66 @@ namespace sql {
 
 			if ( token_is ( item.current, "generated" ) || token_is ( item.current, "as" ) ) {
 
-				if ( accept_word ( item, "generated" ) && !expect_word ( item, "always" ) )
-					return false;
+				if ( accept_word ( item, "generated" ) ) {
+
+					if ( accept_word ( item, "by" ) ) {
+
+						if ( !expect_word ( item, "default" ) )
+							return false;
+
+					} else if ( !expect_word ( item, "always" ) )
+						return false;
+
+					if ( !expect_word ( item, "as" ) )
+						return false;
+
+					if ( accept_word ( item, "identity" ) ) {
+
+						if ( out.affinity != AFFINITY_INTEGER )
+							return fail_here ( item, "an IDENTITY column needs an integer type" );
+
+						out.identity = true;
+
+						if ( accept_symbol ( item, "(" ) ) {
+
+							uint32_t depth = 1;
+
+							while ( depth && item.current.kind != TOKEN_END ) {
+
+								if ( symbol_is ( item.current, "(" ) )
+									depth++;
+								else if ( symbol_is ( item.current, ")" ) )
+									depth--;
+
+								advance ( item );
+
+							}
+
+						}
+
+						continue;
+
+					}
+
+					if ( out.generated )
+						return fail_here ( item, "a column can only be generated once" );
+
+					if ( !expect_symbol ( item, "(" ) )
+						return false;
+
+					out.generated = parse_expression ( item );
+
+					if ( !out.generated || !expect_symbol ( item, ")" ) )
+						return false;
+
+					out.stored = accept_word ( item, "stored" );
+
+					if ( !out.stored )
+						accept_word ( item, "virtual" );
+
+					continue;
+
+				}
 
 				if ( out.generated )
 					return fail_here ( item, "a column can only be generated once" );
@@ -749,7 +825,7 @@ namespace sql {
 
 			if ( accept_word ( item, "references" ) ) {
 
-				out.references = take_name ( item, "a table name" );
+				out.references = take_table ( item, "a table name" );
 
 				if ( !out.references )
 					return false;
@@ -779,8 +855,8 @@ namespace sql {
 
 				if ( base::same_folded ( collation, "nocase" ) )
 					out.nocase = true;
-				else if ( !base::same_folded ( collation, "binary" ) && !base::same_folded ( collation, "rtrim" ) )
-					return fail_here ( item, "only the BINARY and NOCASE collations are known" );
+				else if ( !base::same_folded ( collation, "binary" ) && !base::same_folded ( collation, "rtrim" ) && !base::same_folded ( collation, "c" ) && !base::same_folded ( collation, "posix" ) && !base::same_folded ( collation, "default" ) && !base::same_folded ( collation, "ucs_basic" ) )
+					return fail_here ( item, "only the BINARY, C and NOCASE collations are known" );
 
 				continue;
 
@@ -833,7 +909,7 @@ namespace sql {
 			if ( !expect_word ( item, "key" ) || !parse_names ( item, out.columns, out.column_count ) || !expect_word ( item, "references" ) )
 				return false;
 
-			out.references = take_name ( item, "a table name" );
+			out.references = take_table ( item, "a table name" );
 
 			if ( !out.references )
 				return false;
@@ -859,6 +935,29 @@ namespace sql {
 	}
 
 	static bool parse_create ( parser& item, statement& out ) {
+
+		if ( accept_word ( item, "schema" ) ) {
+
+			drop_statement* made = item.memory->make < drop_statement > ( 1 );
+
+			if ( !made )
+				return fail_here ( item, "out of memory" );
+
+			out.kind = STATEMENT_CREATE_SCHEMA;
+			out.drop = made;
+
+			if ( accept_word ( item, "if" ) && ( !expect_word ( item, "not" ) || !expect_word ( item, "exists" ) ) )
+				return false;
+
+			made->if_exists = true;
+			made->name = take_name ( item, "a schema name" );
+
+			if ( made->name && accept_word ( item, "authorization" ) && !take_name ( item, "a role name" ) )
+				return false;
+
+			return made->name != nullptr;
+
+		}
 
 		bool unique = accept_word ( item, "unique" );
 		bool fulltext = !unique && accept_word ( item, "fulltext" );
@@ -892,7 +991,7 @@ namespace sql {
 			if ( !made->name || !expect_word ( item, "on" ) )
 				return false;
 
-			made->table = take_name ( item, "a table name" );
+			made->table = take_table ( item, "a table name" );
 
 			return made->table && parse_names ( item, made->columns, made->column_count );
 
@@ -923,7 +1022,7 @@ namespace sql {
 
 		}
 
-		made->name = take_name ( item, "a table name" );
+		made->name = take_table ( item, "a table name" );
 
 		if ( !made->name )
 			return false;
@@ -1043,7 +1142,7 @@ namespace sql {
 		if ( item.error->failed || !expect_word ( item, "into" ) )
 			return false;
 
-		made->table = take_name ( item, "a table name" );
+		made->table = take_table ( item, "a table name" );
 
 		if ( !made->table )
 			return false;
@@ -1173,7 +1272,7 @@ namespace sql {
 			out.kind = STATEMENT_UPDATE;
 			out.update = made;
 			made->conflict = parse_or_conflict ( item );
-			made->table = item.error->failed ? nullptr : take_name ( item, "a table name" );
+			made->table = item.error->failed ? nullptr : take_table ( item, "a table name" );
 
 			if ( !made->table || !expect_word ( item, "set" ) || !parse_assignments ( item, made->assignments, made->assignment_count ) )
 				return false;
@@ -1203,7 +1302,7 @@ namespace sql {
 			if ( !expect_word ( item, "from" ) )
 				return false;
 
-			made->table = take_name ( item, "a table name" );
+			made->table = take_table ( item, "a table name" );
 
 			if ( !made->table )
 				return false;
@@ -1225,9 +1324,10 @@ namespace sql {
 
 		if ( accept_word ( item, "drop" ) ) {
 
-			bool index = accept_word ( item, "index" );
+			bool schema = accept_word ( item, "schema" );
+			bool index = !schema && accept_word ( item, "index" );
 
-			if ( !index && !expect_word ( item, "table" ) )
+			if ( !index && !schema && !expect_word ( item, "table" ) )
 				return false;
 
 			drop_statement* made = item.memory->make < drop_statement > ( 1 );
@@ -1235,10 +1335,18 @@ namespace sql {
 			if ( !made )
 				return fail_here ( item, "out of memory" );
 
-			out.kind = index ? STATEMENT_DROP_INDEX : STATEMENT_DROP_TABLE;
+			out.kind = schema ? STATEMENT_DROP_SCHEMA : index ? STATEMENT_DROP_INDEX : STATEMENT_DROP_TABLE;
 			out.drop = made;
 			made->if_exists = if_exists ( item );
-			made->name = item.error->failed ? nullptr : take_name ( item, index ? "an index name" : "a table name" );
+
+			if ( item.error->failed )
+				return false;
+
+			made->name = schema ? take_name ( item, "a schema name" ) : take_table ( item, index ? "an index name" : "a table name" );
+			made->cascade = accept_word ( item, "cascade" );
+
+			if ( !made->cascade )
+				accept_word ( item, "restrict" );
 
 			return made->name != nullptr;
 
@@ -1253,7 +1361,7 @@ namespace sql {
 
 			out.kind = STATEMENT_ALTER_TABLE;
 			out.alter = made;
-			made->table = take_name ( item, "a table name" );
+			made->table = take_table ( item, "a table name" );
 
 			if ( !made->table )
 				return false;
@@ -1284,7 +1392,7 @@ namespace sql {
 			if ( accept_word ( item, "to" ) ) {
 
 				made->kind = ALTER_RENAME_TABLE;
-				made->new_name = take_name ( item, "a table name" );
+				made->new_name = take_table ( item, "a table name" );
 
 				return made->new_name != nullptr;
 
@@ -1367,7 +1475,7 @@ namespace sql {
 			out.kind = STATEMENT_ANALYZE;
 
 			if ( item.current.kind == TOKEN_NAME )
-				take_name ( item, "a table name" );
+				take_table ( item, "a table name" );
 
 			return true;
 

@@ -146,6 +146,37 @@ namespace sql {
 
 	}
 
+	const char* take_table ( parser& item, const char* what, const char** bare ) {
+
+		const char* first = take_name ( item, what );
+
+		if ( bare )
+			*bare = nullptr;
+
+		if ( !first || !symbol_is ( item.current, "." ) )
+			return first;
+
+		advance ( item );
+
+		const char* second = take_name ( item, what );
+
+		if ( !second )
+			return nullptr;
+
+		if ( bare )
+			*bare = second;
+
+		if ( base::same_folded ( first, "public" ) || base::same_folded ( first, "main" ) )
+			return second;
+
+		base::text joined;
+
+		joined.add ( first ).add ( '.' ).add ( second );
+
+		return item.memory->keep ( joined.value ( ), joined.size );
+
+	}
+
 	expression* new_expression ( parser& item, expression_kind kind ) {
 
 		expression* made = item.memory->make < expression > ( 1 );

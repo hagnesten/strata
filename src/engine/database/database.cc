@@ -43,6 +43,8 @@ namespace engine {
 
 		}
 
+		item.schema->search [ 0 ] = 0;
+
 		if ( !load_catalog ( item.pages, *item.schema, item.problem ) ) {
 
 			clear_catalog ( *item.schema );
@@ -229,6 +231,12 @@ namespace engine {
 			case sql::STATEMENT_DROP_INDEX:
 				return run_drop ( ctx, item->drop, true );
 
+			case sql::STATEMENT_CREATE_SCHEMA:
+				return true;
+
+			case sql::STATEMENT_DROP_SCHEMA:
+				return run_drop_schema ( ctx, item->drop );
+
 			case sql::STATEMENT_ALTER_TABLE:
 				return run_alter ( ctx, item->alter );
 
@@ -291,6 +299,7 @@ namespace engine {
 			case sql::STATEMENT_CREATE_INDEX:
 			case sql::STATEMENT_DROP_TABLE:
 			case sql::STATEMENT_DROP_INDEX:
+			case sql::STATEMENT_DROP_SCHEMA:
 			case sql::STATEMENT_ALTER_TABLE:
 			case sql::STATEMENT_ANALYZE:
 			case sql::STATEMENT_VACUUM:

@@ -62,6 +62,52 @@ namespace server {
 
 	}
 
+	static void search_path ( const char* sql, size_t size, size_t at, char* out, size_t room ) {
+
+		if ( !word_at ( sql, size, at, "to" ) ) {
+
+			while ( at < size && sql [ at ] == ' ' )
+				at++;
+
+			if ( at < size && sql [ at ] == '=' )
+				at++;
+
+		}
+
+		for ( ;; ) {
+
+			while ( at < size && ( sql [ at ] == ' ' || sql [ at ] == ',' || sql [ at ] == '\t' ) )
+				at++;
+
+			if ( at >= size || sql [ at ] == ';' )
+				break;
+
+			char quote = sql [ at ] == '"' || sql [ at ] == '\'' ? sql [ at++ ] : 0;
+			size_t length = 0;
+
+			while ( at < size && ( quote ? sql [ at ] != quote : sql [ at ] != ',' && sql [ at ] != ' ' && sql [ at ] != ';' ) ) {
+
+				if ( length + 1 < room )
+					out [ length++ ] = quote ? sql [ at ] : base::lower ( sql [ at ] );
+
+				at++;
+
+			}
+
+			if ( quote && at < size )
+				at++;
+
+			out [ length ] = 0;
+
+			if ( length && out [ 0 ] != '$' )
+				return;
+
+		}
+
+		out [ 0 ] = 0;
+
+	}
+
 	bool control_statement ( const char* sql, size_t size, char* tag, size_t tag_room, char* show, size_t show_room, bool& handled ) {
 
 		size_t at = 0;
@@ -72,6 +118,12 @@ namespace server {
 		if ( word_at ( sql, size, at, "set" ) ) {
 
 			base::copy_text ( tag, tag_room, "SET" );
+
+			if ( !word_at ( sql, size, at, "local" ) )
+				word_at ( sql, size, at, "session" );
+
+			if ( word_at ( sql, size, at, "search_path" ) )
+				search_path ( sql, size, at, show, show_room );
 
 			return true;
 
@@ -212,6 +264,8 @@ namespace server {
 				case sql::STATEMENT_VACUUM: tag.add ( "VACUUM" ); break;
 				case sql::STATEMENT_SAVEPOINT: tag.add ( "SAVEPOINT" ); break;
 				case sql::STATEMENT_RELEASE: tag.add ( "RELEASE" ); break;
+				case sql::STATEMENT_CREATE_SCHEMA: tag.add ( "CREATE SCHEMA" ); break;
+				case sql::STATEMENT_DROP_SCHEMA: tag.add ( "DROP SCHEMA" ); break;
 				default: tag.add ( "OK" ); break;
 
 			}
@@ -304,6 +358,14 @@ namespace server {
 	}
 
 	static bool run_control ( server_connection& link, server_statement& statement, bool describe ) {
+
+		if ( base::same ( statement.tag, "SET" ) && statement.control_text [ 0 ] && !engine::set_search ( *link.db->database.schema, statement.control_text ) ) {
+
+			send_error ( link, "42602", "the schema name in search_path is too long" );
+
+			return false;
+
+		}
 
 		if ( base::same ( statement.tag, "BEGIN" ) ) {
 

@@ -79,6 +79,8 @@ namespace sql {
 
 	const char* take_name ( parser& item, const char* what );
 
+	const char* take_table ( parser& item, const char* what, const char** bare = nullptr );
+
 	expression* parse_expression ( parser& item );
 
 	select_statement* parse_select ( parser& item );
