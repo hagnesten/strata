@@ -110,6 +110,12 @@ namespace engine {
 		FUNCTION_DATE_TRUNC,
 		FUNCTION_TIMEZONE,
 		FUNCTION_TERMINATE,
+		FUNCTION_MAKE_INTERVAL,
+		FUNCTION_ARRAY_BUILD,
+		FUNCTION_ARRAY_CONTAINS,
+		FUNCTION_ARRAY_OVERLAP,
+		FUNCTION_CARDINALITY,
+		FUNCTION_ARRAY_LENGTH,
 		FUNCTION_NEXTVAL,
 		FUNCTION_CURRVAL,
 		FUNCTION_SETVAL,
@@ -520,6 +526,14 @@ namespace engine {
 
 	};
 
+	struct array_item {
+
+		const char* text;
+		size_t size;
+		bool null;
+
+	};
+
 	struct cached_child {
 
 		const sql::expression* key;
@@ -848,6 +862,14 @@ namespace engine {
 	bool run_drop_schema ( run_context& ctx, const sql::drop_statement* item );
 
 	bool array_contains ( run_context& ctx, const storage::value& probe, const storage::value& list, storage::value& out );
+
+	bool array_relation ( run_context& ctx, const storage::value& a, const storage::value& b, bool overlap, storage::value& out );
+
+	bool array_size ( run_context& ctx, const storage::value& list, bool empty_null, storage::value& out );
+
+	bool array_build ( run_context& ctx, const storage::value* args, uint32_t count, storage::value& out );
+
+	bool split_array ( base::arena& memory, const uint8_t* bytes, size_t size, array_item*& items, uint32_t& count );
 
 	bool column_value ( run_context& ctx, const column_info& column, const storage::value& item, storage::value& out );
 

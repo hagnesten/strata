@@ -1,4 +1,5 @@
 #include "engine/search/search.hh"
+#include "engine/value/interval.hh"
 
 namespace engine {
 
@@ -128,7 +129,187 @@ namespace engine {
 
 	}
 
+	static bool interval_of ( const storage::value& item, interval_parts& out ) {
+
+		return item.kind == storage::VALUE_TEXT && parse_interval ( item.bytes, item.size, out );
+
+	}
+
+	static bool moment_of ( const storage::value& item, moment_parts& out ) {
+
+		out = { };
+
+		return item.kind == storage::VALUE_TEXT && item.size >= 8 && parse_moment ( item.bytes, item.size, true, out ) && out.has_date;
+
+	}
+
+	static bool interval_text ( run_context& ctx, const interval_parts& parts, storage::value& out ) {
+
+		base::text written;
+
+		write_interval ( parts, written );
+
+		char* kept = ctx.scratch->keep ( written.value ( ), written.size );
+
+		if ( !kept )
+			return fail_run ( ctx, "out of memory" );
+
+		out = storage::text_value ( kept, written.size );
+		out.subtype = LITERAL_INTERVAL;
+
+		return true;
+
+	}
+
+	static bool moment_text ( run_context& ctx, const moment_parts& parts, bool date_only, storage::value& out ) {
+
+		base::text written;
+
+		write_moment ( parts, date_only ? MOMENT_DATE : MOMENT_TIMESTAMP, written );
+
+		char* kept = ctx.scratch->keep ( written.value ( ), written.size );
+
+		if ( !kept )
+			return fail_run ( ctx, "out of memory" );
+
+		out = storage::text_value ( kept, written.size );
+
+		return true;
+
+	}
+
+	static bool moment_arithmetic ( run_context& ctx, sql::operator_kind op, const storage::value& a, const storage::value& b, storage::value& out, bool& handled ) {
+
+		handled = false;
+
+		if ( !ctx.schema->postgres || a.kind == storage::VALUE_NULL || b.kind == storage::VALUE_NULL )
+			return true;
+
+		bool a_interval = a.subtype == LITERAL_INTERVAL && a.kind == storage::VALUE_TEXT;
+		bool b_interval = b.subtype == LITERAL_INTERVAL && b.kind == storage::VALUE_TEXT;
+		bool a_text = a.kind == storage::VALUE_TEXT;
+		bool b_text = b.kind == storage::VALUE_TEXT;
+
+		if ( op == sql::OPERATOR_ADD || op == sql::OPERATOR_SUBTRACT ) {
+
+			moment_parts moment = { };
+			moment_parts other = { };
+			interval_parts by = { };
+
+			if ( a_text && !a_interval && moment_of ( a, moment ) ) {
+
+				if ( ( b_interval || ( b_text && !moment_of ( b, other ) ) ) && interval_of ( b, by ) ) {
+
+					handled = true;
+					shift_moment ( moment, by, op == sql::OPERATOR_ADD ? 1 : -1 );
+
+					return moment_text ( ctx, moment, false, out );
+
+				}
+
+				if ( b_text && !b_interval && op == sql::OPERATOR_SUBTRACT && moment_of ( b, other ) ) {
+
+					handled = true;
+
+					if ( !moment.has_time && !other.has_time ) {
+
+						out = storage::integer_value ( moment.days - other.days );
+
+						return true;
+
+					}
+
+					return interval_text ( ctx, moment_gap ( moment, other ), out );
+
+				}
+
+				int64_t whole = 0;
+
+				if ( !moment.has_time && ( b.kind == storage::VALUE_INTEGER || b.kind == storage::VALUE_DECIMAL ) && integer_of ( b, whole ) ) {
+
+					handled = true;
+					moment.days += op == sql::OPERATOR_ADD ? whole : -whole;
+
+					return moment_text ( ctx, moment, true, out );
+
+				}
+
+				return true;
+
+			}
+
+			if ( a_interval && op == sql::OPERATOR_ADD && b_text && !b_interval && moment_of ( b, moment ) && interval_of ( a, by ) ) {
+
+				handled = true;
+				shift_moment ( moment, by, 1 );
+
+				return moment_text ( ctx, moment, false, out );
+
+			}
+
+			interval_parts left = { };
+			interval_parts right = { };
+
+			if ( ( a_interval || b_interval ) && interval_of ( a, left ) && interval_of ( b, right ) ) {
+
+				int64_t sign = op == sql::OPERATOR_ADD ? 1 : -1;
+
+				handled = true;
+				left.months += sign * right.months;
+				left.days += sign * right.days;
+				left.micros += sign * right.micros;
+
+				return interval_text ( ctx, left, out );
+
+			}
+
+			return true;
+
+		}
+
+		if ( op == sql::OPERATOR_MULTIPLY || op == sql::OPERATOR_DIVIDE ) {
+
+			interval_parts parts = { };
+			const storage::value& factor = a_interval ? b : a;
+
+			if ( ( !a_interval && !b_interval ) || ( op == sql::OPERATOR_DIVIDE && !a_interval ) || !interval_of ( a_interval ? a : b, parts ) )
+				return true;
+
+			double number = 0;
+
+			if ( !real_of ( factor, number ) )
+				return true;
+
+			handled = true;
+
+			if ( op == sql::OPERATOR_DIVIDE ) {
+
+				if ( number == 0 )
+					return fail_run ( ctx, "division by zero" );
+
+				number = 1.0 / number;
+
+			}
+
+			return interval_text ( ctx, scale_interval ( parts, number ), out );
+
+		}
+
+		return true;
+
+	}
+
 	static truth_kind compare_expressions ( run_context& ctx, sql::operator_kind op, const sql::expression* left, storage::value a, const sql::expression* right, storage::value b ) {
+
+		if ( ( a.subtype == LITERAL_INTERVAL || b.subtype == LITERAL_INTERVAL ) && a.kind == storage::VALUE_TEXT && b.kind == storage::VALUE_TEXT ) {
+
+			interval_parts x = { };
+			interval_parts y = { };
+
+			if ( interval_of ( a, x ) && interval_of ( b, y ) )
+				return compare_with ( op, storage::integer_value ( interval_key ( x ) ), storage::integer_value ( interval_key ( y ) ), false );
+
+		}
 
 		comparison_affinity ( *ctx.scratch, expression_affinity ( left ), expression_affinity ( right ), a, b );
 
@@ -477,6 +658,18 @@ namespace engine {
 				return json_arrow ( ctx, a, b, item->op == sql::OPERATOR_JSON_VALUE, out );
 
 			default:
+				if ( ( a.kind == storage::VALUE_TEXT || b.kind == storage::VALUE_TEXT ) && ctx.schema->postgres ) {
+
+					bool handled = false;
+
+					if ( !moment_arithmetic ( ctx, item->op, a, b, out, handled ) )
+						return false;
+
+					if ( handled )
+						return true;
+
+				}
+
 				if ( ctx.schema->postgres && ( item->op == sql::OPERATOR_DIVIDE || item->op == sql::OPERATOR_MODULO ) && a.kind != storage::VALUE_NULL && b.kind != storage::VALUE_NULL ) {
 
 					storage::value divisor = numeric_of ( b );
@@ -725,6 +918,34 @@ namespace engine {
 					out = storage::integer_value ( truth );
 
 					return true;
+
+				}
+
+				if ( ctx.schema->postgres && item->name && base::find_folded ( item->name, "interval" ) ) {
+
+					interval_parts parts = { };
+
+					if ( value.kind == storage::VALUE_NULL ) {
+
+						out = value;
+
+						return true;
+
+					}
+
+					storage::value written = text_of ( *ctx.scratch, value );
+
+					if ( !parse_interval ( written.bytes, written.size, parts ) ) {
+
+						base::text message;
+
+						message.add ( "invalid input syntax for type interval: \"" ).add ( reinterpret_cast < const char* > ( written.bytes ), base::min < size_t > ( written.size, 64 ) ).add ( '"' );
+
+						return fail_run ( ctx, message.value ( ) );
+
+					}
+
+					return interval_text ( ctx, parts, out );
 
 				}
 

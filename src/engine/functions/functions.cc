@@ -1,4 +1,5 @@
 #include "engine/run/run.hh"
+#include "engine/value/interval.hh"
 
 namespace engine {
 
@@ -63,6 +64,14 @@ namespace engine {
 		{ "date_trunc", 2, 3, false, FUNCTION_DATE_TRUNC },
 		{ "timezone", 2, 2, false, FUNCTION_TIMEZONE },
 		{ "pg_terminate_backend", 1, 2, false, FUNCTION_TERMINATE },
+		{ "make_interval", 0, 7, false, FUNCTION_MAKE_INTERVAL },
+		{ "strata_array", 0, 255, false, FUNCTION_ARRAY_BUILD },
+		{ "strata_contains", 2, 2, false, FUNCTION_ARRAY_CONTAINS },
+		{ "strata_overlap", 2, 2, false, FUNCTION_ARRAY_OVERLAP },
+		{ "cardinality", 1, 1, false, FUNCTION_CARDINALITY },
+		{ "array_length", 2, 2, false, FUNCTION_ARRAY_LENGTH },
+		{ "btrim", 1, 2, false, FUNCTION_TRIM },
+		{ "strpos", 2, 2, false, FUNCTION_INSTR },
 		{ "nextval", 1, 1, false, FUNCTION_NEXTVAL },
 		{ "currval", 1, 1, false, FUNCTION_CURRVAL },
 		{ "setval", 2, 3, false, FUNCTION_SETVAL },
@@ -1270,6 +1279,62 @@ namespace engine {
 
 			}
 
+			case FUNCTION_MAKE_INTERVAL: {
+
+				double numbers [ 7 ] = { 0, 0, 0, 0, 0, 0, 0 };
+
+				for ( uint32_t i = 0; i < count && i < 7; i++ ) {
+
+					if ( args [ i ].kind == storage::VALUE_NULL )
+						return true;
+
+					real_of ( args [ i ], numbers [ i ] );
+
+				}
+
+				interval_parts parts = { };
+
+				parts.months = static_cast < int64_t > ( numbers [ 0 ] ) * 12 + static_cast < int64_t > ( numbers [ 1 ] );
+				parts.days = static_cast < int64_t > ( numbers [ 2 ] ) * 7 + static_cast < int64_t > ( numbers [ 3 ] );
+
+				double micros = numbers [ 4 ] * 3600000000.0 + numbers [ 5 ] * 60000000.0 + numbers [ 6 ] * 1000000.0;
+
+				parts.micros = static_cast < int64_t > ( micros < 0 ? micros - 0.5 : micros + 0.5 );
+
+				base::text made;
+
+				write_interval ( parts, made );
+
+				if ( !make_text ( ctx, made, out ) )
+					return false;
+
+				out.subtype = LITERAL_INTERVAL;
+
+				return true;
+
+			}
+
+			case FUNCTION_ARRAY_BUILD:
+				return array_build ( ctx, args, count, out );
+
+			case FUNCTION_ARRAY_CONTAINS:
+			case FUNCTION_ARRAY_OVERLAP:
+				return array_relation ( ctx, args [ 0 ], args [ 1 ], static_cast < function_kind > ( item->column ) == FUNCTION_ARRAY_OVERLAP, out );
+
+			case FUNCTION_CARDINALITY:
+				return array_size ( ctx, args [ 0 ], false, out );
+
+			case FUNCTION_ARRAY_LENGTH: {
+
+				int64_t dimension = 0;
+
+				if ( args [ 1 ].kind == storage::VALUE_NULL || !integer_of ( args [ 1 ], dimension ) || dimension != 1 )
+					return true;
+
+				return array_size ( ctx, args [ 0 ], true, out );
+
+			}
+
 			case FUNCTION_NEXTVAL:
 			case FUNCTION_CURRVAL:
 			case FUNCTION_SETVAL: {
@@ -1415,6 +1480,23 @@ namespace engine {
 				storage::value field = text_of ( *ctx.scratch, args [ 0 ] );
 				storage::value moment = text_of ( *ctx.scratch, args [ 1 ] );
 				moment_parts parts = { };
+				interval_parts span = { };
+				bool date_part = static_cast < function_kind > ( item->column ) == FUNCTION_DATE_PART;
+
+				if ( date_part && ( args [ 1 ].subtype == LITERAL_INTERVAL || !parse_moment ( moment.bytes, moment.size, false, parts ) ) && parse_interval ( moment.bytes, moment.size, span ) ) {
+
+					double number = 0;
+
+					if ( !interval_field ( reinterpret_cast < const char* > ( field.bytes ), field.size, span, number ) )
+						return fail_run ( ctx, "unit is not recognized by date_part" );
+
+					out = storage::real_value ( number );
+
+					return true;
+
+				}
+
+				parts = { };
 
 				if ( !parse_moment ( moment.bytes, moment.size, false, parts ) )
 					return fail_run ( ctx, "invalid input syntax for type timestamp" );

@@ -91,6 +91,7 @@
     <ClCompile Include="src\engine\value\value.cc" />
     <ClCompile Include="src\engine\value\decimal.cc" />
     <ClCompile Include="src\engine\value\moment.cc" />
+    <ClCompile Include="src\engine\value\interval.cc" />
     <ClCompile Include="src\engine\catalog\catalog.cc" />
     <ClCompile Include="src\base\sort\sort.cc" />
     <ClCompile Include="src\engine\run\evaluate.cc" />
@@ -212,6 +213,7 @@
     <ClInclude Include="src\engine\value\value.hh" />
     <ClInclude Include="src\engine\value\decimal.hh" />
     <ClInclude Include="src\engine\value\moment.hh" />
+    <ClInclude Include="src\engine\value\interval.hh" />
     <ClInclude Include="src\app\backup\backup.hh" />
     <ClInclude Include="src\engine\catalog\catalog.hh" />
     <ClInclude Include="src\base\sort\sort.hh" />

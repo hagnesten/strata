@@ -306,6 +306,7 @@
     <ClCompile Include="src\engine\value\value.cc"><Filter>src\engine\value</Filter></ClCompile>
     <ClCompile Include="src\engine\value\decimal.cc"><Filter>src\engine\value</Filter></ClCompile>
     <ClCompile Include="src\engine\value\moment.cc"><Filter>src\engine\value</Filter></ClCompile>
+    <ClCompile Include="src\engine\value\interval.cc"><Filter>src\engine\value</Filter></ClCompile>
     <ClCompile Include="src\engine\catalog\catalog.cc"><Filter>src\engine\catalog</Filter></ClCompile>
     <ClCompile Include="src\base\sort\sort.cc"><Filter>src\base\sort</Filter></ClCompile>
     <ClCompile Include="src\engine\run\evaluate.cc"><Filter>src\engine\run</Filter></ClCompile>
@@ -427,6 +428,7 @@
     <ClInclude Include="src\engine\value\value.hh"><Filter>src\engine\value</Filter></ClInclude>
     <ClInclude Include="src\engine\value\decimal.hh"><Filter>src\engine\value</Filter></ClInclude>
     <ClInclude Include="src\engine\value\moment.hh"><Filter>src\engine\value</Filter></ClInclude>
+    <ClInclude Include="src\engine\value\interval.hh"><Filter>src\engine\value</Filter></ClInclude>
     <ClInclude Include="src\app\backup\backup.hh"><Filter>src\app\backup</Filter></ClInclude>
     <ClInclude Include="src\engine\catalog\catalog.hh"><Filter>src\engine\catalog</Filter></ClInclude>
     <ClInclude Include="src\base\sort\sort.hh"><Filter>src\base\sort</Filter></ClInclude>

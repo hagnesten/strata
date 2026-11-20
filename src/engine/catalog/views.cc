@@ -103,6 +103,40 @@ namespace engine {
 		if ( !type || !*type )
 			return 0;
 
+		size_t length = base::length ( type );
+
+		if ( length > 2 && length < 128 && type [ length - 2 ] == '[' && type [ length - 1 ] == ']' ) {
+
+			char element [ 128 ];
+
+			base::copy_span ( element, sizeof ( element ), type, length - 2 );
+
+			switch ( postgres_type_of ( element ) ) {
+
+				case 16: return 1000;
+				case 17: return 1001;
+				case 21: return 1005;
+				case 23: return 1007;
+				case 20: return 1016;
+				case 26: return 1028;
+				case 1043: return 1015;
+				case 1042: return 1014;
+				case 700: return 1021;
+				case 701: return 1022;
+				case 1700: return 1231;
+				case 2950: return 2951;
+				case 1114: return 1115;
+				case 1184: return 1185;
+				case 1082: return 1182;
+				case 1083: return 1183;
+				case 114: return 199;
+				case 3802: return 3807;
+				default: return 1009;
+
+			}
+
+		}
+
 		if ( type_has ( type, "bool" ) )
 			return 16;
 

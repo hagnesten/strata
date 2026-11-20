@@ -276,6 +276,35 @@ namespace test {
 
 	}
 
+	static void framework_sql ( engine::database& db ) {
+
+		db.schema->postgres = true;
+		rows ( db, "SELECT btrim ( E'\\t x \\n', E' \\t\\n\\r' ), length ( E'a\\x41\\u00e9' ), E'it''s'", "x|3|it's" );
+		rows ( db, "SELECT strpos ( 'alphabet', 'ph' ), strpos ( 'alpha', 'z' )", "3|0" );
+		rows ( db, "SELECT CAST ( '2026-01-31 10:00:00' AS timestamp ) + INTERVAL '1 month'", "2026-02-28 10:00:00" );
+		rows ( db, "SELECT TIMESTAMP '2026-03-02 14:30:00' + INTERVAL '1 day 02:30:00', TIMESTAMP '2026-03-02 14:30:00' - INTERVAL '90 minutes'", "2026-03-03 17:00:00|2026-03-02 13:00:00" );
+		rows ( db, "SELECT TIMESTAMP '2026-03-03 16:30:00' - TIMESTAMP '2026-03-02 14:00:00'", "1 day 02:30:00" );
+		rows ( db, "SELECT DATE '2026-03-02' + 30, DATE '2026-03-10' - DATE '2026-03-02'", "2026-04-01|8" );
+		rows ( db, "SELECT INTERVAL '1 year 14 months 3 days', INTERVAL 'P1DT2H', INTERVAL '-5 hours', INTERVAL '2 days ago'", "2 years 2 mons 3 days|1 day 02:00:00|-05:00:00|-2 days" );
+		rows ( db, "SELECT make_interval ( days => 3, hours => 4 ), make_interval ( 0, 1 ), INTERVAL '1 hour' * 3, INTERVAL '3 hours' / 2", "3 days 04:00:00|1 mon|03:00:00|01:30:00" );
+		rows ( db, "SELECT date_part ( 'epoch', INTERVAL '1 day 01:00:00' ), EXTRACT ( HOUR FROM INTERVAL '26 hours' )", "90000.0|26.0" );
+		rows ( db, "SELECT INTERVAL '25 hours' > INTERVAL '1 day', INTERVAL '23 hours' < INTERVAL '1 day'", "1|1" );
+		rows ( db, "SELECT ARRAY [ 'a', 'b c', NULL ], cardinality ( ARRAY [ 1, 2, 3 ] ), array_length ( '{}', 1 )", "{a,\"b c\",NULL}|3|NULL" );
+		rows ( db, "SELECT '{a,b,c}' @> ARRAY [ 'b', 'c' ], '{a,b}' @> ARRAY [ 'z' ], ARRAY [ 'a' ] <@ '{a,b}', '{1,2}' && ARRAY [ 2, 9 ]", "1|0|1|1" );
+		run ( db, "CREATE TABLE join_orders ( id integer PRIMARY KEY, symbol text, quantity integer )" );
+		run ( db, "CREATE TABLE join_fills ( id integer PRIMARY KEY, order_id integer, quantity integer, price numeric(18,6) )" );
+		run ( db, "INSERT INTO join_orders VALUES ( 1, 'A', 10 ), ( 2, 'B', 20 )" );
+		run ( db, "INSERT INTO join_fills VALUES ( 1, 1, 5, 100 ), ( 2, 1, 5, 101 ), ( 3, 2, 20, 50 )" );
+		run ( db, "UPDATE join_fills AS f SET quantity = f.quantity * 4, price = f.price / 4 FROM join_orders AS o WHERE f.order_id = o.id AND o.symbol = 'A'" );
+		rows ( db, "SELECT group_concat ( quantity || '@' || price, ',' ) FROM join_fills", "20@25.000000,20@25.250000,20@50.000000" );
+		run ( db, "DELETE FROM join_fills AS f USING join_orders AS o WHERE f.order_id = o.id AND o.symbol = 'B'" );
+		rows ( db, "SELECT count ( * ) FROM join_fills", "2" );
+		run ( db, "DROP TABLE join_fills" );
+		run ( db, "DROP TABLE join_orders" );
+		db.schema->postgres = false;
+
+	}
+
 	void dialect_tests ( engine::database& db ) {
 
 		section ( "Postgres dialect" );
@@ -289,6 +318,7 @@ namespace test {
 		postgres_session ( db );
 		schema_changes ( db );
 		views_and_sequences ( db );
+		framework_sql ( db );
 
 	}
 

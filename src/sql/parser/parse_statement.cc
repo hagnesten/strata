@@ -993,6 +993,40 @@ namespace sql {
 
 	}
 
+	static bool joined_filter ( parser& item, expression*& where ) {
+
+		select_statement* probe = item.memory->make < select_statement > ( 1 );
+		result_column* column = item.memory->make < result_column > ( 1 );
+		expression* one = new_expression ( item, EXPRESSION_LITERAL );
+		expression* exists = new_expression ( item, EXPRESSION_EXISTS );
+
+		if ( !probe || !column || !one || !exists )
+			return fail_here ( item, "out of memory" );
+
+		one->literal = storage::integer_value ( 1 );
+		column->value = one;
+		probe->columns = column;
+		probe->column_count = 1;
+
+		if ( !parse_sources ( item, *probe ) )
+			return false;
+
+		if ( accept_word ( item, "where" ) ) {
+
+			probe->where = parse_expression ( item );
+
+			if ( !probe->where )
+				return false;
+
+		}
+
+		exists->query = probe;
+		where = exists;
+
+		return true;
+
+	}
+
 	static bool take_signed ( parser& item, int64_t& out ) {
 
 		bool negative = accept_symbol ( item, "-" );
@@ -1592,7 +1626,12 @@ namespace sql {
 			if ( !made->table || !expect_word ( item, "set" ) || !parse_assignments ( item, made->assignments, made->assignment_count ) )
 				return false;
 
-			if ( accept_word ( item, "where" ) ) {
+			if ( accept_word ( item, "from" ) ) {
+
+				if ( !joined_filter ( item, made->where ) )
+					return false;
+
+			} else if ( accept_word ( item, "where" ) ) {
 
 				made->where = parse_expression ( item );
 
@@ -1623,7 +1662,12 @@ namespace sql {
 			if ( !made->table || !take_target_alias ( item, made->alias ) )
 				return false;
 
-			if ( accept_word ( item, "where" ) ) {
+			if ( accept_word ( item, "using" ) ) {
+
+				if ( !joined_filter ( item, made->where ) )
+					return false;
+
+			} else if ( accept_word ( item, "where" ) ) {
 
 				made->where = parse_expression ( item );
 

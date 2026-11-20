@@ -65,6 +65,7 @@ ENGINE := \
 	src/engine/value/value.cc \
 	src/engine/value/decimal.cc \
 	src/engine/value/moment.cc \
+	src/engine/value/interval.cc \
 	src/engine/catalog/catalog.cc \
 	src/engine/catalog/statistics.cc \
 	src/engine/catalog/views.cc \

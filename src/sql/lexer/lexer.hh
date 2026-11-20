@@ -35,6 +35,8 @@ namespace sql {
 		const char* at;
 		uint32_t line;
 		const char* line_start;
+		uint32_t array_depth;
+		bool array_open;
 
 	};
 
@@ -45,5 +47,7 @@ namespace sql {
 	bool token_is ( const token& item, const char* word );
 
 	bool symbol_is ( const token& item, const char* symbol );
+
+	void unescape_string ( const char* body, size_t size, base::text& out );
 
 }

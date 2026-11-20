@@ -1,9 +1,11 @@
 #include "server/server.hh"
-#include "engine/value/moment.hh"
+#include "engine/value/interval.hh"
 
 #define PG_EPOCH_DAYS 10957
 
 namespace server {
+
+	static uint32_t array_element ( uint32_t type );
 
 	uint32_t declared_type ( const char* type ) {
 
@@ -13,14 +15,14 @@ namespace server {
 
 			case PG_VARCHAR: case PG_BPCHAR:
 			case PG_BOOL: case PG_BYTEA: case PG_INT8: case PG_INT2: case PG_INT4: case PG_TEXT: case PG_OID: case PG_JSON: case PG_FLOAT4: case PG_FLOAT8:
-			case PG_DATE: case PG_TIME: case PG_TIMESTAMP: case PG_TIMESTAMPTZ: case PG_NUMERIC: case PG_UUID: case PG_JSONB:
+			case PG_DATE: case PG_TIME: case PG_TIMESTAMP: case PG_TIMESTAMPTZ: case PG_NUMERIC: case PG_UUID: case PG_JSONB: case PG_INTERVAL:
 				return oid;
 
 			case 0:
 				return 0;
 
 			default:
-				return PG_TEXT;
+				return array_element ( oid ) ? oid : PG_TEXT;
 
 		}
 
@@ -117,6 +119,28 @@ namespace server {
 						if ( item->op == sql::OPERATOR_JSON_VALUE )
 							return PG_TEXT;
 
+						bool left_moment = left == PG_TIMESTAMP || left == PG_TIMESTAMPTZ || left == PG_DATE;
+						bool right_moment = right == PG_TIMESTAMP || right == PG_TIMESTAMPTZ || right == PG_DATE;
+
+						if ( item->op == sql::OPERATOR_ADD || item->op == sql::OPERATOR_SUBTRACT ) {
+
+							if ( left_moment && right == PG_INTERVAL )
+								return left == PG_DATE ? PG_TIMESTAMP : left;
+
+							if ( right_moment && left == PG_INTERVAL && item->op == sql::OPERATOR_ADD )
+								return right == PG_DATE ? PG_TIMESTAMP : right;
+
+							if ( left_moment && right_moment && item->op == sql::OPERATOR_SUBTRACT )
+								return left == PG_DATE && right == PG_DATE ? PG_INT4 : PG_INTERVAL;
+
+							if ( left == PG_DATE && ( right == PG_INT4 || right == PG_INT2 || right == PG_INT8 ) )
+								return PG_DATE;
+
+						}
+
+						if ( left == PG_INTERVAL || right == PG_INTERVAL )
+							return PG_INTERVAL;
+
 						if ( left == PG_FLOAT8 || right == PG_FLOAT8 || left == PG_FLOAT4 || right == PG_FLOAT4 )
 							return PG_FLOAT8;
 
@@ -136,8 +160,11 @@ namespace server {
 
 				const char* name = item->name;
 
-				if ( base::same_folded ( name, "strata_any" ) || base::same_folded ( name, "pg_terminate_backend" ) )
+				if ( base::same_folded ( name, "strata_any" ) || base::same_folded ( name, "pg_terminate_backend" ) || base::same_folded ( name, "strata_contains" ) || base::same_folded ( name, "strata_overlap" ) )
 					return PG_BOOL;
+
+				if ( base::same_folded ( name, "cardinality" ) || base::same_folded ( name, "array_length" ) )
+					return PG_INT4;
 
 				if ( base::same_folded ( name, "date_part" ) )
 					return PG_FLOAT8;
@@ -147,6 +174,9 @@ namespace server {
 
 				if ( base::same_folded ( name, "pg_get_serial_sequence" ) )
 					return PG_TEXT;
+
+				if ( base::same_folded ( name, "make_interval" ) )
+					return PG_INTERVAL;
 
 				if ( base::same_folded ( name, "timezone" ) && item->count > 1 )
 					return expression_type ( plan, item->list [ 1 ] ) == PG_TIMESTAMPTZ ? PG_TIMESTAMP : PG_TIMESTAMPTZ;
@@ -632,6 +662,55 @@ namespace server {
 		}
 
 		storage::value number;
+		uint32_t element = array_element ( type );
+
+		if ( element && item.kind == storage::VALUE_TEXT ) {
+
+			engine::array_item* items = nullptr;
+			uint32_t count = 0;
+			base::arena memory;
+
+			if ( !engine::split_array ( memory, item.bytes, item.size, items, count ) )
+				return false;
+
+			bool nulls = false;
+
+			for ( uint32_t i = 0; i < count; i++ )
+				nulls = nulls || items [ i ].null;
+
+			size_t mark = out.size;
+
+			put_length ( out, 0 );
+			put_big ( out, count ? 1 : 0, 4 );
+			put_big ( out, nulls ? 1 : 0, 4 );
+			put_big ( out, element, 4 );
+
+			if ( count ) {
+
+				put_big ( out, count, 4 );
+				put_big ( out, 1, 4 );
+
+			}
+
+			for ( uint32_t i = 0; i < count; i++ ) {
+
+				storage::value part = items [ i ].null ? storage::null_value ( ) : storage::text_value ( items [ i ].text, items [ i ].size );
+
+				if ( !encode_value ( link, part, element, true ) )
+					return false;
+
+			}
+
+			uint32_t length = static_cast < uint32_t > ( out.size - mark - 4 );
+
+			out.data [ mark ] = static_cast < char > ( length >> 24 );
+			out.data [ mark + 1 ] = static_cast < char > ( length >> 16 );
+			out.data [ mark + 2 ] = static_cast < char > ( length >> 8 );
+			out.data [ mark + 3 ] = static_cast < char > ( length );
+
+			return true;
+
+		}
 
 		switch ( type ) {
 
@@ -743,6 +822,22 @@ namespace server {
 
 				put_length ( out, 16 );
 				out.add ( reinterpret_cast < const char* > ( bytes ), 16 );
+
+				return true;
+
+			}
+
+			case PG_INTERVAL: {
+
+				engine::interval_parts parts = { };
+
+				if ( item.kind != storage::VALUE_TEXT || !engine::parse_interval ( item.bytes, item.size, parts ) )
+					return false;
+
+				put_length ( out, 16 );
+				put_big ( out, static_cast < uint64_t > ( parts.micros ), 8 );
+				put_big ( out, static_cast < uint64_t > ( parts.days ), 4 );
+				put_big ( out, static_cast < uint64_t > ( parts.months ), 4 );
 
 				return true;
 
@@ -1143,6 +1238,23 @@ namespace server {
 					made.hex ( data [ i ], 2 );
 
 				}
+
+				return keep_text ( memory, made, out );
+
+			}
+
+			case PG_INTERVAL: {
+
+				if ( size != 16 )
+					return false;
+
+				engine::interval_parts parts = { };
+				base::text made;
+
+				parts.micros = static_cast < int64_t > ( read_big ( data, 8 ) );
+				parts.days = static_cast < int32_t > ( read_big ( data + 8, 4 ) );
+				parts.months = static_cast < int32_t > ( read_big ( data + 12, 4 ) );
+				engine::write_interval ( parts, made );
 
 				return keep_text ( memory, made, out );
 

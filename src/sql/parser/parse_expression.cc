@@ -656,14 +656,17 @@ namespace sql {
 			expression* made = new_expression ( item, EXPRESSION_LITERAL );
 			base::text plain;
 
-			for ( uint32_t i = 1; i + 1 < here.size; i++ ) {
+			if ( here.symbol [ 0 ] == 'E' )
+				unescape_string ( here.start + 2, here.size - 3, plain );
+			else
+				for ( uint32_t i = 1; i + 1 < here.size; i++ ) {
 
-				plain.add ( here.start [ i ] );
+					plain.add ( here.start [ i ] );
 
-				if ( here.start [ i ] == '\'' )
-					i++;
+					if ( here.start [ i ] == '\'' )
+						i++;
 
-			}
+				}
 
 			char* kept = item.memory->keep ( plain.value ( ), plain.size );
 
@@ -985,6 +988,39 @@ namespace sql {
 
 			bool plain_word = here.start [ 0 ] != '"' && here.start [ 0 ] != '`' && here.start [ 0 ] != '[';
 
+			if ( plain_word && base::same_folded ( first, "array" ) && accept_symbol ( item, "[" ) ) {
+
+				grow_list < expression* > elements;
+
+				if ( !symbol_is ( item.current, "]" ) ) {
+
+					do {
+
+						expression* element = parse_expression ( item );
+
+						if ( !element || !elements.push ( item, element ) )
+							return nullptr;
+
+					} while ( accept_symbol ( item, "," ) );
+
+				}
+
+				if ( !expect_symbol ( item, "]" ) )
+					return nullptr;
+
+				expression* made = new_expression ( item, EXPRESSION_FUNCTION );
+
+				if ( !made )
+					return nullptr;
+
+				made->name = "strata_array";
+				made->list = elements.items;
+				made->count = elements.count;
+
+				return made;
+
+			}
+
 			if ( plain_word && typed_literal ( first ) && ( item.current.kind == TOKEN_STRING || ( ( token_is ( item.current, "with" ) || token_is ( item.current, "without" ) ) && ( base::same_folded ( first, "timestamp" ) || base::same_folded ( first, "time" ) ) ) ) ) {
 
 				base::text type;
@@ -1039,6 +1075,101 @@ namespace sql {
 
 				if ( base::ends_with_folded ( first, "nextval" ) || base::ends_with_folded ( first, "setval" ) )
 					item.writes = true;
+
+				if ( base::same_folded ( first, "make_interval" ) ) {
+
+					static const char* const slots [ ] = { "years", "months", "weeks", "days", "hours", "mins", "secs" };
+					expression** list = item.memory->make < expression* > ( 7 );
+
+					if ( !list ) {
+
+						fail_here ( item, "out of memory" );
+
+						return nullptr;
+
+					}
+
+					for ( uint32_t s = 0; s < 7; s++ ) {
+
+						list [ s ] = new_expression ( item, EXPRESSION_LITERAL );
+
+						if ( !list [ s ] )
+							return nullptr;
+
+						list [ s ]->literal = storage::integer_value ( 0 );
+
+					}
+
+					uint32_t position = 0;
+
+					if ( !symbol_is ( item.current, ")" ) ) {
+
+						do {
+
+							uint32_t slot = position;
+
+							if ( item.current.kind == TOKEN_NAME ) {
+
+								lexer saved = item.lex;
+								token saved_token = item.current;
+
+								advance ( item );
+
+								if ( symbol_is ( item.current, "=>" ) ) {
+
+									slot = 7;
+
+									for ( uint32_t s = 0; s < 7; s++ )
+										if ( saved_token.size == base::length ( slots [ s ] ) && base::same_folded_size ( saved_token.start, slots [ s ], saved_token.size ) )
+											slot = s;
+
+									if ( slot == 7 ) {
+
+										fail_here ( item, "make_interval has no argument with that name" );
+
+										return nullptr;
+
+									}
+
+									advance ( item );
+
+								} else {
+
+									item.lex = saved;
+									item.current = saved_token;
+
+								}
+
+							}
+
+							if ( slot >= 7 ) {
+
+								fail_here ( item, "make_interval takes at most 7 arguments" );
+
+								return nullptr;
+
+							}
+
+							list [ slot ] = parse_expression ( item );
+
+							if ( !list [ slot ] )
+								return nullptr;
+
+							position = slot + 1;
+
+						} while ( accept_symbol ( item, "," ) );
+
+					}
+
+					if ( !expect_symbol ( item, ")" ) )
+						return nullptr;
+
+					made->list = list;
+					made->count = 7;
+
+					return made;
+
+				}
 
 				if ( accept_symbol ( item, "*" ) )
 					made->star = true;
@@ -1434,6 +1565,37 @@ namespace sql {
 		while ( left ) {
 
 			operator_kind op = symbol_is ( item.current, "<" ) ? OPERATOR_LESS : symbol_is ( item.current, "<=" ) ? OPERATOR_LESS_EQUAL : symbol_is ( item.current, ">" ) ? OPERATOR_GREATER : symbol_is ( item.current, ">=" ) ? OPERATOR_GREATER_EQUAL : OPERATOR_NONE;
+
+			if ( op == OPERATOR_NONE && ( symbol_is ( item.current, "@>" ) || symbol_is ( item.current, "<@" ) || symbol_is ( item.current, "&&" ) ) ) {
+
+				bool flipped = symbol_is ( item.current, "<@" );
+				bool overlap = symbol_is ( item.current, "&&" );
+
+				advance ( item );
+
+				expression* right = parse_bits ( item );
+				expression* call = new_expression ( item, EXPRESSION_FUNCTION );
+				expression** list = item.memory->make < expression* > ( 2 );
+
+				if ( !right || !call || !list ) {
+
+					if ( right )
+						fail_here ( item, "out of memory" );
+
+					return nullptr;
+
+				}
+
+				list [ 0 ] = flipped ? right : left;
+				list [ 1 ] = flipped ? left : right;
+				call->name = overlap ? "strata_overlap" : "strata_contains";
+				call->list = list;
+				call->count = 2;
+				left = call;
+
+				continue;
+
+			}
 
 			if ( op == OPERATOR_NONE )
 				break;

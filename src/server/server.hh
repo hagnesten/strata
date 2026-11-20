@@ -52,6 +52,7 @@
 #define PG_TIME 1083
 #define PG_TIMESTAMP 1114
 #define PG_TIMESTAMPTZ 1184
+#define PG_INTERVAL 1186
 #define PG_NUMERIC 1700
 #define PG_UUID 2950
 #define PG_JSONB 3802

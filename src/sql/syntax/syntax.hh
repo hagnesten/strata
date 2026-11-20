@@ -4,6 +4,7 @@
 #include "storage/record/record.hh"
 
 #define LITERAL_BOOLEAN 2
+#define LITERAL_INTERVAL 3
 
 namespace sql {
 

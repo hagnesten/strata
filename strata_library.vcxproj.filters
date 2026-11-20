@@ -157,6 +157,7 @@
     <ClCompile Include="src\engine\value\value.cc"><Filter>src\engine\value</Filter></ClCompile>
     <ClCompile Include="src\engine\value\decimal.cc"><Filter>src\engine\value</Filter></ClCompile>
     <ClCompile Include="src\engine\value\moment.cc"><Filter>src\engine\value</Filter></ClCompile>
+    <ClCompile Include="src\engine\value\interval.cc"><Filter>src\engine\value</Filter></ClCompile>
     <ClCompile Include="src\engine\catalog\catalog.cc"><Filter>src\engine\catalog</Filter></ClCompile>
     <ClCompile Include="src\engine\catalog\statistics.cc"><Filter>src\engine\catalog</Filter></ClCompile>
     <ClCompile Include="src\engine\run\evaluate.cc"><Filter>src\engine\run</Filter></ClCompile>

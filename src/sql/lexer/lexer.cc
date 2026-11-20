@@ -26,12 +26,131 @@ namespace sql {
 
 	}
 
+	static int32_t hex_value ( char c ) {
+
+		if ( c >= '0' && c <= '9' )
+			return c - '0';
+
+		if ( c >= 'a' && c <= 'f' )
+			return c - 'a' + 10;
+
+		if ( c >= 'A' && c <= 'F' )
+			return c - 'A' + 10;
+
+		return -1;
+
+	}
+
+	void unescape_string ( const char* body, size_t size, base::text& out ) {
+
+		for ( size_t i = 0; i < size; i++ ) {
+
+			char c = body [ i ];
+
+			if ( c == '\'' && i + 1 < size && body [ i + 1 ] == '\'' ) {
+
+				out.add ( '\'' );
+				i++;
+
+				continue;
+
+			}
+
+			if ( c != '\\' || i + 1 >= size ) {
+
+				out.add ( c );
+
+				continue;
+
+			}
+
+			char next = body [ ++i ];
+
+			switch ( next ) {
+
+				case 'b': out.add ( '\b' ); break;
+				case 'f': out.add ( '\f' ); break;
+				case 'n': out.add ( '\n' ); break;
+				case 'r': out.add ( '\r' ); break;
+				case 't': out.add ( '\t' ); break;
+
+				case 'x': {
+
+					uint32_t value = 0;
+					uint32_t used = 0;
+
+					while ( used < 2 && i + 1 < size && hex_value ( body [ i + 1 ] ) >= 0 ) {
+
+						value = value * 16 + static_cast < uint32_t > ( hex_value ( body [ ++i ] ) );
+						used++;
+
+					}
+
+					if ( used )
+						out.add ( static_cast < char > ( value ) );
+					else
+						out.add ( 'x' );
+
+					break;
+
+				}
+
+				case 'u':
+				case 'U': {
+
+					uint32_t want = next == 'u' ? 4 : 8;
+					uint32_t value = 0;
+					uint32_t used = 0;
+
+					while ( used < want && i + 1 < size && hex_value ( body [ i + 1 ] ) >= 0 ) {
+
+						value = value * 16 + static_cast < uint32_t > ( hex_value ( body [ ++i ] ) );
+						used++;
+
+					}
+
+					if ( used == want && value && value <= 0x10FFFF )
+						out.code ( value );
+
+					break;
+
+				}
+
+				default:
+
+					if ( next >= '0' && next <= '7' ) {
+
+						uint32_t value = static_cast < uint32_t > ( next - '0' );
+						uint32_t used = 1;
+
+						while ( used < 3 && i + 1 < size && body [ i + 1 ] >= '0' && body [ i + 1 ] <= '7' ) {
+
+							value = value * 8 + static_cast < uint32_t > ( body [ ++i ] - '0' );
+							used++;
+
+						}
+
+						out.add ( static_cast < char > ( value & 0xFF ) );
+
+					} else
+						out.add ( next );
+
+					break;
+
+			}
+
+		}
+
+	}
+
 	void start_lexer ( lexer& out, const char* source ) {
 
 		out.source = source;
 		out.at = source;
 		out.line = 1;
 		out.line_start = source;
+		out.array_depth = 0;
+		out.array_open = false;
 
 	}
 
@@ -111,6 +230,121 @@ namespace sql {
 			out.kind = *at == '\'' && ( at - start - 2 ) % 2 == 0 ? TOKEN_BLOB : TOKEN_BAD;
 			item.at = *at == '\'' ? at + 1 : at;
 			out.size = static_cast < uint32_t > ( item.at - start );
+
+			return out;
+
+		}
+
+		if ( ( c == 'e' || c == 'E' ) && start [ 1 ] == '\'' ) {
+
+			const char* at = start + 2;
+
+			for ( ;; ) {
+
+				if ( !*at ) {
+
+					out.kind = TOKEN_BAD;
+					item.at = at;
+					out.size = static_cast < uint32_t > ( at - start );
+
+					return out;
+
+				}
+
+				if ( *at == '\n' ) {
+
+					item.line++;
+					item.line_start = at + 1;
+
+				}
+
+				if ( *at == '\\' && at [ 1 ] ) {
+
+					at += 2;
+
+					continue;
+
+				}
+
+				if ( *at == '\'' ) {
+
+					if ( at [ 1 ] == '\'' ) {
+
+						at += 2;
+
+						continue;
+
+					}
+
+					break;
+
+				}
+
+				at++;
+
+			}
+
+			out.kind = TOKEN_STRING;
+			out.symbol [ 0 ] = 'E';
+			item.at = at + 1;
+			out.size = static_cast < uint32_t > ( item.at - start );
+
+			return out;
+
+		}
+
+		if ( ( c == 'a' || c == 'A' ) && base::same_folded_size ( start, "array", 5 ) && !name_part ( start [ 5 ] ) ) {
+
+			const char* after = start + 5;
+
+			while ( *after == ' ' || *after == '\t' || *after == '\r' || *after == '\n' )
+				after++;
+
+			if ( *after == '[' ) {
+
+				out.kind = TOKEN_NAME;
+				out.size = 5;
+				item.at = start + 5;
+				item.array_open = true;
+
+				return out;
+
+			}
+
+		}
+
+		if ( c == '[' && item.array_open ) {
+
+			item.array_open = false;
+			item.array_depth++;
+			out.kind = TOKEN_SYMBOL;
+			out.symbol [ 0 ] = '[';
+			out.size = 1;
+			item.at = start + 1;
+
+			return out;
+
+		}
+
+		if ( c == ']' && item.array_depth ) {
+
+			item.array_depth--;
+			out.kind = TOKEN_SYMBOL;
+			out.symbol [ 0 ] = ']';
+			out.size = 1;
+			item.at = start + 1;
+
+			return out;
+
+		}
+
+		if ( c == '[' && item.array_depth ) {
+
+			item.array_depth++;
+			out.kind = TOKEN_SYMBOL;
+			out.symbol [ 0 ] = '[';
+			out.size = 1;
+			item.at = start + 1;
 
 			return out;
 
@@ -286,6 +520,18 @@ namespace sql {
 
 		}
 
+		if ( ( c == '@' && start [ 1 ] == '>' ) || ( c == '<' && start [ 1 ] == '@' && !name_part ( start [ 2 ] ) ) || ( c == '&' && start [ 1 ] == '&' ) ) {
+
+			out.kind = TOKEN_SYMBOL;
+			out.symbol [ 0 ] = c;
+			out.symbol [ 1 ] = start [ 1 ];
+			out.size = 2;
+			item.at = start + 2;
+
+			return out;
+
+		}
+
 		if ( c == '?' || c == ':' || c == '@' || c == '$' ) {
 
 			const char* at = start + 1;
@@ -323,7 +569,7 @@ namespace sql {
 
 		}
 
-		static const char* const pairs [ ] = { "<=", ">=", "<>", "!=", "==", "||", "<<", ">>", "->" };
+		static const char* const pairs [ ] = { "<=", ">=", "<>", "!=", "==", "=>", "||", "<<", ">>", "->" };
 
 		for ( const char* pair : pairs ) {
 
