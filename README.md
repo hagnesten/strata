@@ -39,6 +39,25 @@ Strata is a single-file SQL database engine and a studio app for working with it
   - aggregates: count, sum, total, avg, min, max, group_concat
   - windows: row_number, rank, dense_rank, percent_rank, cume_dist, ntile, lag, lead, first_value, last_value and nth_value
 
+## Postgres server
+
+`strata --serve <file>` speaks the Postgres wire protocol, so Npgsql, Dapper, Entity Framework Core, psql and other Postgres clients connect to it like a normal Postgres 17 server.
+
+- **Sign-in:** SCRAM-SHA-256 users kept in `<file>.users`, managed with `strata --user`.
+- **Protocol:** simple and extended query, binary and text formats, pipelining and batches, Postgres error codes, and Postgres's transaction states: an error inside a transaction aborts the rest of it until ROLLBACK.
+- **Postgres SQL:**
+  - schemas and `search_path`
+  - IDENTITY and serial columns, which never reuse an id
+  - `RETURNING`, `::` casts, typed literals (`TIMESTAMPTZ '...'`), `AT TIME ZONE` and `EXTRACT`
+  - `ILIKE`, `= ANY (array)` and `<> ALL (array)`
+  - UPDATE and DELETE aliases, `DO` blocks with `IF [NOT] EXISTS`
+  - `pg_catalog` and `information_schema` views
+- **Exact money:** `NUMERIC(p,s)`, `DECIMAL` and `MONEY` columns store exact decimals up to 36 digits. They round to the declared scale and use Postgres's rules for division and averages.
+- **Timestamps and JSON:** timestamps are stored in one canonical UTC form, and `jsonb` is normalized the way Postgres stores it.
+- **Concurrency:** many readers run alongside one writer. Each statement sees the latest commits (read committed), and waiting writers are served in order.
+
+`bindings/csharp/Compat` runs the same Npgsql, Dapper and EF Core scenarios against Strata and a real Postgres and compares every result. `bindings/csharp/Wire` is a dependency-free check with an orders-and-fills trading workload.
+
 ## Strata Studio
 
 `strata-studio.exe` opens a database in a window. Open files with Ctrl+O or drop them onto the window. With no file given, it makes a sample database in `Documents\Strata`.
@@ -74,6 +93,10 @@ Strata is a single-file SQL database engine and a studio app for working with it
 strata <file>                open a database in the SQL shell
 strata <file> "<sql>"        run SQL and print the rows
 strata --studio [file]       open the studio
+strata --serve <file> [--port 5432] [--host 0.0.0.0]
+                             serve the database to Postgres clients
+strata --user <file> <name> [password]
+                             add or change a server user, or remove it with no password
 strata --capture <folder>    render every studio view to PNG and play a scripted session
 strata --test [part]         run the self test (pager, btree, crash, parser, engine)
 ```
