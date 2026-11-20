@@ -16,6 +16,8 @@
 #define SERVER_SALT 16
 #define SERVER_BUSY_LIMIT 120000
 #define SERVER_LOCK_RETRY 5
+#define SERVER_CHANNELS 64
+#define SERVER_NOTICE_ROOM 8000
 
 #define PG_PROTOCOL 196608
 #define PG_SSL_REQUEST 80877103
@@ -125,6 +127,10 @@ namespace server {
 		server_portal portal;
 		bool skipping;
 		bool failed;
+		bool rolled_back;
+		char channels [ SERVER_CHANNELS ] [ SERVER_NAME_ROOM ];
+		uint32_t channel_count;
+		base::text notices;
 		uint32_t secret;
 		uint32_t id;
 
@@ -233,5 +239,9 @@ namespace server {
 	bool dollar_body ( const char* sql, size_t size, size_t& body, size_t& body_size, size_t& after );
 
 	bool run_do_block ( server_connection& link, const char* body, size_t size, base::text& problem );
+
+	bool listen_command ( server_connection& link, const char* tag, const char* text, size_t size, base::text& problem );
+
+	void deliver_notices ( server_connection& link, bool committed );
 
 }

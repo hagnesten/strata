@@ -147,6 +147,7 @@
     <ClCompile Include="src\server\postgres\query.cc" />
     <ClCompile Include="src\server\postgres\types.cc" />
     <ClCompile Include="src\server\postgres\procedural.cc" />
+    <ClCompile Include="src\server\postgres\notify.cc" />
     <ClCompile Include="src\base\png\png.cc" />
     <ClCompile Include="src\ui\render\render.cc" />
     <ClCompile Include="src\base\clipboard\clipboard.cc" />

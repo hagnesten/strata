@@ -327,6 +327,11 @@ namespace server {
 			link.failed = false;
 			link.owner->released = true;
 
+			if ( link.notices.size )
+				deliver_notices ( link, !link.rolled_back );
+
+			link.rolled_back = false;
+
 		}
 
 		begin_message ( link, 'Z' );

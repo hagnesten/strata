@@ -96,9 +96,19 @@ namespace server {
 
 		}
 
-		if ( word_at ( sql, size, at, "reset" ) || word_at ( sql, size, at, "unlisten" ) ) {
+		if ( word_at ( sql, size, at, "reset" ) ) {
 
-			base::copy_text ( tag, tag_room, sql [ 0 ] == 'u' || sql [ 0 ] == 'U' ? "UNLISTEN" : "RESET" );
+			base::copy_text ( tag, tag_room, "RESET" );
+
+			return true;
+
+		}
+
+		at = 0;
+
+		if ( word_at ( sql, size, at, "unlisten" ) ) {
+
+			base::copy_text ( tag, tag_room, "UNLISTEN" );
 
 			return true;
 
@@ -294,6 +304,7 @@ namespace server {
 
 		}
 
+		link.rolled_back = base::starts_with ( tag.value ( ), "ROLLBACK" );
 		begin_message ( link, 'C' );
 		put_string ( link, tag.value ( ) );
 		end_message ( link );
@@ -376,11 +387,39 @@ namespace server {
 			statement.returns_rows = statement.column_count != 0;
 
 			size_t at = 0;
+			char quote = 0;
 
-			while ( at < size && sql [ at ] && sql [ at ] != ';' )
+			while ( at < size && sql [ at ] && ( quote || sql [ at ] != ';' ) ) {
+
+				if ( quote && sql [ at ] == quote )
+					quote = 0;
+				else if ( !quote && ( sql [ at ] == '\'' || sql [ at ] == '"' ) )
+					quote = sql [ at ];
+
 				at++;
 
+			}
+
 			tail = sql + at;
+
+			if ( base::same ( statement.tag, "LISTEN" ) || base::same ( statement.tag, "UNLISTEN" ) || base::same ( statement.tag, "NOTIFY" ) ) {
+
+				size_t start_args = 0;
+
+				word_at ( sql, at, start_args, statement.tag [ 0 ] == 'L' ? "listen" : statement.tag [ 0 ] == 'U' ? "unlisten" : "notify" );
+
+				statement.body = base::make < char > ( at - start_args + 1 );
+
+				if ( !statement.body )
+					return false;
+
+				if ( at > start_args )
+					base::copy ( statement.body, sql + start_args, at - start_args );
+
+				statement.body [ at - start_args ] = 0;
+				statement.body_size = at - start_args;
+
+			}
 
 			return true;
 
@@ -436,6 +475,7 @@ namespace server {
 
 			strata_exec ( link.db, "ROLLBACK" );
 			link.failed = false;
+			link.rolled_back = true;
 			begin_message ( link, 'C' );
 			put_string ( link, "ROLLBACK" );
 			end_message ( link );
@@ -460,7 +500,7 @@ namespace server {
 
 		}
 
-		if ( statement.body ) {
+		if ( statement.body && base::same ( statement.tag, "DO" ) ) {
 
 			base::text problem;
 
@@ -474,9 +514,24 @@ namespace server {
 
 		}
 
+		if ( base::same ( statement.tag, "LISTEN" ) || base::same ( statement.tag, "UNLISTEN" ) || base::same ( statement.tag, "NOTIFY" ) ) {
+
+			base::text problem;
+
+			if ( !listen_command ( link, statement.tag, statement.body ? statement.body : "", statement.body_size, problem ) ) {
+
+				send_error ( link, base::same ( statement.tag, "NOTIFY" ) && base::find_folded ( problem.value ( ), "payload" ) ? "22023" : "42601", problem.value ( ) );
+
+				return false;
+
+			}
+
+		}
+
 		if ( base::same ( statement.tag, "DISCARD ALL" ) ) {
 
 			forget_statements ( link );
+			link.channel_count = 0;
 			engine::set_search ( *link.db->database.schema, "public" );
 
 		}

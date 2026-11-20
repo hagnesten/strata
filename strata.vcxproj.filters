@@ -356,6 +356,7 @@
     <ClCompile Include="src\server\postgres\query.cc"><Filter>src\server\postgres</Filter></ClCompile>
     <ClCompile Include="src\server\postgres\types.cc"><Filter>src\server\postgres</Filter></ClCompile>
     <ClCompile Include="src\server\postgres\procedural.cc"><Filter>src\server\postgres</Filter></ClCompile>
+    <ClCompile Include="src\server\postgres\notify.cc"><Filter>src\server\postgres</Filter></ClCompile>
     <ClCompile Include="src\base\png\png.cc"><Filter>src\base\png</Filter></ClCompile>
     <ClCompile Include="src\ui\render\render.cc"><Filter>src\ui\render</Filter></ClCompile>
     <ClCompile Include="src\base\clipboard\clipboard.cc"><Filter>src\base\clipboard</Filter></ClCompile>

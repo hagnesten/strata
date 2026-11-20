@@ -26,6 +26,7 @@ namespace server {
 
 		base::release ( link->input );
 		link->output.~text ( );
+		link->notices.~text ( );
 		base::release ( link );
 		state.connections [ at ] = state.connections [ --state.connection_count ];
 
