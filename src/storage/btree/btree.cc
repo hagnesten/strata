@@ -458,6 +458,42 @@ namespace storage {
 
 	}
 
+	static bool borrow_space ( pager& owner, uint8_t*& scratch, cell_span*& cells ) {
+
+		if ( owner.spare_scratch && owner.spare_cells ) {
+
+			scratch = owner.spare_scratch;
+			cells = static_cast < cell_span* > ( owner.spare_cells );
+			owner.spare_scratch = nullptr;
+			owner.spare_cells = nullptr;
+
+			return true;
+
+		}
+
+		scratch = static_cast < uint8_t* > ( base::allocate ( PAGE_SIZE * 2 ) );
+		cells = static_cast < cell_span* > ( base::allocate ( sizeof ( cell_span ) * ( BTREE_CELLS + 2 ) ) );
+
+		return scratch && cells;
+
+	}
+
+	static void return_space ( pager& owner, uint8_t* scratch, cell_span* cells ) {
+
+		if ( scratch && cells && !owner.spare_scratch && !owner.spare_cells ) {
+
+			owner.spare_scratch = scratch;
+			owner.spare_cells = cells;
+
+			return;
+
+		}
+
+		base::release ( scratch );
+		base::release ( cells );
+
+	}
+
 	bool fill_page ( uint8_t* page, uint8_t kind, const cell_span* cells, uint32_t count, uint32_t a, uint32_t b ) {
 
 		return rebuild ( page, kind, cells, count, a, b );
@@ -1048,13 +1084,8 @@ namespace storage {
 
 			bool placed = fine && ( exact ? swap_cell ( frame->data, slot, old.size, job.cell, job.cell_size ) : place_cell ( frame->data, slot, job.cell, job.cell_size ) );
 
-			if ( fine && !placed ) {
-
-				scratch = base::make < uint8_t > ( PAGE_SIZE * 2 );
-				cells = base::make < cell_span > ( BTREE_CELLS + 2 );
-				fine = scratch && cells && gather ( owner, frame, scratch, used, cells, count );
-
-			}
+			if ( fine && !placed )
+				fine = borrow_space ( owner, scratch, cells ) && gather ( owner, frame, scratch, used, cells, count );
 
 			if ( fine && !placed ) {
 
@@ -1117,9 +1148,7 @@ namespace storage {
 
 				}
 
-				scratch = fine ? base::make < uint8_t > ( PAGE_SIZE * 2 ) : nullptr;
-				cells = fine ? base::make < cell_span > ( BTREE_CELLS + 2 ) : nullptr;
-				fine = scratch && cells && gather ( owner, frame, scratch, used, cells, count );
+				fine = fine && borrow_space ( owner, scratch, cells ) && gather ( owner, frame, scratch, used, cells, count );
 
 				uint32_t right_child = link_a ( frame->data );
 				bool appending = position == count;
@@ -1147,8 +1176,7 @@ namespace storage {
 		}
 
 		release_page ( frame );
-		base::release ( scratch );
-		base::release ( cells );
+		return_space ( owner, scratch, cells );
 
 		return fine;
 
@@ -1561,9 +1589,7 @@ namespace storage {
 				uint32_t right_child = link_a ( frame->data );
 				bool merged = false;
 
-				scratch = base::make < uint8_t > ( PAGE_SIZE * 2 );
-				cells = base::make < cell_span > ( BTREE_CELLS + 2 );
-				fine = scratch && cells && gather ( owner, frame, scratch, used, cells, count );
+				fine = borrow_space ( owner, scratch, cells ) && gather ( owner, frame, scratch, used, cells, count );
 
 				uint32_t a_slot = position < count ? position : count - 1;
 
@@ -1584,8 +1610,7 @@ namespace storage {
 			out.underfull = quick_used ( frame->data ) < BTREE_UNDERFULL;
 
 		release_page ( frame );
-		base::release ( scratch );
-		base::release ( cells );
+		return_space ( owner, scratch, cells );
 
 		return fine;
 

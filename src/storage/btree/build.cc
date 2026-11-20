@@ -1,5 +1,7 @@
 #include "storage/btree/btree.hh"
 
+#define BUILD_LEAF_FILL ( BTREE_SPACE * 9 / 10 )
+
 namespace storage {
 
 	static uint32_t body_size ( uint32_t size ) {
@@ -107,7 +109,7 @@ namespace storage {
 
 				uint32_t size = body_size ( keys [ start + taken ].size ) + 2;
 
-				if ( space + size > BTREE_SPACE )
+				if ( space + size > ( single ? BTREE_SPACE : BUILD_LEAF_FILL ) )
 					break;
 
 				space += size;

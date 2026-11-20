@@ -176,6 +176,8 @@ namespace storage {
 		uint64_t layout;
 		leaf_hint leaves [ PAGER_LEAVES ];
 		uint32_t next_leaf;
+		uint8_t* spare_scratch;
+		void* spare_cells;
 
 	};
 

@@ -323,6 +323,10 @@ namespace storage {
 
 		base::release ( item.frames );
 		base::release ( item.cell_bytes.data );
+		base::release ( item.spare_scratch );
+		base::release ( item.spare_cells );
+		item.spare_scratch = nullptr;
+		item.spare_cells = nullptr;
 		base::close_file ( item.file );
 		item.frames = nullptr;
 		item.frame_count = 0;
