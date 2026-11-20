@@ -46,7 +46,8 @@ enum strata_type {
 	STRATA_REAL = 2,
 	STRATA_TEXT = 3,
 	STRATA_BLOB = 4,
-	STRATA_TEXT16 = 5
+	STRATA_TEXT16 = 5,
+	STRATA_NUMERIC = 6
 
 };
 
@@ -108,6 +109,8 @@ STRATA_API int strata_bind_null ( strata_stmt* stmt, int index );
 STRATA_API int strata_bind_int64 ( strata_stmt* stmt, int index, int64_t value );
 
 STRATA_API int strata_bind_double ( strata_stmt* stmt, int index, double value );
+
+STRATA_API int strata_bind_numeric ( strata_stmt* stmt, int index, const char* value, int size );
 
 STRATA_API int strata_bind_text ( strata_stmt* stmt, int index, const char* value, int size );
 

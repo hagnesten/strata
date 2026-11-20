@@ -69,6 +69,10 @@ namespace sql {
 				out.real ( item.real );
 				break;
 
+			case storage::VALUE_DECIMAL:
+				storage::write_decimal ( item, out );
+				break;
+
 			case storage::VALUE_TEXT:
 				out.add ( '\'' );
 

@@ -1,5 +1,6 @@
 #include "api/api.hh"
 #include "base/text/unicode.hh"
+#include "engine/value/decimal.hh"
 
 namespace api {
 
@@ -22,6 +23,21 @@ namespace api {
 			case STRATA_BLOB:
 				out = item.data.bytes ? storage::blob_value ( static_cast < const uint8_t* > ( item.data.bytes ), item.size ) : storage::null_value ( );
 				return true;
+
+			case STRATA_NUMERIC: {
+
+				engine::decimal_number exact = { };
+
+				if ( !item.data.bytes )
+					out = storage::null_value ( );
+				else if ( engine::parse_decimal ( static_cast < const uint8_t* > ( item.data.bytes ), item.size, exact ) )
+					out = engine::decimal_result ( exact );
+				else
+					out = storage::text_value ( static_cast < const char* > ( item.data.bytes ), item.size );
+
+				return true;
+
+			}
 
 			case STRATA_TEXT16: {
 

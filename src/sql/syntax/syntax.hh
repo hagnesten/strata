@@ -3,6 +3,8 @@
 #include "base/arena/arena.hh"
 #include "storage/record/record.hh"
 
+#define LITERAL_BOOLEAN 2
+
 namespace sql {
 
 	enum expression_kind : uint8_t {

@@ -32,7 +32,10 @@ namespace server {
 		switch ( item->kind ) {
 
 			case sql::EXPRESSION_LITERAL:
-				return item->literal.kind == storage::VALUE_INTEGER ? PG_INT8 : item->literal.kind == storage::VALUE_REAL ? PG_FLOAT8 : item->literal.kind == storage::VALUE_BLOB ? PG_BYTEA : PG_TEXT;
+				if ( item->literal.kind == storage::VALUE_INTEGER )
+					return item->literal.subtype == LITERAL_BOOLEAN ? PG_BOOL : item->literal.integer >= -2147483648ll && item->literal.integer <= 2147483647ll ? PG_INT4 : PG_INT8;
+
+				return item->literal.kind == storage::VALUE_DECIMAL ? PG_NUMERIC : item->literal.kind == storage::VALUE_REAL ? PG_FLOAT8 : item->literal.kind == storage::VALUE_BLOB ? PG_BYTEA : item->literal.kind == storage::VALUE_NULL ? PG_TEXT : PG_TEXT;
 
 			case sql::EXPRESSION_COLUMN: {
 
@@ -106,11 +109,20 @@ namespace server {
 						uint32_t left = expression_type ( plan, item->left );
 						uint32_t right = expression_type ( plan, item->right );
 
-						if ( left == PG_FLOAT8 || right == PG_FLOAT8 || left == PG_FLOAT4 || right == PG_FLOAT4 || ( item->op == sql::OPERATOR_DIVIDE && ( left == PG_NUMERIC || right == PG_NUMERIC ) ) )
+						if ( item->op == sql::OPERATOR_JSON )
+							return PG_JSONB;
+
+						if ( item->op == sql::OPERATOR_JSON_VALUE )
+							return PG_TEXT;
+
+						if ( left == PG_FLOAT8 || right == PG_FLOAT8 || left == PG_FLOAT4 || right == PG_FLOAT4 )
 							return PG_FLOAT8;
 
 						if ( left == PG_NUMERIC || right == PG_NUMERIC )
 							return PG_NUMERIC;
+
+						if ( ( left == PG_INT4 || left == PG_INT2 ) && ( right == PG_INT4 || right == PG_INT2 ) )
+							return PG_INT4;
 
 						return PG_INT8;
 
@@ -125,7 +137,43 @@ namespace server {
 				if ( base::same_folded ( name, "strata_any" ) )
 					return PG_BOOL;
 
-				if ( base::same_folded ( name, "count" ) || base::same_folded ( name, "length" ) || base::same_folded ( name, "instr" ) || base::same_folded ( name, "row_number" ) || base::same_folded ( name, "rank" ) || base::same_folded ( name, "dense_rank" ) || base::same_folded ( name, "ntile" ) || base::same_folded ( name, "unixepoch" ) || base::same_folded ( name, "changes" ) || base::same_folded ( name, "last_insert_rowid" ) || base::same_folded ( name, "random" ) || base::same_folded ( name, "sign" ) )
+				if ( base::same_folded ( name, "date_part" ) )
+					return PG_FLOAT8;
+
+				if ( base::same_folded ( name, "date_trunc" ) && item->count > 1 ) {
+
+					uint32_t inner = expression_type ( plan, item->list [ 1 ] );
+
+					return inner == PG_TIMESTAMPTZ ? PG_TIMESTAMPTZ : PG_TIMESTAMP;
+
+				}
+
+				if ( base::same_folded ( name, "length" ) || base::same_folded ( name, "char_length" ) || base::same_folded ( name, "octet_length" ) || base::same_folded ( name, "strpos" ) || base::same_folded ( name, "position" ) || base::same_folded ( name, "pg_backend_pid" ) )
+					return PG_INT4;
+
+				if ( base::same_folded ( name, "avg" ) && item->count ) {
+
+					uint32_t inner = expression_type ( plan, item->list [ 0 ] );
+
+					return inner == PG_FLOAT8 || inner == PG_FLOAT4 ? PG_FLOAT8 : PG_NUMERIC;
+
+				}
+
+				if ( base::same_folded ( name, "round" ) && item->count ) {
+
+					uint32_t inner = expression_type ( plan, item->list [ 0 ] );
+
+					return inner == PG_FLOAT8 || inner == PG_FLOAT4 ? PG_FLOAT8 : PG_NUMERIC;
+
+				}
+
+				if ( base::same_folded ( name, "now" ) || base::same_folded ( name, "statement_timestamp" ) || base::same_folded ( name, "transaction_timestamp" ) || base::same_folded ( name, "clock_timestamp" ) )
+					return PG_TIMESTAMPTZ;
+
+				if ( base::same_folded ( name, "gen_random_uuid" ) || base::same_folded ( name, "uuid_generate_v4" ) )
+					return PG_UUID;
+
+				if ( base::same_folded ( name, "count" ) || base::same_folded ( name, "instr" ) || base::same_folded ( name, "row_number" ) || base::same_folded ( name, "rank" ) || base::same_folded ( name, "dense_rank" ) || base::same_folded ( name, "ntile" ) || base::same_folded ( name, "unixepoch" ) || base::same_folded ( name, "changes" ) || base::same_folded ( name, "last_insert_rowid" ) || base::same_folded ( name, "random" ) || base::same_folded ( name, "sign" ) )
 					return PG_INT8;
 
 				if ( base::same_folded ( name, "avg" ) || base::same_folded ( name, "total" ) || base::same_folded ( name, "julianday" ) || base::same_folded ( name, "round" ) || base::same_folded ( name, "percent_rank" ) || base::same_folded ( name, "cume_dist" ) || base::same_folded ( name, "bm25" ) )
@@ -459,7 +507,7 @@ namespace server {
 
 	static bool number_value ( const storage::value& item, storage::value& out ) {
 
-		if ( item.kind == storage::VALUE_INTEGER || item.kind == storage::VALUE_REAL ) {
+		if ( item.kind == storage::VALUE_INTEGER || item.kind == storage::VALUE_REAL || item.kind == storage::VALUE_DECIMAL ) {
 
 			out = item;
 
@@ -1142,7 +1190,12 @@ namespace server {
 
 				}
 
-				return keep_text ( memory, made, out );
+				if ( !keep_text ( memory, made, out ) )
+					return false;
+
+				out.type = STRATA_NUMERIC;
+
+				return true;
 
 			}
 

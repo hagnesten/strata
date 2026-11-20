@@ -1,5 +1,6 @@
 #include "api/api.hh"
 #include "base/text/unicode.hh"
+#include "engine/value/decimal.hh"
 
 namespace api {
 
@@ -294,6 +295,27 @@ extern "C" {
 
 	}
 
+	STRATA_API int strata_bind_numeric ( strata_stmt* stmt, int index, const char* value, int size ) {
+
+		if ( !value )
+			return strata_bind_null ( stmt, index );
+
+		engine::decimal_number exact = { };
+		size_t length = size < 0 ? base::length ( value ) : static_cast < size_t > ( size );
+
+		if ( !engine::parse_decimal ( reinterpret_cast < const uint8_t* > ( value ), length, exact ) )
+			return strata_bind_text ( stmt, index, value, static_cast < int > ( length ) );
+
+		storage::value* slot = nullptr;
+		int code = api::bind_slot ( stmt, index, slot );
+
+		if ( code == STRATA_OK )
+			*slot = engine::decimal_result ( exact );
+
+		return code;
+
+	}
+
 	STRATA_API int strata_bind_text ( strata_stmt* stmt, int index, const char* value, int size ) {
 
 		return api::bind_bytes ( stmt, index, value, value ? ( size < 0 ? base::length ( value ) : static_cast < size_t > ( size ) ) : 0, true );
@@ -369,6 +391,10 @@ extern "C" {
 
 				case STRATA_TEXT16:
 					code = strata_bind_text16 ( stmt, i + 1, static_cast < const uint16_t* > ( item.data.bytes ), static_cast < int > ( item.size / 2 ) );
+					break;
+
+				case STRATA_NUMERIC:
+					code = strata_bind_numeric ( stmt, i + 1, static_cast < const char* > ( item.data.bytes ), static_cast < int > ( item.size ) );
 					break;
 
 				case STRATA_BLOB:

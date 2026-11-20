@@ -1,5 +1,6 @@
 #include "api/api.hh"
 #include "engine/value/value.hh"
+#include "engine/value/decimal.hh"
 
 namespace api {
 
@@ -18,6 +19,17 @@ namespace api {
 				out.type = STRATA_REAL;
 				out.data.real = item.real;
 				break;
+
+			case storage::VALUE_DECIMAL: {
+
+				engine::decimal_number exact = { };
+
+				engine::decimal_of ( item, exact );
+				out.type = STRATA_NUMERIC;
+				out.data.real = engine::decimal_real ( exact );
+				break;
+
+			}
 
 			case storage::VALUE_TEXT:
 			case storage::VALUE_BLOB:
@@ -44,6 +56,17 @@ namespace api {
 	}
 
 	static storage::value numeric ( strata_stmt* stmt, const storage::value& item ) {
+
+		if ( item.kind == storage::VALUE_DECIMAL ) {
+
+			engine::decimal_number exact = { };
+			int64_t whole = 0;
+
+			engine::decimal_of ( item, exact );
+
+			return engine::decimal_integral ( exact, whole ) ? storage::integer_value ( whole ) : storage::real_value ( engine::decimal_real ( exact ) );
+
+		}
 
 		if ( item.kind != storage::VALUE_TEXT && item.kind != storage::VALUE_BLOB )
 			return item;

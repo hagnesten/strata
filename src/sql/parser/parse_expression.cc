@@ -293,6 +293,73 @@ namespace sql {
 
 	static affinity_kind cast_affinity ( const char* type );
 
+	static bool typed_literal ( const char* name ) {
+
+		static const char* const names [ ] = { "timestamp", "timestamptz", "date", "time", "timetz", "interval", "uuid", "numeric", "decimal", "boolean", "bool", "json", "jsonb", "bigint", "integer", "int", "smallint", "real", "text", "varchar", "bytea" };
+
+		for ( const char* known : names )
+			if ( base::same_folded ( name, known ) )
+				return true;
+
+		return false;
+
+	}
+
+	static expression* parse_extract ( parser& item ) {
+
+		if ( item.current.kind != TOKEN_NAME && item.current.kind != TOKEN_STRING ) {
+
+			fail_here ( item, "expected a field name like YEAR in EXTRACT" );
+
+			return nullptr;
+
+		}
+
+		expression* field = new_expression ( item, EXPRESSION_LITERAL );
+		expression* made = new_expression ( item, EXPRESSION_FUNCTION );
+		expression** list = item.memory->make < expression* > ( 2 );
+
+		if ( !field || !made || !list ) {
+
+			fail_here ( item, "out of memory" );
+
+			return nullptr;
+
+		}
+
+		bool quoted = item.current.kind == TOKEN_STRING;
+		const char* start = item.current.start + ( quoted ? 1 : 0 );
+		size_t size = item.current.size - ( quoted ? 2 : 0 );
+		char* kept = item.memory->keep ( start, size );
+
+		if ( !kept ) {
+
+			fail_here ( item, "out of memory" );
+
+			return nullptr;
+
+		}
+
+		field->literal = storage::text_value ( kept, size );
+		advance ( item );
+
+		if ( !expect_word ( item, "from" ) )
+			return nullptr;
+
+		list [ 0 ] = field;
+		list [ 1 ] = parse_expression ( item );
+
+		if ( !list [ 1 ] || !expect_symbol ( item, ")" ) )
+			return nullptr;
+
+		made->name = "date_part";
+		made->list = list;
+		made->count = 2;
+
+		return made;
+
+	}
+
 	static expression* parse_comparison ( parser& item );
 
 	static bool parse_list ( parser& item, expression**& out, uint32_t& count ) {
@@ -545,6 +612,39 @@ namespace sql {
 			}
 
 			made->literal = storage::real_value ( number );
+
+			__int128 mantissa = 0;
+			uint32_t scale = 0;
+			uint32_t digits = 0;
+			bool exact = true;
+			bool point = false;
+
+			for ( uint32_t i = 0; i < here.size && exact; i++ ) {
+
+				char c = here.start [ i ];
+
+				if ( c == '.' && !point )
+					point = true;
+				else if ( c >= '0' && c <= '9' ) {
+
+					if ( digits || c != '0' )
+						digits++;
+
+					mantissa = mantissa * 10 + ( c - '0' );
+					scale += point ? 1 : 0;
+
+				} else
+					exact = false;
+
+			}
+
+			if ( exact && point && digits <= 36 && scale <= 30 ) {
+
+				made->literal = storage::decimal_raw ( mantissa, static_cast < uint8_t > ( scale ) );
+				made->literal.real = number;
+
+			}
+
 			advance ( item );
 
 			return made;
@@ -759,8 +859,12 @@ namespace sql {
 
 			expression* made = new_expression ( item, EXPRESSION_LITERAL );
 
-			if ( made )
+			if ( made ) {
+
 				made->literal = storage::integer_value ( token_is ( here, "true" ) ? 1 : 0 );
+				made->literal.subtype = LITERAL_BOOLEAN;
+
+			}
 
 			advance ( item );
 
@@ -838,8 +942,16 @@ namespace sql {
 
 			if ( accept_symbol ( item, "(" ) ) {
 
-				while ( item.current.kind == TOKEN_INTEGER || symbol_is ( item.current, "," ) )
+				type.add ( '(' );
+
+				while ( item.current.kind == TOKEN_INTEGER || symbol_is ( item.current, "," ) ) {
+
+					type.add ( item.current.start, item.current.size );
 					advance ( item );
+
+				}
+
+				type.add ( ')' );
 
 				if ( !expect_symbol ( item, ")" ) )
 					return nullptr;
@@ -871,7 +983,52 @@ namespace sql {
 			if ( !first )
 				return nullptr;
 
+			bool plain_word = here.start [ 0 ] != '"' && here.start [ 0 ] != '`' && here.start [ 0 ] != '[';
+
+			if ( plain_word && typed_literal ( first ) && ( item.current.kind == TOKEN_STRING || ( ( token_is ( item.current, "with" ) || token_is ( item.current, "without" ) ) && ( base::same_folded ( first, "timestamp" ) || base::same_folded ( first, "time" ) ) ) ) ) {
+
+				base::text type;
+
+				type.add ( first );
+
+				if ( token_is ( item.current, "with" ) || token_is ( item.current, "without" ) ) {
+
+					type.add ( ' ' ).add ( item.current.start, item.current.size );
+					advance ( item );
+
+					if ( !expect_word ( item, "time" ) || !expect_word ( item, "zone" ) )
+						return nullptr;
+
+					type.add ( " time zone" );
+
+				}
+
+				if ( item.current.kind != TOKEN_STRING ) {
+
+					fail_here ( item, "expected a quoted value after the type name" );
+
+					return nullptr;
+
+				}
+
+				expression* literal = parse_primary ( item );
+				expression* made = new_expression ( item, EXPRESSION_CAST );
+
+				if ( !literal || !made )
+					return nullptr;
+
+				made->left = literal;
+				made->name = item.memory->keep ( type.value ( ), type.size );
+				made->cast = cast_affinity ( made->name );
+
+				return made;
+
+			}
+
 			if ( accept_symbol ( item, "(" ) ) {
+
+				if ( plain_word && base::same_folded ( first, "extract" ) )
+					return parse_extract ( item );
 
 				expression* made = new_expression ( item, EXPRESSION_FUNCTION );
 
@@ -1009,15 +1166,23 @@ namespace sql {
 
 		if ( accept_symbol ( item, "(" ) ) {
 
-			while ( item.current.kind == TOKEN_INTEGER || symbol_is ( item.current, "," ) )
+			type.add ( '(' );
+
+			while ( item.current.kind == TOKEN_INTEGER || symbol_is ( item.current, "," ) ) {
+
+				type.add ( item.current.start, item.current.size );
 				advance ( item );
+
+			}
+
+			type.add ( ')' );
 
 			if ( !expect_symbol ( item, ")" ) )
 				return nullptr;
 
 		}
 
-		while ( item.current.kind == TOKEN_NAME && item.current.size == 2 && item.current.start [ 0 ] == '[' && item.current.start [ 1 ] == ']' ) {
+		while ( item.current.kind == TOKEN_NAME && item.current.size == 2&& item.current.start [ 0 ] == '[' && item.current.start [ 1 ] == ']' ) {
 
 			type.add ( "[]" );
 			advance ( item );
