@@ -41,15 +41,61 @@ namespace storage {
 
 	};
 
-	value null_value ( );
+	inline value null_value ( ) {
 
-	value integer_value ( int64_t number );
+		value made = { };
 
-	value real_value ( double number );
+		made.kind = VALUE_NULL;
 
-	value text_value ( const char* data, size_t size );
+		return made;
 
-	value blob_value ( const uint8_t* data, size_t size );
+	}
+
+	inline value integer_value ( int64_t number ) {
+
+		value made = { };
+
+		made.kind = VALUE_INTEGER;
+		made.integer = number;
+
+		return made;
+
+	}
+
+	inline value real_value ( double number ) {
+
+		value made = { };
+
+		made.kind = VALUE_REAL;
+		made.real = number;
+
+		return made;
+
+	}
+
+	inline value text_value ( const char* data, size_t size ) {
+
+		value made = { };
+
+		made.kind = VALUE_TEXT;
+		made.bytes = reinterpret_cast < const uint8_t* > ( data );
+		made.size = size;
+
+		return made;
+
+	}
+
+	inline value blob_value ( const uint8_t* data, size_t size ) {
+
+		value made = { };
+
+		made.kind = VALUE_BLOB;
+		made.bytes = data;
+		made.size = size;
+
+		return made;
+
+	}
 
 	size_t record_size ( const value* values, uint32_t count );
 

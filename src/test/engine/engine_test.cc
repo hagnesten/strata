@@ -655,6 +655,7 @@ namespace test {
 		prepared_tests ( *db );
 		limit_tests ( *db );
 		update_tests ( *db );
+		semi_tests ( *db );
 		fuzz_tests ( *db );
 		engine::close_database ( *db );
 		db->problem.~text ( );

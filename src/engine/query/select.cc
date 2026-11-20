@@ -482,7 +482,8 @@ namespace engine {
 		for ( uint32_t a = 0; a < plan->aggregate_count; a++ ) {
 
 			const sql::expression* call = plan->aggregates [ a ];
-			storage::value* args = call->count ? static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * call->count ) ) : nullptr;
+			storage::value local [ 4 ];
+			storage::value* args = call->count <= 4 ? local : static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * call->count ) );
 
 			if ( call->count && !args )
 				return fail_run ( ctx, "out of memory" );
@@ -1343,6 +1344,15 @@ namespace engine {
 
 		if ( !child )
 			return fail_run ( ctx, "a subquery was not prepared" );
+
+		if ( item->kind == sql::EXPRESSION_EXISTS && child->correlated ) {
+
+			semi_plan* semi = semi_join ( ctx, child );
+
+			if ( semi )
+				return semi_exists ( ctx, scope, item, *semi, out );
+
+		}
 
 		cached_child* cached = child->correlated ? nullptr : find_cache ( ctx, item );
 

@@ -72,6 +72,7 @@ ENGINE := \
 	src/engine/search/query.cc \
 	src/engine/search/snippets.cc \
 	src/engine/query/select.cc \
+	src/engine/query/semi.cc \
 	src/engine/query/source.cc \
 	src/engine/query/aggregate.cc \
 	src/engine/query/window.cc \
@@ -107,6 +108,7 @@ TESTS := \
 	src/test/engine/prepared_test.cc \
 	src/test/engine/limit_test.cc \
 	src/test/engine/update_test.cc \
+	src/test/engine/semi_test.cc \
 	src/test/engine/concurrency_test.cc \
 	src/test/api/api_test.cc
 

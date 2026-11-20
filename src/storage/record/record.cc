@@ -2,62 +2,6 @@
 
 namespace storage {
 
-	value null_value ( ) {
-
-		value made = { };
-
-		made.kind = VALUE_NULL;
-
-		return made;
-
-	}
-
-	value integer_value ( int64_t number ) {
-
-		value made = { };
-
-		made.kind = VALUE_INTEGER;
-		made.integer = number;
-
-		return made;
-
-	}
-
-	value real_value ( double number ) {
-
-		value made = { };
-
-		made.kind = VALUE_REAL;
-		made.real = number;
-
-		return made;
-
-	}
-
-	value text_value ( const char* data, size_t size ) {
-
-		value made = { };
-
-		made.kind = VALUE_TEXT;
-		made.bytes = reinterpret_cast < const uint8_t* > ( data );
-		made.size = size;
-
-		return made;
-
-	}
-
-	value blob_value ( const uint8_t* data, size_t size ) {
-
-		value made = { };
-
-		made.kind = VALUE_BLOB;
-		made.bytes = data;
-		made.size = size;
-
-		return made;
-
-	}
-
 	size_t record_size ( const value* values, uint32_t count ) {
 
 		size_t size = base::varint_size ( count );

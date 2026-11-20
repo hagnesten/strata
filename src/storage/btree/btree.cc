@@ -1755,7 +1755,7 @@ namespace storage {
 
 	}
 
-	static void remember_leaf ( pager& owner, leaf_hint* hint, uint32_t root, uint32_t leaf ) {
+	static void remember_leaf ( pager& owner, leaf_hint* hint, uint32_t root, uint32_t leaf, uint32_t slot ) {
 
 		if ( !hint ) {
 
@@ -1767,11 +1767,93 @@ namespace storage {
 		}
 
 		hint->leaf = leaf;
+		hint->slot = slot;
 		hint->layout = owner.layout;
 
 	}
 
-	static bool hinted_seek ( pager& owner, const leaf_hint& hint, const key_probe& probe, cursor& at, bool& hit ) {
+	static bool gallop_seek ( pager& owner, const uint8_t* page, uint32_t count, uint32_t start, const key_probe& probe, uint32_t& slot, bool& exact, bool& hit ) {
+
+		bool fine = true;
+		uint32_t s = start < 1 ? 1 : start > count - 1 ? count - 1 : start;
+
+		hit = false;
+
+		if ( index_order ( owner, page, s - 1, count, probe, fine ) >= 0 || !fine )
+			return fine;
+
+		uint32_t low = s - 1;
+		uint32_t high = 0;
+		uint32_t step = 1;
+		bool found = false;
+
+		exact = false;
+
+		while ( !found ) {
+
+			uint32_t next = low + step;
+
+			if ( next >= count - 1 ) {
+
+				int32_t order = index_order ( owner, page, count - 1, count, probe, fine );
+
+				if ( !fine || order < 0 )
+					return fine;
+
+				high = count - 1;
+				exact = order == 0;
+				found = true;
+
+				break;
+
+			}
+
+			int32_t order = index_order ( owner, page, next, count, probe, fine );
+
+			if ( !fine )
+				return false;
+
+			if ( order >= 0 ) {
+
+				high = next;
+				exact = order == 0;
+				found = true;
+
+			} else {
+
+				low = next;
+				step *= 2;
+
+			}
+
+		}
+
+		low++;
+
+		while ( fine && low < high ) {
+
+			uint32_t middle = low + ( high - low ) / 2;
+			int32_t order = index_order ( owner, page, middle, count, probe, fine );
+
+			if ( order < 0 )
+				low = middle + 1;
+			else {
+
+				high = middle;
+				exact = exact || order == 0;
+
+			}
+
+		}
+
+		slot = low;
+		hit = fine;
+
+		return fine;
+
+	}
+
+	static bool hinted_seek ( pager& owner, leaf_hint& hint, const key_probe& probe, cursor& at, bool& hit ) {
 
 		page_frame* frame = get_page ( owner, hint.leaf );
 
@@ -1785,6 +1867,28 @@ namespace storage {
 		bool fine = true;
 
 		if ( page [ 0 ] == PAGE_INDEX_LEAF && count >= 2 ) {
+
+			uint32_t slot = 0;
+			bool exact = false;
+
+			fine = gallop_seek ( owner, page, count, hint.slot, probe, slot, exact, hit );
+
+			if ( fine && hit ) {
+
+				at.page = hint.leaf;
+				at.slot = slot;
+				at.valid = true;
+				at.match = exact ? SEEK_EQUAL : SEEK_NONE;
+				hint.slot = slot;
+				release_page ( frame );
+
+				return true;
+
+			}
+
+		}
+
+		if ( fine && page [ 0 ] == PAGE_INDEX_LEAF && count >= 2 ) {
 
 			int32_t low_order = index_order ( owner, page, 0, count, probe, fine );
 			int32_t high_order = fine && low_order < 0 ? index_order ( owner, page, count - 1, count, probe, fine ) : -1;
@@ -1817,6 +1921,7 @@ namespace storage {
 					at.slot = low;
 					at.valid = true;
 					at.match = exact ? SEEK_EQUAL : SEEK_NONE;
+					hint.slot = low;
 					hit = true;
 
 				}
@@ -1901,7 +2006,7 @@ namespace storage {
 
 				if ( hinted ) {
 
-					remember_leaf ( owner, hint, tree.root, number );
+					remember_leaf ( owner, hint, tree.root, number, slot );
 
 					if ( slot < count )
 						at.match = exact ? SEEK_EQUAL : SEEK_NONE;

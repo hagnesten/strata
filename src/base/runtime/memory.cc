@@ -15,7 +15,7 @@ extern "C" {
 
 		uint8_t* to = static_cast < uint8_t* > ( target );
 
-		if ( size <= 64 ) {
+		if ( size <= 512 ) {
 
 			uint64_t pattern = static_cast < uint8_t > ( value ) * 0x0101010101010101ull;
 
@@ -55,7 +55,7 @@ extern "C" {
 		uint8_t* to = static_cast < uint8_t* > ( target );
 		const uint8_t* from = static_cast < const uint8_t* > ( source );
 
-		if ( size <= 64 ) {
+		if ( size <= 512 ) {
 
 			if ( size >= 8 ) {
 

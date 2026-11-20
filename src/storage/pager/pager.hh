@@ -135,6 +135,7 @@ namespace storage {
 
 		uint32_t root;
 		uint32_t leaf;
+		uint32_t slot;
 		uint64_t layout;
 		int32_t score;
 		uint32_t tries;

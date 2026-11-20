@@ -6,6 +6,7 @@
 #define RUN_DEPTH 48
 #define SORT_BOUND 100000
 #define QUICK_MIXED -2
+#define SEMI_KEYS 4
 #define ENGINE_VERSION "0.5"
 #define RUN_KEY_ROOM ( CATALOG_KEY_COLUMNS + 1 )
 
@@ -279,6 +280,18 @@ namespace engine {
 		int32_t snapshot_aggregate;
 		plan_child* children;
 		uint32_t id;
+		struct semi_plan* semi;
+		bool semi_checked;
+
+	};
+
+	struct semi_plan {
+
+		uint32_t key_count;
+		const sql::expression* inner [ SEMI_KEYS ];
+		const sql::expression* outer [ SEMI_KEYS ];
+		prepared_source scan;
+		prepared_select select;
 
 	};
 
@@ -704,6 +717,10 @@ namespace engine {
 	bool append_json ( run_context& ctx, base::text& out, const storage::value& item );
 
 	bool run_child ( run_context& ctx, query_state* scope, const sql::expression* item, storage::value& out );
+
+	semi_plan* semi_join ( run_context& ctx, prepared_select* child );
+
+	bool semi_exists ( run_context& ctx, query_state* scope, const sql::expression* item, semi_plan& semi, storage::value& out );
 
 	bool open_source ( run_context& ctx, query_state* scope, source_state& source );
 

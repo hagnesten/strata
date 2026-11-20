@@ -53,6 +53,7 @@
     <ClCompile Include="src\test\api\api_test.cc" />
     <ClCompile Include="src\test\base\hash_test.cc" />
     <ClCompile Include="src\test\engine\update_test.cc" />
+    <ClCompile Include="src\test\engine\semi_test.cc" />
     <ClInclude Include="src\engine\version.hh" />
     <None Include="src\base\platform\linux\coroutine.cc" />
     <None Include="src\base\platform\linux\runtime.cc" />
@@ -104,6 +105,7 @@
     <ClCompile Include="src\engine\schema\analyze.cc" />
     <ClCompile Include="src\storage\btree\estimate.cc" />
     <ClCompile Include="src\engine\query\select.cc" />
+    <ClCompile Include="src\engine\query\semi.cc" />
     <ClCompile Include="src\engine\query\source.cc" />
     <ClCompile Include="src\engine\query\aggregate.cc" />
     <ClCompile Include="src\engine\query\window.cc" />
