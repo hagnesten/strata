@@ -58,6 +58,7 @@
     <ClInclude Include="src\base\platform\os.hh" />
     <ClInclude Include="src\base\platform\windows\wide.hh" />
     <ClCompile Include="src\base\runtime\memory.cc" />
+    <ClCompile Include="src\base\runtime\wide.cc" />
     <ClInclude Include="src\base\runtime\memory.hh" />
     <ClInclude Include="src\base\runtime\coroutine.hh" />
     <ClCompile Include="src\base\console\console.cc" />
@@ -86,6 +87,8 @@
     <ClCompile Include="src\sql\parser\parse_statement.cc" />
     <ClCompile Include="src\sql\print\print.cc" />
     <ClCompile Include="src\engine\value\value.cc" />
+    <ClCompile Include="src\engine\value\decimal.cc" />
+    <ClCompile Include="src\engine\value\moment.cc" />
     <ClCompile Include="src\engine\catalog\catalog.cc" />
     <ClCompile Include="src\engine\catalog\statistics.cc" />
     <ClCompile Include="src\engine\run\evaluate.cc" />

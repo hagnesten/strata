@@ -13,6 +13,7 @@ LIBRARYFLAGS := $(TARGET) -fuse-ld=lld -nostdlib -shared -Wl,--gc-sections -Wl,-
 
 BASE := \
 	src/base/runtime/memory.cc \
+	src/base/runtime/wide.cc \
 	src/base/console/console.cc \
 	src/base/text/text.cc \
 	src/base/file/file.cc \
@@ -62,6 +63,8 @@ SQL := \
 
 ENGINE := \
 	src/engine/value/value.cc \
+	src/engine/value/decimal.cc \
+	src/engine/value/moment.cc \
 	src/engine/catalog/catalog.cc \
 	src/engine/catalog/statistics.cc \
 	src/engine/catalog/views.cc \

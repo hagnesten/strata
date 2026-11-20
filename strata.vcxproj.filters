@@ -271,6 +271,7 @@
     <ClInclude Include="src\base\platform\os.hh"><Filter>src\base\platform</Filter></ClInclude>
     <ClInclude Include="src\base\platform\windows\wide.hh"><Filter>src\base\platform\windows</Filter></ClInclude>
     <ClCompile Include="src\base\runtime\memory.cc"><Filter>src\base\runtime</Filter></ClCompile>
+    <ClCompile Include="src\base\runtime\wide.cc"><Filter>src\base\runtime</Filter></ClCompile>
     <ClCompile Include="src\base\console\console.cc"><Filter>src\base\console</Filter></ClCompile>
     <ClCompile Include="src\base\text\text.cc"><Filter>src\base\text</Filter></ClCompile>
     <ClCompile Include="src\base\file\file.cc"><Filter>src\base\file</Filter></ClCompile>
@@ -297,6 +298,8 @@
     <ClCompile Include="src\sql\print\print.cc"><Filter>src\sql\print</Filter></ClCompile>
     <ClCompile Include="src\test\sql\parser_test.cc"><Filter>src\test\sql</Filter></ClCompile>
     <ClCompile Include="src\engine\value\value.cc"><Filter>src\engine\value</Filter></ClCompile>
+    <ClCompile Include="src\engine\value\decimal.cc"><Filter>src\engine\value</Filter></ClCompile>
+    <ClCompile Include="src\engine\value\moment.cc"><Filter>src\engine\value</Filter></ClCompile>
     <ClCompile Include="src\engine\catalog\catalog.cc"><Filter>src\engine\catalog</Filter></ClCompile>
     <ClCompile Include="src\base\sort\sort.cc"><Filter>src\base\sort</Filter></ClCompile>
     <ClCompile Include="src\engine\run\evaluate.cc"><Filter>src\engine\run</Filter></ClCompile>
@@ -409,6 +412,8 @@
     <ClInclude Include="src\sql\print\print.hh"><Filter>src\sql\print</Filter></ClInclude>
     <ClInclude Include="src\app\main\main.hh"><Filter>src\app\main</Filter></ClInclude>
     <ClInclude Include="src\engine\value\value.hh"><Filter>src\engine\value</Filter></ClInclude>
+    <ClInclude Include="src\engine\value\decimal.hh"><Filter>src\engine\value</Filter></ClInclude>
+    <ClInclude Include="src\engine\value\moment.hh"><Filter>src\engine\value</Filter></ClInclude>
     <ClInclude Include="src\engine\catalog\catalog.hh"><Filter>src\engine\catalog</Filter></ClInclude>
     <ClInclude Include="src\base\sort\sort.hh"><Filter>src\base\sort</Filter></ClInclude>
     <ClInclude Include="src\base\clock\clock.hh"><Filter>src\base\clock</Filter></ClInclude>

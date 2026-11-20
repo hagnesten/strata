@@ -126,6 +126,7 @@
     <ClInclude Include="src\base\platform\os.hh"><Filter>src\base\platform</Filter></ClInclude>
     <ClInclude Include="src\base\platform\windows\wide.hh"><Filter>src\base\platform\windows</Filter></ClInclude>
     <ClCompile Include="src\base\runtime\memory.cc"><Filter>src\base\runtime</Filter></ClCompile>
+    <ClCompile Include="src\base\runtime\wide.cc"><Filter>src\base\runtime</Filter></ClCompile>
     <ClInclude Include="src\base\runtime\memory.hh"><Filter>src\base\runtime</Filter></ClInclude>
     <ClInclude Include="src\base\runtime\coroutine.hh"><Filter>src\base\runtime</Filter></ClInclude>
     <ClCompile Include="src\base\console\console.cc"><Filter>src\base\console</Filter></ClCompile>
@@ -154,6 +155,8 @@
     <ClCompile Include="src\sql\parser\parse_statement.cc"><Filter>src\sql\parser</Filter></ClCompile>
     <ClCompile Include="src\sql\print\print.cc"><Filter>src\sql\print</Filter></ClCompile>
     <ClCompile Include="src\engine\value\value.cc"><Filter>src\engine\value</Filter></ClCompile>
+    <ClCompile Include="src\engine\value\decimal.cc"><Filter>src\engine\value</Filter></ClCompile>
+    <ClCompile Include="src\engine\value\moment.cc"><Filter>src\engine\value</Filter></ClCompile>
     <ClCompile Include="src\engine\catalog\catalog.cc"><Filter>src\engine\catalog</Filter></ClCompile>
     <ClCompile Include="src\engine\catalog\statistics.cc"><Filter>src\engine\catalog</Filter></ClCompile>
     <ClCompile Include="src\engine\run\evaluate.cc"><Filter>src\engine\run</Filter></ClCompile>
