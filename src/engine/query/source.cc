@@ -145,6 +145,51 @@ namespace engine {
 
 	}
 
+	static bool bound_term ( const sql::expression* term, const access_path& path ) {
+
+		if ( term->kind == sql::EXPRESSION_BETWEEN )
+			return !term->negated && path.low && path.high && term->right == path.low && term->third == path.high;
+
+		if ( term->kind != sql::EXPRESSION_BINARY )
+			return false;
+
+		for ( uint32_t k = 0; k < path.equal_count; k++ )
+			if ( term->left == path.equal [ k ] || term->right == path.equal [ k ] )
+				return term->op == sql::OPERATOR_EQUAL;
+
+		if ( path.low && ( term->left == path.low || term->right == path.low ) )
+			return true;
+
+		return path.low && path.high && ( term->left == path.high || term->right == path.high );
+
+	}
+
+	static void consume_bounds ( prepared_source& source ) {
+
+		uint32_t end = source.filter_count;
+
+		for ( uint32_t t = 0; t < end; ) {
+
+			sql::expression* term = source.filters [ t ];
+
+			if ( !bound_term ( term, source.path ) ) {
+
+				t++;
+
+				continue;
+
+			}
+
+			end--;
+			source.filters [ t ] = source.filters [ end ];
+			source.filters [ end ] = term;
+
+		}
+
+		source.path.consumed = source.filter_count - end;
+
+	}
+
 	void choose_path ( run_context& ctx, prepared_select* plan, uint32_t level ) {
 
 		prepared_source& source = plan->sources [ level ];
@@ -260,6 +305,9 @@ namespace engine {
 
 			source.path = best_index;
 
+			if ( !outer )
+				consume_bounds ( source );
+
 			return;
 
 		}
@@ -276,7 +324,7 @@ namespace engine {
 
 				source.filters [ t ] = source.filters [ source.filter_count - 1 ];
 				source.filters [ source.filter_count - 1 ] = list;
-				source.path.consumed = true;
+				source.path.consumed = 1;
 
 				break;
 
@@ -298,8 +346,14 @@ namespace engine {
 
 		}
 
-		if ( best_score > 0 )
+		if ( best_score > 0 ) {
+
 			source.path = best_index;
+
+			if ( !outer )
+				consume_bounds ( source );
+
+		}
 
 	}
 
@@ -706,7 +760,7 @@ namespace engine {
 		}
 
 		terms = source.plan->filters;
-		count = source.plan->filter_count - ( source.plan->path.consumed ? 1 : 0 );
+		count = source.plan->filter_count - source.plan->path.consumed;
 
 	}
 
@@ -1191,6 +1245,23 @@ namespace engine {
 
 	}
 
+	static storage::key_probe* keep_probe ( run_context& ctx, const uint8_t* key, size_t size, uint32_t columns ) {
+
+		storage::key_probe* made = static_cast < storage::key_probe* > ( ctx.scratch->take_raw ( sizeof ( storage::key_probe ) ) );
+
+		if ( made )
+			storage::make_probe ( key, size, columns, *made );
+
+		return made;
+
+	}
+
+	static int32_t order_entry ( const uint8_t* entry, size_t size, const storage::key_probe* probe, const uint8_t* key, size_t key_size, uint32_t columns ) {
+
+		return probe ? storage::compare_probe ( entry, size, *probe ) : storage::compare_records ( entry, size, key, key_size, columns );
+
+	}
+
 	static bool open_index ( run_context& ctx, query_state* scope, source_state& source ) {
 
 		const access_path& path = source.plan->path;
@@ -1223,6 +1294,9 @@ namespace engine {
 		if ( !keep_key ( ctx, key, equal, source.equal_key, source.equal_size ) )
 			return false;
 
+		source.equal_probe = equal ? keep_probe ( ctx, source.equal_key, source.equal_size, equal ) : nullptr;
+		source.high_probe = nullptr;
+
 		sql::affinity_kind range_affinity = equal < index.column_count ? table.columns [ index.columns [ equal ] ].affinity : sql::AFFINITY_ANY;
 
 		source.high_key = nullptr;
@@ -1248,6 +1322,7 @@ namespace engine {
 			if ( !keep_key ( ctx, key, equal + 1, source.high_key, source.high_size ) )
 				return false;
 
+			source.high_probe = keep_probe ( ctx, source.high_key, source.high_size, equal + 1 );
 			source.high_columns = equal + 1;
 			source.high_inclusive = path.high_inclusive;
 
@@ -1548,25 +1623,34 @@ namespace engine {
 
 		while ( source.index_at.valid ) {
 
-			if ( !storage::cursor_payload ( source.index_at, ctx.row_bytes ) )
+			int64_t unused = 0;
+			const uint8_t* entry = nullptr;
+			size_t size = 0;
+			storage::page_frame* held = nullptr;
+
+			if ( !storage::cursor_view ( source.index_at, *ctx.scratch, unused, entry, size, held ) )
 				return fail_storage ( ctx, "an index could not be read" );
 
-			const uint8_t* entry = reinterpret_cast < const uint8_t* > ( ctx.row_bytes.value ( ) );
-			size_t size = ctx.row_bytes.size;
+			bool stop = equal && order_entry ( entry, size, source.equal_probe, source.equal_key, source.equal_size, equal ) != 0;
 
-			if ( equal && storage::compare_records ( entry, size, source.equal_key, source.equal_size, equal ) != 0 ) {
+			if ( !stop && source.high_key ) {
 
-				source.done = true;
+				int32_t order = order_entry ( entry, size, source.high_probe, source.high_key, source.high_size, source.high_columns );
 
-				return true;
+				stop = order > 0 || ( order == 0 && !source.high_inclusive );
 
 			}
 
-			if ( source.high_key ) {
+			bool skip = !stop && source.low_key && source.low_exclusive && storage::compare_records ( entry, size, source.low_key, source.low_size, equal + 1 ) == 0;
+			int64_t rowid = 0;
+			bool damaged = !stop && !skip && !storage::last_integer ( entry, size, rowid );
 
-				int32_t order = storage::compare_records ( entry, size, source.high_key, source.high_size, source.high_columns );
+			if ( stop || skip || damaged || !path.covering ) {
 
-				if ( order > 0 || ( order == 0 && !source.high_inclusive ) ) {
+				if ( held )
+					storage::release_page ( held );
+
+				if ( stop ) {
 
 					source.done = true;
 
@@ -1574,22 +1658,22 @@ namespace engine {
 
 				}
 
+				if ( damaged )
+					return fail_named ( ctx, "an entry of index ", path.index->name, " is damaged" );
+
+				if ( skip )
+					continue;
+
+			} else {
+
+				bool fine = covered_row ( ctx, source, entry, size, rowid, found );
+
+				if ( held )
+					storage::release_page ( held );
+
+				return fine;
+
 			}
-
-			bool skip = source.low_key && source.low_exclusive && storage::compare_records ( entry, size, source.low_key, source.low_size, equal + 1 ) == 0;
-			int64_t rowid = 0;
-
-			if ( !skip && !storage::last_integer ( entry, size, rowid ) )
-				return fail_named ( ctx, "an entry of index ", path.index->name, " is damaged" );
-
-			if ( !storage::cursor_next ( source.index_at ) )
-				return fail_storage ( ctx, "an index could not be read" );
-
-			if ( skip )
-				continue;
-
-			if ( path.covering )
-				return covered_row ( ctx, source, entry, size, rowid, found );
 
 			bool present = false;
 

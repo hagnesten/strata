@@ -2,16 +2,6 @@
 
 namespace test {
 
-	static void same_answer ( engine::database& db, const char* fast, const char* slow, const char* what ) {
-
-		result_capture a;
-		result_capture b;
-		bool fine = query ( db, fast, a ) && query ( db, slow, b );
-
-		expect ( fine && a.rows == b.rows && base::same ( a.out.value ( ), b.out.value ( ) ), what );
-
-	}
-
 	static void shapes ( engine::database& db ) {
 
 		rows ( db, "SELECT count ( * ) FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id AND i.qty > 3 )", "70" );
@@ -19,13 +9,13 @@ namespace test {
 		rows ( db, "SELECT count ( * ) FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.price = o.weight )", "160" );
 		rows ( db, "SELECT count ( * ) FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.label = o.name )", "65" );
 		rows ( db, "SELECT count ( * ) FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id AND i.qty = o.band )", "76" );
-		same_answer ( db, "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id AND i.qty > 3 ) ORDER BY id", "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id AND i.qty > 3 LIMIT 1000 ) ORDER BY id", "a decorrelated EXISTS returns the same rows as a row-by-row one" );
-		same_answer ( db, "SELECT id FROM semi_outer o WHERE NOT EXISTS ( SELECT 1 FROM semi_inner i WHERE o.id = i.ref ) ORDER BY id", "SELECT id FROM semi_outer o WHERE NOT EXISTS ( SELECT 1 FROM semi_inner i WHERE o.id = i.ref LIMIT 1000 ) ORDER BY id", "NOT EXISTS with the outer column on the left matches" );
-		same_answer ( db, "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.label = o.name ) ORDER BY id", "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.label = o.name LIMIT 1000 ) ORDER BY id", "text keys match" );
-		same_answer ( db, "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id AND i.qty = o.band ) ORDER BY id", "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id AND i.qty = o.band LIMIT 1000 ) ORDER BY id", "two key columns match" );
-		same_answer ( db, "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.price = o.weight ) ORDER BY id", "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.price = o.weight LIMIT 1000 ) ORDER BY id", "whole reals and integers match" );
-		same_answer ( db, "SELECT id FROM semi_outer a WHERE EXISTS ( SELECT 1 FROM semi_outer b WHERE b.band = a.id AND b.id > 150 ) ORDER BY id", "SELECT id FROM semi_outer a WHERE EXISTS ( SELECT 1 FROM semi_outer b WHERE b.band = a.id AND b.id > 150 LIMIT 1000 ) ORDER BY id", "a table can test itself" );
-		same_answer ( db, "SELECT id, EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id ) FROM semi_outer o ORDER BY id", "SELECT id, EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id LIMIT 1000 ) FROM semi_outer o ORDER BY id", "EXISTS works as a result column" );
+		same_rows ( db, "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id AND i.qty > 3 ) ORDER BY id", "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id AND i.qty > 3 LIMIT 1000 ) ORDER BY id", "a decorrelated EXISTS returns the same rows as a row-by-row one" );
+		same_rows ( db, "SELECT id FROM semi_outer o WHERE NOT EXISTS ( SELECT 1 FROM semi_inner i WHERE o.id = i.ref ) ORDER BY id", "SELECT id FROM semi_outer o WHERE NOT EXISTS ( SELECT 1 FROM semi_inner i WHERE o.id = i.ref LIMIT 1000 ) ORDER BY id", "NOT EXISTS with the outer column on the left matches" );
+		same_rows ( db, "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.label = o.name ) ORDER BY id", "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.label = o.name LIMIT 1000 ) ORDER BY id", "text keys match" );
+		same_rows ( db, "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id AND i.qty = o.band ) ORDER BY id", "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id AND i.qty = o.band LIMIT 1000 ) ORDER BY id", "two key columns match" );
+		same_rows ( db, "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.price = o.weight ) ORDER BY id", "SELECT id FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.price = o.weight LIMIT 1000 ) ORDER BY id", "whole reals and integers match" );
+		same_rows ( db, "SELECT id FROM semi_outer a WHERE EXISTS ( SELECT 1 FROM semi_outer b WHERE b.band = a.id AND b.id > 150 ) ORDER BY id", "SELECT id FROM semi_outer a WHERE EXISTS ( SELECT 1 FROM semi_outer b WHERE b.band = a.id AND b.id > 150 LIMIT 1000 ) ORDER BY id", "a table can test itself" );
+		same_rows ( db, "SELECT id, EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id ) FROM semi_outer o ORDER BY id", "SELECT id, EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id LIMIT 1000 ) FROM semi_outer o ORDER BY id", "EXISTS works as a result column" );
 		rows ( db, "SELECT count ( * ) FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.missing )", "0" );
 		rows ( db, "SELECT count ( * ) FROM semi_outer o WHERE NOT EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.missing )", "200" );
 		rows ( db, "SELECT count ( * ) FROM semi_outer o WHERE EXISTS ( SELECT 1 FROM semi_inner i WHERE i.ref = o.id AND i.qty > 100 )", "0" );

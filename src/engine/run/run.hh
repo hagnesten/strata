@@ -176,7 +176,7 @@ namespace engine {
 		bool high_inclusive;
 		sql::expression* list;
 		bool covering;
-		bool consumed;
+		uint32_t consumed;
 
 	};
 
@@ -343,6 +343,8 @@ namespace engine {
 		const uint8_t* low_key;
 		size_t low_size;
 		bool low_exclusive;
+		storage::key_probe* equal_probe;
+		storage::key_probe* high_probe;
 		int64_t* list;
 		uint32_t list_count;
 		uint32_t list_at;

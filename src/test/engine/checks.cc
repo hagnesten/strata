@@ -44,6 +44,16 @@ namespace test {
 
 	}
 
+	void same_rows ( engine::database& db, const char* fast, const char* slow, const char* what ) {
+
+		result_capture a;
+		result_capture b;
+		bool fine = query ( db, fast, a ) && query ( db, slow, b );
+
+		expect ( fine && a.rows == b.rows && base::same ( a.out.value ( ), b.out.value ( ) ), what );
+
+	}
+
 	void rows ( engine::database& db, const char* sql, const char* wanted ) {
 
 		result_capture capture;

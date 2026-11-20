@@ -608,6 +608,51 @@ namespace storage {
 
 		size_t at = leaf ? 0 : 4;
 		uint64_t number = 0;
+		const uint8_t* bytes = page + offset + at;
+
+		if ( offset + at + 4 <= PAGE_USABLE ) {
+
+			uint32_t a = bytes [ 0 ];
+
+			if ( a < 0x80 ) {
+
+				out = base::unzigzag ( a );
+
+				return true;
+
+			}
+
+			uint32_t b = bytes [ 1 ];
+
+			if ( b < 0x80 ) {
+
+				out = base::unzigzag ( ( a & 0x7F ) | b << 7 );
+
+				return true;
+
+			}
+
+			uint32_t c = bytes [ 2 ];
+
+			if ( c < 0x80 ) {
+
+				out = base::unzigzag ( ( a & 0x7F ) | ( b & 0x7F ) << 7 | c << 14 );
+
+				return true;
+
+			}
+
+			uint32_t d = bytes [ 3 ];
+
+			if ( d < 0x80 ) {
+
+				out = base::unzigzag ( ( a & 0x7F ) | ( b & 0x7F ) << 7 | ( c & 0x7F ) << 14 | d << 21 );
+
+				return true;
+
+			}
+
+		}
 
 		if ( !base::read_varint ( page + offset, PAGE_USABLE - offset, at, number ) )
 			return false;

@@ -9,6 +9,8 @@ namespace test {
 
 	void rows ( engine::database& db, const char* sql, const char* wanted );
 
+	void same_rows ( engine::database& db, const char* fast, const char* slow, const char* what );
+
 	void run ( engine::database& db, const char* sql );
 
 	void fails ( engine::database& db, const char* sql, const char* fragment );
@@ -40,6 +42,8 @@ namespace test {
 	void update_tests ( engine::database& db );
 
 	void semi_tests ( engine::database& db );
+
+	void range_tests ( engine::database& db );
 
 	void concurrency_tests ( const char* path );
 
