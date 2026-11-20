@@ -4,6 +4,7 @@
 #include "base/bytes/bytes.hh"
 
 #define RECORD_COLUMNS 256
+#define PROBE_FIELDS 16
 
 namespace storage {
 
@@ -28,6 +29,18 @@ namespace storage {
 
 	};
 
+	struct key_probe {
+
+		const uint8_t* key;
+		size_t size;
+		uint32_t columns;
+		uint32_t fields;
+		uint64_t count;
+		bool decoded;
+		value values [ PROBE_FIELDS ];
+
+	};
+
 	value null_value ( );
 
 	value integer_value ( int64_t number );
@@ -47,5 +60,11 @@ namespace storage {
 	int32_t compare_values ( const value& a, const value& b );
 
 	int32_t compare_records ( const uint8_t* a, size_t a_size, const uint8_t* b, size_t b_size, uint32_t columns );
+
+	bool last_integer ( const uint8_t* data, size_t size, int64_t& out );
+
+	void make_probe ( const uint8_t* key, size_t size, uint32_t columns, key_probe& out );
+
+	int32_t compare_probe ( const uint8_t* data, size_t size, const key_probe& probe );
 
 }

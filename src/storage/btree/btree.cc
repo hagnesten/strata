@@ -511,18 +511,43 @@ namespace storage {
 
 	}
 
-	static int32_t order_key ( pager& owner, const cell_info& info, const uint8_t* key, size_t size, uint32_t columns, bool& fine ) {
+	static int32_t index_order ( pager& owner, const uint8_t* page, uint32_t slot, uint32_t count, const key_probe& probe, bool& fine ) {
+
+		uint32_t offset = offset_of ( page, slot );
+
+		fine = false;
+
+		if ( offset < BTREE_HEADER + count * 2 || offset >= PAGE_USABLE )
+			return 0;
+
+		const uint8_t* data = page + offset;
+		size_t size = PAGE_USABLE - offset;
+		size_t at = leaf_kind ( page [ 0 ] ) ? 0 : 4;
+		uint64_t payload = 0;
+
+		if ( !base::read_varint ( data, size, at, payload ) )
+			return 0;
+
+		if ( payload <= BTREE_MAX_LOCAL ) {
+
+			if ( payload > size - at )
+				return 0;
+
+			fine = true;
+
+			return compare_probe ( data + at, static_cast < size_t > ( payload ), probe );
+
+		}
+
+		cell_info info;
+		base::text whole;
+
+		if ( !parse_cell ( page, slot, info ) || !read_full ( owner, info, whole ) )
+			return 0;
 
 		fine = true;
 
-		if ( info.payload == info.local )
-			return compare_records ( info.local_data, info.local, key, size, columns );
-
-		base::text whole;
-
-		fine = read_full ( owner, info, whole );
-
-		return fine ? compare_records ( reinterpret_cast < const uint8_t* > ( whole.value ( ) ), whole.size, key, size, columns ) : 0;
+		return compare_probe ( reinterpret_cast < const uint8_t* > ( whole.value ( ) ), whole.size, probe );
 
 	}
 
@@ -545,7 +570,7 @@ namespace storage {
 
 	}
 
-	static bool find_slot ( pager& owner, const uint8_t* page, bool table, int64_t rowid, const uint8_t* key, size_t size, uint32_t columns, uint32_t& slot, bool& exact ) {
+	static bool find_slot ( pager& owner, const uint8_t* page, bool table, int64_t rowid, const key_probe* probe, uint32_t& slot, bool& exact ) {
 
 		uint32_t low = 0;
 		uint32_t high = count_of ( page );
@@ -556,58 +581,97 @@ namespace storage {
 
 			uint32_t count = high;
 			bool leaf = leaf_kind ( page [ 0 ] );
+			int64_t first = 0;
+			int64_t last = 0;
 
-			if ( count ) {
+			if ( !count ) {
 
-				int64_t last = 0;
+				slot = 0;
 
-				if ( !cell_rowid ( page, count - 1, count, leaf, last ) )
-					return false;
-
-				if ( last < rowid ) {
-
-					slot = count;
-
-					return true;
-
-				}
+				return true;
 
 			}
 
-			while ( low < high ) {
+			if ( !cell_rowid ( page, count - 1, count, leaf, last ) )
+				return false;
+
+			if ( last <= rowid ) {
+
+				slot = last < rowid ? count : count - 1;
+				exact = last == rowid;
+
+				return true;
+
+			}
+
+			if ( !cell_rowid ( page, 0, count, leaf, first ) )
+				return false;
+
+			if ( rowid <= first ) {
+
+				slot = 0;
+				exact = first == rowid;
+
+				return true;
+
+			}
+
+			low = 1;
+			high = count - 1;
+
+			for ( uint32_t round = 0; low < high; round++ ) {
 
 				uint32_t middle = low + ( high - low ) / 2;
+
+				if ( round < 2 ) {
+
+					double reach = static_cast < double > ( static_cast < uint64_t > ( rowid ) - static_cast < uint64_t > ( first ) ) / static_cast < double > ( static_cast < uint64_t > ( last ) - static_cast < uint64_t > ( first ) );
+					uint32_t guess = low - 1 + static_cast < uint32_t > ( reach * static_cast < double > ( high - low + 1 ) );
+
+					middle = guess < low ? low : guess >= high ? high - 1 : guess;
+
+				}
+
 				int64_t here = 0;
 
 				if ( !cell_rowid ( page, middle, count, leaf, here ) )
 					return false;
 
-				if ( here < rowid )
+				if ( here == rowid ) {
+
+					slot = middle;
+					exact = true;
+
+					return true;
+
+				}
+
+				if ( here < rowid ) {
+
 					low = middle + 1;
-				else
+					first = here;
+
+				} else {
+
 					high = middle;
+					last = here;
+
+				}
 
 			}
 
 			slot = low;
 
-			int64_t here = 0;
-
-			exact = slot < count && cell_rowid ( page, slot, count, leaf, here ) && here == rowid;
-
 			return true;
 
 		}
 
+		uint32_t count = high;
+
 		if ( high ) {
 
-			cell_info last;
 			bool fine = true;
-
-			if ( !parse_cell ( page, high - 1, last ) )
-				return false;
-
-			int32_t order = order_key ( owner, last, key, size, columns, fine );
+			int32_t order = index_order ( owner, page, high - 1, count, *probe, fine );
 
 			if ( !fine )
 				return false;
@@ -620,29 +684,19 @@ namespace storage {
 
 			}
 
+			exact = order == 0;
+			high--;
+
 		}
 
 		while ( low < high ) {
 
 			uint32_t middle = low + ( high - low ) / 2;
-			cell_info info;
-			int32_t order = 0;
+			bool fine = true;
+			int32_t order = index_order ( owner, page, middle, count, *probe, fine );
 
-			if ( !parse_cell ( page, middle, info ) )
+			if ( !fine )
 				return false;
-
-			if ( table )
-				order = info.rowid == rowid ? 0 : info.rowid < rowid ? -1 : 1;
-			else {
-
-				bool fine = true;
-
-				order = order_key ( owner, info, key, size, columns, fine );
-
-				if ( !fine )
-					return false;
-
-			}
 
 			if ( order < 0 )
 				low = middle + 1;
@@ -657,32 +711,15 @@ namespace storage {
 
 		slot = low;
 
-		if ( exact && slot < count_of ( page ) ) {
-
-			cell_info info;
-
-			if ( !parse_cell ( page, slot, info ) )
-				return false;
-
-			bool fine = true;
-
-			exact = table ? info.rowid == rowid : order_key ( owner, info, key, size, columns, fine ) == 0;
-
-			if ( !fine )
-				return false;
-
-		} else
-			exact = false;
-
 		return true;
 
 	}
 
-	static bool child_for ( pager& owner, const uint8_t* page, bool table, int64_t rowid, const uint8_t* key, size_t size, uint32_t columns, uint32_t& position, uint32_t& child ) {
+	static bool child_for ( pager& owner, const uint8_t* page, bool table, int64_t rowid, const key_probe* probe, uint32_t& position, uint32_t& child ) {
 
 		bool exact = false;
 
-		if ( !find_slot ( owner, page, table, rowid, key, size, columns, position, exact ) )
+		if ( !find_slot ( owner, page, table, rowid, probe, position, exact ) )
 			return false;
 
 		if ( position < count_of ( page ) ) {
@@ -975,7 +1012,7 @@ namespace storage {
 			uint32_t slot = 0;
 			bool exact = false;
 
-			fine = find_slot ( owner, frame->data, job.table, job.rowid, job.key, job.key_size, 0, slot, exact );
+			fine = find_slot ( owner, frame->data, job.table, job.rowid, job.probe, slot, exact );
 
 			if ( fine && exact && ( !job.table || !job.replace ) ) {
 
@@ -1031,7 +1068,7 @@ namespace storage {
 			uint32_t position = 0;
 			uint32_t child = 0;
 
-			fine = child_for ( owner, frame->data, job.table, job.rowid, job.key, job.key_size, 0, position, child );
+			fine = child_for ( owner, frame->data, job.table, job.rowid, job.probe, position, child );
 
 			if ( !fine && owner.error == PAGER_FINE )
 				corrupt ( owner, "an interior page has no child", number );
@@ -1225,7 +1262,11 @@ namespace storage {
 		if ( !payload_body ( *tree.owner, key, size, cell ) )
 			return false;
 
-		insert_job job = { false, 0, key, size, reinterpret_cast < const uint8_t* > ( cell.value ( ) ), static_cast < uint32_t > ( cell.size ), false, false };
+		key_probe probe;
+
+		make_probe ( key, size, 0, probe );
+
+		insert_job job = { false, 0, key, size, reinterpret_cast < const uint8_t* > ( cell.value ( ) ), static_cast < uint32_t > ( cell.size ), false, false, &probe };
 		bool fine = insert ( tree, job );
 
 		existed = job.existed;
@@ -1417,7 +1458,7 @@ namespace storage {
 			uint32_t slot = 0;
 			bool exact = false;
 
-			fine = find_slot ( owner, frame->data, job.table, job.rowid, job.key, job.key_size, 0, slot, exact );
+			fine = find_slot ( owner, frame->data, job.table, job.rowid, job.probe, slot, exact );
 
 			if ( fine && exact ) {
 
@@ -1440,7 +1481,7 @@ namespace storage {
 			uint32_t position = 0;
 			uint32_t child = 0;
 
-			fine = child_for ( owner, frame->data, job.table, job.rowid, job.key, job.key_size, 0, position, child );
+			fine = child_for ( owner, frame->data, job.table, job.rowid, job.probe, position, child );
 
 			remove_result below;
 
@@ -1557,7 +1598,11 @@ namespace storage {
 
 	bool index_delete ( btree& tree, const uint8_t* key, size_t size, bool& found ) {
 
-		remove_job job = { false, 0, key, size };
+		key_probe probe;
+
+		make_probe ( key, size, 0, probe );
+
+		remove_job job = { false, 0, key, size, &probe };
 
 		return remove ( tree, job, found );
 
@@ -1611,9 +1656,13 @@ namespace storage {
 
 		pager& owner = *tree.owner;
 		uint32_t number = tree.root;
+		key_probe probe;
 
 		at.tree = tree;
 		at.valid = false;
+
+		if ( tree.index && !first )
+			make_probe ( key, size, columns, probe );
 
 		for ( uint32_t depth = 0; depth <= BTREE_DEPTH; depth++ ) {
 
@@ -1637,7 +1686,7 @@ namespace storage {
 
 				uint32_t slot = 0;
 				bool exact = false;
-				bool fine = first || find_slot ( owner, frame->data, !tree.index, rowid, key, size, columns, slot, exact );
+				bool fine = first || find_slot ( owner, frame->data, !tree.index, rowid, &probe, slot, exact );
 
 				release_page ( frame );
 
@@ -1667,7 +1716,7 @@ namespace storage {
 				fine = child != 0;
 
 			} else
-				fine = child_for ( owner, frame->data, !tree.index, rowid, key, size, columns, position, child );
+				fine = child_for ( owner, frame->data, !tree.index, rowid, &probe, position, child );
 
 			release_page ( frame );
 
@@ -1853,7 +1902,7 @@ namespace storage {
 
 				uint32_t slot = 0;
 				bool exact = false;
-				bool fine = find_slot ( owner, frame->data, true, rowid, nullptr, 0, 0, slot, exact );
+				bool fine = find_slot ( owner, frame->data, true, rowid, nullptr, slot, exact );
 				cell_info info;
 
 				if ( fine && exact && ( fine = parse_cell ( frame->data, slot, info ) ) ) {
@@ -1907,7 +1956,7 @@ namespace storage {
 
 			uint32_t position = 0;
 			uint32_t child = 0;
-			bool fine = child_for ( owner, frame->data, true, rowid, nullptr, 0, 0, position, child );
+			bool fine = child_for ( owner, frame->data, true, rowid, nullptr, position, child );
 
 			release_page ( frame );
 

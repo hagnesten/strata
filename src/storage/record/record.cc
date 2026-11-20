@@ -411,4 +411,146 @@ namespace storage {
 
 	}
 
+	bool last_integer ( const uint8_t* data, size_t size, int64_t& out ) {
+
+		size_t at = 0;
+		uint64_t columns = 0;
+
+		if ( !base::read_varint ( data, size, at, columns ) || !columns || columns > RECORD_COLUMNS )
+			return false;
+
+		for ( uint64_t i = 1; i < columns; i++ )
+			if ( !skip_one ( data, size, at ) )
+				return false;
+
+		uint64_t bits = 0;
+
+		if ( at >= size || data [ at ] != VALUE_INTEGER )
+			return false;
+
+		at++;
+
+		if ( !base::read_varint ( data, size, at, bits ) )
+			return false;
+
+		out = base::unzigzag ( bits );
+
+		return true;
+
+	}
+
+	void make_probe ( const uint8_t* key, size_t size, uint32_t columns, key_probe& out ) {
+
+		size_t at = 0;
+
+		out.key = key;
+		out.size = size;
+		out.columns = columns;
+		out.fields = 0;
+		out.count = 0;
+		out.decoded = false;
+
+		if ( !base::read_varint ( key, size, at, out.count ) )
+			return;
+
+		uint64_t wanted = columns && columns < out.count ? columns : out.count;
+
+		if ( wanted > PROBE_FIELDS )
+			return;
+
+		for ( uint32_t i = 0; i < wanted; i++ )
+			if ( !decode_one ( key, size, at, out.values [ i ] ) )
+				return;
+
+		out.fields = static_cast < uint32_t > ( wanted );
+		out.decoded = true;
+
+	}
+
+	int32_t compare_probe ( const uint8_t* data, size_t size, const key_probe& probe ) {
+
+		if ( !probe.decoded )
+			return compare_records ( data, size, probe.key, probe.size, probe.columns );
+
+		size_t at = 0;
+		uint64_t count = 0;
+
+		if ( !base::read_varint ( data, size, at, count ) )
+			return 0;
+
+		uint64_t shared = count < probe.count ? count : probe.count;
+
+		if ( probe.columns && shared > probe.columns )
+			shared = probe.columns;
+
+		for ( uint32_t i = 0; i < shared; i++ ) {
+
+			const value& right = probe.values [ i ];
+
+			if ( at >= size )
+				return 0;
+
+			uint8_t kind = data [ at ];
+
+			if ( kind == VALUE_INTEGER && right.kind == VALUE_INTEGER ) {
+
+				uint64_t bits = 0;
+
+				at++;
+
+				if ( !base::read_varint ( data, size, at, bits ) )
+					return 0;
+
+				int64_t left = base::unzigzag ( bits );
+
+				if ( left != right.integer )
+					return left < right.integer ? -1 : 1;
+
+				continue;
+
+			}
+
+			if ( kind == right.kind && ( kind == VALUE_TEXT || kind == VALUE_BLOB ) ) {
+
+				uint64_t length = 0;
+
+				at++;
+
+				if ( !base::read_varint ( data, size, at, length ) || length > size - at )
+					return 0;
+
+				size_t shorter = static_cast < size_t > ( length < right.size ? length : right.size );
+				int32_t order = shorter ? __builtin_memcmp ( data + at, right.bytes, shorter ) : 0;
+
+				at += static_cast < size_t > ( length );
+
+				if ( order )
+					return order < 0 ? -1 : 1;
+
+				if ( length != right.size )
+					return length < right.size ? -1 : 1;
+
+				continue;
+
+			}
+
+			value left;
+
+			if ( !decode_one ( data, size, at, left ) )
+				return 0;
+
+			int32_t order = compare_values ( left, right );
+
+			if ( order )
+				return order;
+
+		}
+
+		if ( probe.columns && shared == probe.columns )
+			return 0;
+
+		return count == probe.count ? 0 : count < probe.count ? -1 : 1;
+
+	}
+
 }

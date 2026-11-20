@@ -78,6 +78,34 @@ namespace base {
 
 		uint64_t value = 0;
 
+		if ( at < size && size - at >= 10 ) {
+
+			const uint8_t* bytes = data + at;
+
+			for ( uint32_t i = 0; i < 10; i++ ) {
+
+				uint8_t byte = bytes [ i ];
+
+				if ( i == 9 && byte > 1 )
+					return false;
+
+				value |= static_cast < uint64_t > ( byte & 0x7F ) << ( i * 7 );
+
+				if ( !( byte & 0x80 ) ) {
+
+					at += i + 1;
+					out = value;
+
+					return true;
+
+				}
+
+			}
+
+			return false;
+
+		}
+
 		for ( uint32_t shift = 0; shift < 70; shift += 7 ) {
 
 			if ( at >= size )

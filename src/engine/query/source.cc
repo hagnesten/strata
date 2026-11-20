@@ -531,6 +531,22 @@ namespace engine {
 
 	}
 
+	static bool read_source_row ( run_context& ctx, source_state& source, int64_t rowid, bool& found ) {
+
+		storage::btree tree = { ctx.pages, source.plan->table->root, false };
+		const uint8_t* data = nullptr;
+		size_t size = 0;
+
+		if ( !storage::table_lookup ( tree, rowid, *ctx.scratch, data, size, found ) )
+			return fail_storage ( ctx, "a row could not be read" );
+
+		if ( !found )
+			return true;
+
+		return decode_scanned ( ctx, source, rowid, data, size );
+
+	}
+
 	static bool quick_side ( const sql::expression* item, int32_t level ) {
 
 		return item && item->kind == sql::EXPRESSION_COLUMN && item->depth == 0 && item->source == level && !item->nocase;
@@ -1407,7 +1423,6 @@ namespace engine {
 	static bool next_index ( run_context& ctx, source_state& source, bool& found ) {
 
 		const access_path& path = source.plan->path;
-		const table_info& table = *source.plan->table;
 		uint32_t equal = path.equal_count;
 
 		while ( source.index_at.valid ) {
@@ -1441,13 +1456,10 @@ namespace engine {
 			}
 
 			bool skip = source.low_key && source.low_exclusive && storage::compare_records ( entry, size, source.low_key, source.low_size, equal + 1 ) == 0;
-			storage::value key [ RUN_KEY_ROOM ];
-			uint32_t count = 0;
+			int64_t rowid = 0;
 
-			if ( !skip && ( !storage::decode_record ( entry, size, key, RUN_KEY_ROOM, count ) || !count || key [ count - 1 ].kind != storage::VALUE_INTEGER ) )
+			if ( !skip && !storage::last_integer ( entry, size, rowid ) )
 				return fail_named ( ctx, "an entry of index ", path.index->name, " is damaged" );
-
-			int64_t rowid = skip ? 0 : key [ count - 1 ].integer;
 
 			if ( !storage::cursor_next ( source.index_at ) )
 				return fail_storage ( ctx, "an index could not be read" );
@@ -1460,7 +1472,7 @@ namespace engine {
 
 			bool present = false;
 
-			if ( !read_row ( ctx, table, rowid, source.values, present ) )
+			if ( !read_source_row ( ctx, source, rowid, present ) )
 				return false;
 
 			if ( !present )
@@ -1594,7 +1606,7 @@ namespace engine {
 					int64_t rowid = source.list [ source.list_at++ ];
 					bool present = false;
 
-					if ( !read_row ( ctx, *plan.table, rowid, source.values, present ) )
+					if ( !read_source_row ( ctx, source, rowid, present ) )
 						return false;
 
 					if ( present ) {

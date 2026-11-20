@@ -53,6 +53,7 @@ namespace storage {
 		uint32_t cell_size;
 		bool replace;
 		bool existed;
+		const key_probe* probe;
 
 	};
 
@@ -62,6 +63,7 @@ namespace storage {
 		int64_t rowid;
 		const uint8_t* key;
 		size_t key_size;
+		const key_probe* probe;
 
 	};
 
