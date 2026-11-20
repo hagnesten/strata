@@ -343,6 +343,14 @@ namespace sql {
 
 	};
 
+	struct returning_clause {
+
+		result_column* columns;
+		uint32_t count;
+		mutable void* prepared;
+
+	};
+
 	struct insert_statement {
 
 		const char* table;
@@ -356,6 +364,7 @@ namespace sql {
 		uint32_t update_count;
 		expression* update_where;
 		mutable void* prepared;
+		returning_clause returning;
 
 	};
 
@@ -367,6 +376,7 @@ namespace sql {
 		expression* where;
 		conflict_kind conflict;
 		mutable void* prepared;
+		returning_clause returning;
 
 	};
 
@@ -375,6 +385,7 @@ namespace sql {
 		const char* table;
 		expression* where;
 		mutable void* prepared;
+		returning_clause returning;
 
 	};
 

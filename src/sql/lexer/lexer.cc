@@ -274,6 +274,18 @@ namespace sql {
 
 		}
 
+		if ( c == ':' && start [ 1 ] == ':' ) {
+
+			out.kind = TOKEN_SYMBOL;
+			out.symbol [ 0 ] = ':';
+			out.symbol [ 1 ] = ':';
+			out.size = 2;
+			item.at = start + 2;
+
+			return out;
+
+		}
+
 		if ( c == '?' || c == ':' || c == '@' || c == '$' ) {
 
 			const char* at = start + 1;

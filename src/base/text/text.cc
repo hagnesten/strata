@@ -160,6 +160,39 @@ namespace base {
 
 	}
 
+	bool find_folded ( const char* text, const char* part ) {
+
+		if ( !text || !part )
+			return false;
+
+		size_t size = length ( part );
+
+		for ( const char* at = text; *at; at++ ) {
+
+			size_t i = 0;
+
+			while ( i < size && at [ i ] && lower ( at [ i ] ) == lower ( part [ i ] ) )
+				i++;
+
+			if ( i == size )
+				return true;
+
+		}
+
+		return !size;
+
+	}
+
+	bool same_folded_size ( const char* a, const char* b, size_t size ) {
+
+		for ( size_t i = 0; i < size; i++ )
+			if ( lower ( a [ i ] ) != lower ( b [ i ] ) )
+				return false;
+
+		return true;
+
+	}
+
 	bool starts_with ( const char* value, const char* prefix ) {
 
 		while ( *prefix )

@@ -9,6 +9,7 @@ namespace sql {
 		"cross", "outer", "and", "or", "not", "is", "in", "like", "glob", "between", "case", "when", "then", "else", "end",
 		"as", "by", "asc", "desc", "null", "distinct", "all", "exists", "primary", "unique", "check", "default",
 		"references", "foreign", "constraint", "table", "index", "begin", "commit", "rollback", "collate", "escape", "cast",
+		"returning", "ilike",
 
 	};
 
@@ -289,6 +290,8 @@ namespace sql {
 	}
 
 	static expression* parse_or ( parser& item );
+
+	static affinity_kind cast_affinity ( const char* type );
 
 	static expression* parse_comparison ( parser& item );
 
@@ -851,7 +854,7 @@ namespace sql {
 
 			}
 
-			made->cast = affinity_of ( type.value ( ) );
+			made->cast = cast_affinity ( type.value ( ) );
 			made->name = item.memory->keep ( type.value ( ), type.size );
 
 			if ( !expect_symbol ( item, ")" ) )
@@ -904,6 +907,21 @@ namespace sql {
 
 			}
 
+			bool bare_word = here.start [ 0 ] != '"' && here.start [ 0 ] != '`' && here.start [ 0 ] != '[';
+
+			if ( bare_word && !symbol_is ( item.current, "." ) && ( base::same_folded ( first, "current_user" ) || base::same_folded ( first, "session_user" ) || base::same_folded ( first, "current_catalog" ) || base::same_folded ( first, "current_schema" ) ) ) {
+
+				expression* call = new_expression ( item, EXPRESSION_FUNCTION );
+
+				if ( !call )
+					return nullptr;
+
+				call->name = first;
+
+				return call;
+
+			}
+
 			expression* made = new_expression ( item, EXPRESSION_COLUMN );
 
 			if ( !made )
@@ -927,6 +945,86 @@ namespace sql {
 		fail_here ( item, "expected a value or an expression" );
 
 		return nullptr;
+
+	}
+
+	static affinity_kind cast_affinity ( const char* type ) {
+
+		static const char* const textual [ ] = { "date", "time", "uuid", "json", "interval", "inet", "cidr", "macaddr", "xml", "regclass", "regtype", "name" };
+
+		for ( const char* word : textual )
+			if ( base::find_folded ( type, word ) )
+				return AFFINITY_TEXT;
+
+		if ( base::find_folded ( type, "bytea" ) )
+			return AFFINITY_BLOB;
+
+		return affinity_of ( type );
+
+	}
+
+	static bool type_continues ( const char* type, const token& next ) {
+
+		if ( next.kind != TOKEN_NAME )
+			return false;
+
+		if ( token_is ( next, "varying" ) || token_is ( next, "precision" ) || token_is ( next, "zone" ) )
+			return true;
+
+		if ( token_is ( next, "with" ) || token_is ( next, "without" ) )
+			return base::starts_with ( type, "time" ) || base::starts_with ( type, "TIME" );
+
+		if ( token_is ( next, "time" ) )
+			return base::same_folded ( type, "timestamp with" ) || base::same_folded ( type, "timestamp without" ) || base::same_folded ( type, "time with" ) || base::same_folded ( type, "time without" );
+
+		return false;
+
+	}
+
+	static const char* take_cast_type ( parser& item ) {
+
+		base::text type;
+		const char* first = take_name ( item, "a type name" );
+
+		if ( !first )
+			return nullptr;
+
+		if ( accept_symbol ( item, "." ) ) {
+
+			first = take_name ( item, "a type name" );
+
+			if ( !first )
+				return nullptr;
+
+		}
+
+		type.add ( first );
+
+		while ( type_continues ( type.value ( ), item.current ) ) {
+
+			type.add ( ' ' ).add ( item.current.start, item.current.size );
+			advance ( item );
+
+		}
+
+		if ( accept_symbol ( item, "(" ) ) {
+
+			while ( item.current.kind == TOKEN_INTEGER || symbol_is ( item.current, "," ) )
+				advance ( item );
+
+			if ( !expect_symbol ( item, ")" ) )
+				return nullptr;
+
+		}
+
+		while ( item.current.kind == TOKEN_NAME && item.current.size == 2 && item.current.start [ 0 ] == '[' && item.current.start [ 1 ] == ']' ) {
+
+			type.add ( "[]" );
+			advance ( item );
+
+		}
+
+		return item.memory->keep ( type.value ( ), type.size );
 
 	}
 
@@ -967,6 +1065,27 @@ namespace sql {
 
 		} else
 			result = parse_primary ( item );
+
+		while ( result && accept_symbol ( item, "::" ) ) {
+
+			expression* made = new_expression ( item, EXPRESSION_CAST );
+			const char* type = take_cast_type ( item );
+
+			if ( !made || !type ) {
+
+				result = nullptr;
+
+				break;
+
+			}
+
+			made->left = result;
+			made->name = type;
+			made->cast = cast_affinity ( type );
+			made->offset = result->offset;
+			result = made;
+
+		}
 
 		if ( result && accept_word ( item, "collate" ) ) {
 
@@ -1170,7 +1289,7 @@ namespace sql {
 
 			if ( accept_word ( item, "not" ) ) {
 
-				if ( !token_is ( item.current, "in" ) && !token_is ( item.current, "like" ) && !token_is ( item.current, "glob" ) && !token_is ( item.current, "match" ) && !token_is ( item.current, "between" ) && !token_is ( item.current, "null" ) ) {
+				if ( !token_is ( item.current, "in" ) && !token_is ( item.current, "like" ) && !token_is ( item.current, "ilike" ) && !token_is ( item.current, "glob" ) && !token_is ( item.current, "match" ) && !token_is ( item.current, "between" ) && !token_is ( item.current, "null" ) ) {
 
 					item.lex = saved;
 					item.current = saved_token;
@@ -1227,7 +1346,7 @@ namespace sql {
 
 			}
 
-			if ( token_is ( item.current, "like" ) || token_is ( item.current, "glob" ) ) {
+			if ( token_is ( item.current, "like" ) || token_is ( item.current, "ilike" ) || token_is ( item.current, "glob" ) ) {
 
 				expression* made = new_expression ( item, EXPRESSION_LIKE );
 

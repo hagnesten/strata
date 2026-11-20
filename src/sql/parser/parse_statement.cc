@@ -219,28 +219,7 @@ namespace sql {
 
 	}
 
-	static select_statement* parse_core ( parser& item ) {
-
-		select_statement* out = item.memory->make < select_statement > ( 1 );
-
-		if ( !out ) {
-
-			fail_here ( item, "out of memory" );
-
-			return nullptr;
-
-		}
-
-		if ( accept_word ( item, "values" ) )
-			return parse_values ( item, *out ) ? out : nullptr;
-
-		if ( !expect_word ( item, "select" ) )
-			return nullptr;
-
-		out->distinct = accept_word ( item, "distinct" );
-
-		if ( !out->distinct )
-			accept_word ( item, "all" );
+	static bool parse_result_list ( parser& item, result_column*& out, uint32_t& count ) {
 
 		grow_list < result_column > columns;
 
@@ -280,7 +259,7 @@ namespace sql {
 					column.value = parse_expression ( item );
 
 					if ( !column.value )
-						return nullptr;
+						return false;
 
 					const char* end = item.current.start;
 
@@ -301,7 +280,7 @@ namespace sql {
 						}
 
 						if ( !column.alias )
-							return nullptr;
+							return false;
 
 					} else if ( item.current.kind == TOKEN_NAME && !reserved_word ( item.current ) )
 						column.alias = take_name ( item, "an alias" );
@@ -311,12 +290,53 @@ namespace sql {
 			}
 
 			if ( !columns.push ( item, column ) )
-				return nullptr;
+				return false;
 
 		} while ( accept_symbol ( item, "," ) );
 
-		out->columns = columns.items;
-		out->column_count = columns.count;
+		out = columns.items;
+		count = columns.count;
+
+		return true;
+
+	}
+
+	static bool parse_returning ( parser& item, returning_clause& out ) {
+
+		out = { };
+
+		if ( !accept_word ( item, "returning" ) )
+			return true;
+
+		return parse_result_list ( item, out.columns, out.count );
+
+	}
+
+	static select_statement* parse_core ( parser& item ) {
+
+		select_statement* out = item.memory->make < select_statement > ( 1 );
+
+		if ( !out ) {
+
+			fail_here ( item, "out of memory" );
+
+			return nullptr;
+
+		}
+
+		if ( accept_word ( item, "values" ) )
+			return parse_values ( item, *out ) ? out : nullptr;
+
+		if ( !expect_word ( item, "select" ) )
+			return nullptr;
+
+		out->distinct = accept_word ( item, "distinct" );
+
+		if ( !out->distinct )
+			accept_word ( item, "all" );
+
+		if ( !parse_result_list ( item, out->columns, out->column_count ) )
+			return nullptr;
 
 		if ( accept_word ( item, "from" ) && !parse_sources ( item, *out ) )
 			return nullptr;
@@ -1197,7 +1217,7 @@ namespace sql {
 
 		}
 
-		return true;
+		return parse_returning ( item, made->returning );
 
 	}
 
@@ -1281,11 +1301,12 @@ namespace sql {
 
 				made->where = parse_expression ( item );
 
-				return made->where != nullptr;
+				if ( !made->where )
+					return false;
 
 			}
 
-			return true;
+			return parse_returning ( item, made->returning );
 
 		}
 
@@ -1311,11 +1332,12 @@ namespace sql {
 
 				made->where = parse_expression ( item );
 
-				return made->where != nullptr;
+				if ( !made->where )
+					return false;
 
 			}
 
-			return true;
+			return parse_returning ( item, made->returning );
 
 		}
 

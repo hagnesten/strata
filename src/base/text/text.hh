@@ -10,6 +10,10 @@ namespace base {
 
 	bool same_folded ( const char* a, const char* b );
 
+	bool same_folded_size ( const char* a, const char* b, size_t size );
+
+	bool find_folded ( const char* text, const char* part );
+
 	bool starts_with ( const char* value, const char* prefix );
 
 	void copy_text ( char* out, size_t room, const char* value );
