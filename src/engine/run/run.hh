@@ -94,6 +94,15 @@ namespace engine {
 		FUNCTION_UPPER,
 		FUNCTION_VERSION,
 		FUNCTION_ZEROBLOB,
+		FUNCTION_SERVER_VERSION,
+		FUNCTION_CURRENT_DATABASE,
+		FUNCTION_CURRENT_SCHEMA,
+		FUNCTION_CURRENT_USER,
+		FUNCTION_BACKEND_PID,
+		FUNCTION_CURRENT_SETTING,
+		FUNCTION_RANDOM_UUID,
+		FUNCTION_NOTHING,
+		FUNCTION_NOW,
 		FUNCTION_DATE,
 		FUNCTION_TIME,
 		FUNCTION_DATETIME,
@@ -509,8 +518,20 @@ namespace engine {
 
 	};
 
+	struct query_sink;
+
+	struct returning_plan {
+
+		prepared_select* scope;
+		sql::expression** outputs;
+		const char** names;
+		uint32_t count;
+
+	};
+
 	struct run_context {
 
+		query_sink* output;
 		storage::pager* pages;
 		catalog* schema;
 		base::arena* lasting;
@@ -809,6 +830,32 @@ namespace engine {
 	bool run_drop ( run_context& ctx, const sql::drop_statement* item, bool index );
 
 	bool run_drop_schema ( run_context& ctx, const sql::drop_statement* item );
+
+	bool ensure_sequence_table ( run_context& ctx );
+
+	bool read_sequence ( run_context& ctx, const table_info& table, int64_t& value );
+
+	bool raise_sequence ( run_context& ctx, const table_info& table, int64_t value );
+
+	bool keep_high_water ( run_context& ctx, const table_info& table );
+
+	bool forget_sequence ( run_context& ctx, const table_info& table );
+
+	sql::select_statement* catalog_view ( run_context& ctx, const char* name );
+
+	const char* catalog_view_alias ( const char* name );
+
+	uint32_t postgres_type_of ( const char* type );
+
+	bool has_returning ( const sql::statement* item );
+
+	const sql::returning_clause* returning_of ( const sql::statement* item, const char*& table );
+
+	returning_plan* plan_returning ( run_context& ctx, const char* name, const sql::returning_clause& returning );
+
+	void start_returning ( run_context& ctx, returning_plan* plan );
+
+	bool emit_returning ( run_context& ctx, returning_plan* plan, const storage::value* values, int64_t rowid );
 
 	bool run_alter ( run_context& ctx, const sql::alter_statement* item );
 

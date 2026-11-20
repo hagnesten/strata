@@ -27,41 +27,6 @@ namespace server {
 
 	}
 
-	static void show_value ( const char* name, char* out, size_t room ) {
-
-		static const char* const known [ ] [ 2 ] = {
-
-			{ "server_version", "16.0" },
-			{ "server_version_num", "160000" },
-			{ "transaction_isolation", "serializable" },
-			{ "default_transaction_isolation", "serializable" },
-			{ "max_identifier_length", "63" },
-			{ "standard_conforming_strings", "on" },
-			{ "client_encoding", "UTF8" },
-			{ "server_encoding", "UTF8" },
-			{ "timezone", "UTC" },
-			{ "datestyle", "ISO, MDY" },
-			{ "search_path", "public" },
-			{ "integer_datetimes", "on" },
-
-		};
-
-		for ( const auto& pair : known ) {
-
-			if ( base::same_folded ( pair [ 0 ], name ) ) {
-
-				base::copy_text ( out, room, pair [ 1 ] );
-
-				return;
-
-			}
-
-		}
-
-		base::copy_text ( out, room, "" );
-
-	}
-
 	static void search_path ( const char* sql, size_t size, size_t at, char* out, size_t room ) {
 
 		if ( !word_at ( sql, size, at, "to" ) ) {
@@ -145,6 +110,35 @@ namespace server {
 
 		}
 
+		static const char* const quiet [ ] [ 2 ] = {
+
+			{ "close", "CLOSE CURSOR ALL" },
+			{ "lock", "LOCK TABLE" },
+			{ "checkpoint", "CHECKPOINT" },
+			{ "listen", "LISTEN" },
+			{ "notify", "NOTIFY" },
+			{ "comment", "COMMENT" },
+			{ "grant", "GRANT" },
+			{ "revoke", "REVOKE" },
+
+		};
+
+		for ( const auto& pair : quiet ) {
+
+			at = 0;
+
+			if ( word_at ( sql, size, at, pair [ 0 ] ) ) {
+
+				base::copy_text ( tag, tag_room, pair [ 1 ] );
+
+				return true;
+
+			}
+
+		}
+
+		at = 0;
+
 		if ( word_at ( sql, size, at, "deallocate" ) ) {
 
 			base::copy_text ( tag, tag_room, "DEALLOCATE" );
@@ -167,7 +161,7 @@ namespace server {
 				name [ length++ ] = sql [ at++ ];
 
 			name [ length ] = 0;
-			show_value ( name, show, show_room );
+			base::copy_text ( show, show_room, name );
 			base::copy_text ( tag, tag_room, name );
 
 			return true;
@@ -319,7 +313,9 @@ namespace server {
 
 			statement.control = true;
 			base::copy_text ( statement.control_text, sizeof ( statement.control_text ), show );
-			statement.column_count = base::same ( statement.tag, "BEGIN" ) || base::same ( statement.tag, "SET" ) || base::same ( statement.tag, "RESET" ) || base::same ( statement.tag, "DISCARD ALL" ) || base::same ( statement.tag, "DEALLOCATE" ) || base::same ( statement.tag, "UNLISTEN" ) ? 0 : 1;
+			size_t start = 0;
+
+			statement.column_count = word_at ( sql, size, start, "show" ) ? 1 : 0;
 			statement.column_types [ 0 ] = PG_TEXT;
 			statement.returns_rows = statement.column_count != 0;
 
@@ -384,10 +380,13 @@ namespace server {
 			if ( describe )
 				describe_rows ( link, statement, nullptr, 0 );
 
+			base::text value;
+
+			engine::setting_value ( *link.db->database.schema, statement.control_text, value );
 			begin_message ( link, 'D' );
 			put16 ( link, 1 );
-			put32 ( link, static_cast < int32_t > ( base::length ( statement.control_text ) ) );
-			put_bytes ( link, statement.control_text, base::length ( statement.control_text ) );
+			put32 ( link, static_cast < int32_t > ( value.size ) );
+			put_bytes ( link, value.value ( ), value.size );
 			end_message ( link );
 
 		}

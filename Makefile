@@ -64,6 +64,7 @@ ENGINE := \
 	src/engine/value/value.cc \
 	src/engine/catalog/catalog.cc \
 	src/engine/catalog/statistics.cc \
+	src/engine/catalog/views.cc \
 	src/engine/run/evaluate.cc \
 	src/engine/plan/prepare.cc \
 	src/engine/plan/explain.cc \
@@ -83,6 +84,8 @@ ENGINE := \
 	src/engine/functions/json.cc \
 	src/engine/write/changes.cc \
 	src/engine/write/generated.cc \
+	src/engine/write/returning.cc \
+	src/engine/write/sequence.cc \
 	src/engine/schema/schema.cc \
 	src/engine/schema/index_build.cc \
 	src/engine/schema/alter.cc \

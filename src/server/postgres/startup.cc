@@ -288,6 +288,12 @@ namespace server {
 		}
 
 		strata_busy_timeout ( link.db, 0 );
+
+		engine::catalog& session = *link.db->database.schema;
+
+		base::copy_text ( session.session_user, sizeof ( session.session_user ), link.user );
+		base::copy_text ( session.session_database, sizeof ( session.session_database ), link.database [ 0 ] ? link.database : link.user );
+		session.session_id = link.id;
 		send_auth ( link, 0, nullptr, 0 );
 		parameter ( link, "server_version", "16.0" );
 		parameter ( link, "server_encoding", "UTF8" );

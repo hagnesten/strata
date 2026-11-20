@@ -4,80 +4,23 @@
 
 namespace server {
 
-	static bool type_word ( const char* type, const char* word ) {
-
-		size_t size = base::length ( word );
-
-		for ( const char* at = type; *at; at++ ) {
-
-			bool hit = true;
-
-			for ( size_t i = 0; i < size && hit; i++ )
-				hit = at [ i ] && base::lower ( at [ i ] ) == word [ i ];
-
-			if ( hit )
-				return true;
-
-		}
-
-		return false;
-
-	}
-
 	uint32_t declared_type ( const char* type ) {
 
-		if ( !type || !*type )
-			return 0;
+		uint32_t oid = engine::postgres_type_of ( type );
 
-		if ( type_word ( type, "bool" ) )
-			return PG_BOOL;
+		switch ( oid ) {
 
-		if ( type_word ( type, "bigint" ) || type_word ( type, "int8" ) || type_word ( type, "bigserial" ) )
-			return PG_INT8;
+			case PG_BOOL: case PG_BYTEA: case PG_INT8: case PG_INT2: case PG_INT4: case PG_TEXT: case PG_OID: case PG_JSON: case PG_FLOAT4: case PG_FLOAT8:
+			case PG_DATE: case PG_TIME: case PG_TIMESTAMP: case PG_TIMESTAMPTZ: case PG_NUMERIC: case PG_UUID: case PG_JSONB:
+				return oid;
 
-		if ( type_word ( type, "smallint" ) || type_word ( type, "int2" ) )
-			return PG_INT2;
+			case 0:
+				return 0;
 
-		if ( type_word ( type, "int" ) || type_word ( type, "serial" ) )
-			return PG_INT4;
+			default:
+				return PG_TEXT;
 
-		if ( type_word ( type, "timestamptz" ) || type_word ( type, "with time zone" ) )
-			return PG_TIMESTAMPTZ;
-
-		if ( type_word ( type, "timestamp" ) || type_word ( type, "datetime" ) )
-			return PG_TIMESTAMP;
-
-		if ( type_word ( type, "date" ) )
-			return PG_DATE;
-
-		if ( type_word ( type, "time" ) )
-			return PG_TIME;
-
-		if ( type_word ( type, "uuid" ) )
-			return PG_UUID;
-
-		if ( type_word ( type, "jsonb" ) )
-			return PG_JSONB;
-
-		if ( type_word ( type, "json" ) )
-			return PG_JSON;
-
-		if ( type_word ( type, "bytea" ) || type_word ( type, "blob" ) )
-			return PG_BYTEA;
-
-		if ( type_word ( type, "double" ) || type_word ( type, "float8" ) || type_word ( type, "float" ) )
-			return PG_FLOAT8;
-
-		if ( type_word ( type, "real" ) || type_word ( type, "float4" ) )
-			return PG_FLOAT4;
-
-		if ( type_word ( type, "numeric" ) || type_word ( type, "decimal" ) || type_word ( type, "money" ) )
-			return PG_NUMERIC;
-
-		if ( type_word ( type, "char" ) || type_word ( type, "text" ) || type_word ( type, "clob" ) )
-			return PG_TEXT;
-
-		return 0;
+		}
 
 	}
 
@@ -106,6 +49,8 @@ namespace server {
 
 					} else if ( source.table )
 						return PG_INT8;
+					else if ( source.query && item->column >= 0 && static_cast < uint32_t > ( item->column ) < source.query->output_count && source.query->outputs [ item->column ] )
+						return expression_type ( source.query, source.query->outputs [ item->column ] );
 
 				}
 

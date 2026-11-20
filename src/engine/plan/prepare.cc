@@ -1112,9 +1112,20 @@ namespace engine {
 			source.left = syntax.join == sql::JOIN_LEFT || syntax.join == sql::JOIN_FULL;
 			source.right = syntax.join == sql::JOIN_RIGHT || syntax.join == sql::JOIN_FULL;
 
-			if ( syntax.query ) {
+			sql::select_statement* view = nullptr;
 
-				source.query = prepare_select ( ctx, syntax.query, parent );
+			if ( !syntax.query && syntax.name && !find_cte ( ctx, syntax.name ) && !find_table ( *ctx.schema, syntax.name ) ) {
+
+				view = catalog_view ( ctx, syntax.name );
+
+				if ( !view && ctx.problem->size )
+					return nullptr;
+
+			}
+
+			if ( syntax.query || view ) {
+
+				source.query = prepare_select ( ctx, view ? view : syntax.query, parent );
 
 				if ( !source.query || !add_child ( ctx, plan, source.query, CHILD_FROM ) )
 					return nullptr;
@@ -1122,7 +1133,7 @@ namespace engine {
 				if ( source.query->correlated )
 					plan->correlated = true;
 
-				source.alias = syntax.alias;
+				source.alias = syntax.alias || !view ? syntax.alias : catalog_view_alias ( syntax.name );
 				source.width = source.query->output_count;
 				source.names = source.query->names;
 				source.affinities = ctx.lasting->make < sql::affinity_kind > ( source.width + 1 );
