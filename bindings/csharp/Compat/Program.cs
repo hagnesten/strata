@@ -559,6 +559,45 @@ namespace Strata.Compat {
 
 		}
 
+		private static void Notify ( Run run ) {
+
+			using NpgsqlConnection listener = Open ( run );
+			using NpgsqlConnection sender = Open ( run );
+			List < string > heard = new List < string > ( );
+
+			listener.Notification += ( _, e ) => heard.Add ( e.Channel + ":" + e.Payload + ":" + ( e.PID == sender.ProcessID ) );
+			Exec ( listener, "LISTEN fills; LISTEN \"Order Book\"" );
+			Exec ( sender, "NOTIFY fills, 'order 42 filled 100 @ 187.25'" );
+			Exec ( sender, "NOTIFY \"Order Book\", 'it''s quoted; with a semicolon'" );
+			Exec ( sender, "NOTIFY other, 'nobody listens'" );
+
+			using ( NpgsqlTransaction kept = sender.BeginTransaction ( ) ) {
+
+				Exec ( sender, "NOTIFY fills, 'after commit'" );
+				kept.Commit ( );
+
+			}
+
+			using ( NpgsqlTransaction dropped = sender.BeginTransaction ( ) ) {
+
+				Exec ( sender, "NOTIFY fills, 'rolled back'" );
+				dropped.Rollback ( );
+
+			}
+
+			Exec ( sender, "NOTIFY fills" );
+
+			for ( int i = 0; i < 20 && heard.Count < 4; i++ )
+				listener.Wait ( 100 );
+
+			run.Note ( "notify.heard", heard );
+			Exec ( listener, "UNLISTEN fills" );
+			Exec ( sender, "NOTIFY fills, 'ignored'" );
+			listener.Wait ( 200 );
+			run.Note ( "notify.after_unlisten", heard.Count );
+
+		}
+
 		private static void Speed ( Run run, int count ) {
 
 			using NpgsqlConnection connection = Open ( run );
@@ -672,6 +711,7 @@ namespace Strata.Compat {
 			Step ( run, "batches", ( ) => Batches ( run ) );
 			Step ( run, "entity", ( ) => Entity ( run ) );
 			Step ( run, "concurrency", ( ) => Concurrency ( run ) );
+			Step ( run, "notify", ( ) => Notify ( run ) );
 
 			if ( speed > 0 )
 				Step ( run, "speed", ( ) => Speed ( run, speed ) );
