@@ -4,6 +4,7 @@
 #include "test/harness/harness.hh"
 #include "app/shell/shell.hh"
 #include "server/server.hh"
+#include "engine/check/check.hh"
 
 #if STRATA_WINDOWS
 #include "studio/app/studio.hh"
@@ -101,6 +102,65 @@ namespace app {
 
 	}
 
+	static int32_t run_check ( const char* path ) {
+
+		if ( !base::path_exists ( path ) ) {
+
+			base::write_error ( "there is no database at that path\n" );
+
+			return 2;
+
+		}
+
+		engine::database* db = base::make < engine::database > ( 1 );
+		engine::check_report report = { };
+
+		if ( !db || !engine::open_database ( *db, path ) ) {
+
+			base::write_error ( "the database could not be opened" );
+
+			if ( db && db->problem.size )
+				base::write_error ( ": " ), base::write_error ( db->problem.value ( ) );
+
+			base::write_error ( "\n" );
+
+			if ( db ) {
+
+				db->problem.~text ( );
+				base::release ( db );
+
+			}
+
+			return 2;
+
+		}
+
+		bool fine = engine::check_database ( *db, report );
+		base::text line;
+
+		line.add ( "checked " ).number ( report.pages ).add ( " pages, " ).number ( report.trees ).add ( " trees, " ).number ( report.rows ).add ( " rows, " ).number ( report.entries ).add ( " index entries, " ).number ( report.free_pages ).add ( " free pages\n" );
+		base::write ( line.value ( ) );
+
+		for ( uint32_t i = 0; i < report.problem_count; i++ ) {
+
+			base::write ( "  problem: " );
+			base::write ( report.problems [ i ] );
+			base::write ( "\n" );
+
+		}
+
+		bool clean = fine && !report.problem_count;
+
+		base::write ( clean ? "ok\n" : "the file has problems\n" );
+		engine::forget_report ( report );
+		engine::close_database ( *db );
+		db->problem.~text ( );
+		base::release ( db );
+
+		return clean ? 0 : 1;
+
+	}
+
 	int32_t run ( int32_t count, char** arguments, bool windowed ) {
 
 		bool handled = false;
@@ -115,6 +175,9 @@ namespace app {
 		if ( named ( count, arguments, 1, "--user" ) && count > 3 )
 			return server::manage_user ( arguments [ 2 ], arguments [ 3 ], count > 4 ? arguments [ 4 ] : nullptr );
 
+		if ( named ( count, arguments, 1, "--check" ) && count > 2 )
+			return run_check ( arguments [ 2 ] );
+
 		if ( named ( count, arguments, 1, "--test" ) )
 			return test::run_all ( count > 2 ? arguments [ 2 ] : nullptr );
 
@@ -128,6 +191,7 @@ namespace app {
 		base::write ( "  strata <file>            open a database in the SQL shell\n" );
 		base::write ( "  strata <file> \"<sql>\"    run SQL against a database and print the rows\n" );
 		base::write ( "  strata --test [part]     run the self test (pager, btree, crash, parser, engine)\n" );
+		base::write ( "  strata --check <file>    check every page, tree, row and index entry of a database\n" );
 		base::write ( "  strata --serve <file>    serve a database to Postgres clients (--port, --host, --trust)\n" );
 		base::write ( "  strata --user <file> <name> [password]   add, change or remove a server user\n" );
 
