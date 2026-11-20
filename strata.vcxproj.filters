@@ -25,6 +25,12 @@
     <Filter Include="src\base\hash">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D0A}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\base\crypto">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D60}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\server\tls">
+      <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D61}</UniqueIdentifier>
+    </Filter>
     <Filter Include="src\base\bytes">
       <UniqueIdentifier>{5A1E0C33-7D24-4B8F-9C10-2E6F4A8B1D0B}</UniqueIdentifier>
     </Filter>
@@ -266,6 +272,7 @@
     <ClCompile Include="src\api\batch.cc"><Filter>src\api</Filter></ClCompile>
     <ClCompile Include="src\test\api\api_test.cc"><Filter>src\test\api</Filter></ClCompile>
     <ClCompile Include="src\test\base\hash_test.cc"><Filter>src\test\base</Filter></ClCompile>
+    <ClCompile Include="src\test\base\crypto_test.cc"><Filter>src\test\base</Filter></ClCompile>
     <ClCompile Include="src\test\engine\update_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\test\engine\semi_test.cc"><Filter>src\test\engine</Filter></ClCompile>
     <ClCompile Include="src\test\engine\range_test.cc"><Filter>src\test\engine</Filter></ClCompile>
@@ -284,6 +291,10 @@
     <ClCompile Include="src\base\hash\crc32c.cc"><Filter>src\base\hash</Filter></ClCompile>
     <ClCompile Include="src\base\hash\sha256.cc"><Filter>src\base\hash</Filter></ClCompile>
     <ClCompile Include="src\base\hash\scram.cc"><Filter>src\base\hash</Filter></ClCompile>
+    <ClCompile Include="src\base\crypto\x25519.cc"><Filter>src\base\crypto</Filter></ClCompile>
+    <ClCompile Include="src\base\crypto\p256.cc"><Filter>src\base\crypto</Filter></ClCompile>
+    <ClCompile Include="src\base\crypto\aes_gcm.cc"><Filter>src\base\crypto</Filter></ClCompile>
+    <ClCompile Include="src\base\crypto\hkdf.cc"><Filter>src\base\crypto</Filter></ClCompile>
     <ClCompile Include="src\base\text\base64.cc"><Filter>src\base\text</Filter></ClCompile>
     <ClCompile Include="src\storage\pager\pager.cc"><Filter>src\storage\pager</Filter></ClCompile>
     <ClCompile Include="src\storage\pager\wal.cc"><Filter>src\storage\pager</Filter></ClCompile>
@@ -362,6 +373,9 @@
     <ClCompile Include="src\server\loop\log.cc"><Filter>src\server\loop</Filter></ClCompile>
     <ClCompile Include="src\server\loop\backups.cc"><Filter>src\server\loop</Filter></ClCompile>
     <ClCompile Include="src\server\loop\activity.cc"><Filter>src\server\loop</Filter></ClCompile>
+    <ClCompile Include="src\server\tls\identity.cc"><Filter>src\server\tls</Filter></ClCompile>
+    <ClCompile Include="src\server\tls\records.cc"><Filter>src\server\tls</Filter></ClCompile>
+    <ClCompile Include="src\server\tls\handshake.cc"><Filter>src\server\tls</Filter></ClCompile>
     <ClCompile Include="src\app\backup\backup.cc"><Filter>src\app\backup</Filter></ClCompile>
     <ClCompile Include="src\server\users\users.cc"><Filter>src\server\users</Filter></ClCompile>
     <ClCompile Include="src\server\postgres\startup.cc"><Filter>src\server\postgres</Filter></ClCompile>
@@ -412,6 +426,11 @@
     <ClInclude Include="src\base\hash\crc32c.hh"><Filter>src\base\hash</Filter></ClInclude>
     <ClInclude Include="src\base\hash\sha256.hh"><Filter>src\base\hash</Filter></ClInclude>
     <ClInclude Include="src\base\hash\scram.hh"><Filter>src\base\hash</Filter></ClInclude>
+    <ClInclude Include="src\base\crypto\x25519.hh"><Filter>src\base\crypto</Filter></ClInclude>
+    <ClInclude Include="src\base\crypto\p256.hh"><Filter>src\base\crypto</Filter></ClInclude>
+    <ClInclude Include="src\base\crypto\aes_gcm.hh"><Filter>src\base\crypto</Filter></ClInclude>
+    <ClInclude Include="src\base\crypto\hkdf.hh"><Filter>src\base\crypto</Filter></ClInclude>
+    <ClInclude Include="src\server\tls\tls.hh"><Filter>src\server\tls</Filter></ClInclude>
     <ClInclude Include="src\base\text\base64.hh"><Filter>src\base\text</Filter></ClInclude>
     <ClInclude Include="src\base\bytes\bytes.hh"><Filter>src\base\bytes</Filter></ClInclude>
     <ClInclude Include="src\storage\pager\pager.hh"><Filter>src\storage\pager</Filter></ClInclude>

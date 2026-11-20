@@ -67,4 +67,6 @@ namespace test {
 
 	void hash_tests ( );
 
+	void crypto_tests ( );
+
 }

@@ -52,6 +52,7 @@
     <ClCompile Include="src\api\batch.cc" />
     <ClCompile Include="src\test\api\api_test.cc" />
     <ClCompile Include="src\test\base\hash_test.cc" />
+    <ClCompile Include="src\test\base\crypto_test.cc" />
     <ClCompile Include="src\test\engine\update_test.cc" />
     <ClCompile Include="src\test\engine\semi_test.cc" />
     <ClCompile Include="src\test\engine\range_test.cc" />
@@ -70,6 +71,10 @@
     <ClCompile Include="src\base\hash\crc32c.cc" />
     <ClCompile Include="src\base\hash\sha256.cc" />
     <ClCompile Include="src\base\hash\scram.cc" />
+    <ClCompile Include="src\base\crypto\x25519.cc" />
+    <ClCompile Include="src\base\crypto\p256.cc" />
+    <ClCompile Include="src\base\crypto\aes_gcm.cc" />
+    <ClCompile Include="src\base\crypto\hkdf.cc" />
     <ClCompile Include="src\base\text\base64.cc" />
     <ClCompile Include="src\storage\pager\pager.cc" />
     <ClCompile Include="src\storage\pager\wal.cc" />
@@ -154,6 +159,9 @@
     <ClCompile Include="src\server\loop\log.cc" />
     <ClCompile Include="src\server\loop\backups.cc" />
     <ClCompile Include="src\server\loop\activity.cc" />
+    <ClCompile Include="src\server\tls\identity.cc" />
+    <ClCompile Include="src\server\tls\records.cc" />
+    <ClCompile Include="src\server\tls\handshake.cc" />
     <ClCompile Include="src\app\backup\backup.cc" />
     <ClCompile Include="src\base\png\png.cc" />
     <ClCompile Include="src\ui\render\render.cc" />
@@ -198,6 +206,11 @@
     <ClInclude Include="src\base\hash\crc32c.hh" />
     <ClInclude Include="src\base\hash\sha256.hh" />
     <ClInclude Include="src\base\hash\scram.hh" />
+    <ClInclude Include="src\base\crypto\x25519.hh" />
+    <ClInclude Include="src\base\crypto\p256.hh" />
+    <ClInclude Include="src\base\crypto\aes_gcm.hh" />
+    <ClInclude Include="src\base\crypto\hkdf.hh" />
+    <ClInclude Include="src\server\tls\tls.hh" />
     <ClInclude Include="src\base\text\base64.hh" />
     <ClInclude Include="src\base\bytes\bytes.hh" />
     <ClInclude Include="src\storage\pager\pager.hh" />

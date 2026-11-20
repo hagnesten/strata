@@ -100,6 +100,9 @@ namespace test {
 		if ( chosen ( "hash" ) )
 			hash_tests ( );
 
+		if ( chosen ( "crypto" ) )
+			crypto_tests ( );
+
 		if ( chosen ( "pager" ) )
 			pager_tests ( );
 

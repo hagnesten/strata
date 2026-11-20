@@ -21,6 +21,10 @@ BASE := \
 	src/base/hash/crc32c.cc \
 	src/base/hash/sha256.cc \
 	src/base/hash/scram.cc \
+	src/base/crypto/x25519.cc \
+	src/base/crypto/p256.cc \
+	src/base/crypto/aes_gcm.cc \
+	src/base/crypto/hkdf.cc \
 	src/base/text/base64.cc \
 	src/base/arena/arena.cc \
 	src/base/sort/sort.cc \
@@ -105,6 +109,7 @@ ENGINE := \
 TESTS := \
 	src/test/harness/harness.cc \
 	src/test/base/hash_test.cc \
+	src/test/base/crypto_test.cc \
 	src/test/storage/pager_test.cc \
 	src/test/storage/btree_test.cc \
 	src/test/storage/crash_test.cc \
@@ -133,6 +138,9 @@ APP := \
 	src/server/loop/log.cc \
 	src/server/loop/backups.cc \
 	src/server/loop/activity.cc \
+	src/server/tls/identity.cc \
+	src/server/tls/records.cc \
+	src/server/tls/handshake.cc \
 	src/server/loop/loop.cc \
 	src/server/users/users.cc \
 	src/server/postgres/startup.cc \
