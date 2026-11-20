@@ -104,6 +104,7 @@ TESTS := \
 	src/test/engine/check_test.cc \
 	src/test/engine/prepared_test.cc \
 	src/test/engine/limit_test.cc \
+	src/test/engine/update_test.cc \
 	src/test/engine/concurrency_test.cc \
 	src/test/api/api_test.cc
 

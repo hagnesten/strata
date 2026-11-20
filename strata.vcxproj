@@ -52,6 +52,7 @@
     <ClCompile Include="src\api\batch.cc" />
     <ClCompile Include="src\test\api\api_test.cc" />
     <ClCompile Include="src\test\base\hash_test.cc" />
+    <ClCompile Include="src\test\engine\update_test.cc" />
     <ClInclude Include="src\engine\version.hh" />
     <None Include="src\base\platform\linux\coroutine.cc" />
     <None Include="src\base\platform\linux\runtime.cc" />

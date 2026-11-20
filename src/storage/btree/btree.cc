@@ -1253,6 +1253,62 @@ namespace storage {
 
 	}
 
+	bool table_replace_at ( btree& tree, uint32_t number, uint32_t slot, int64_t rowid, const uint8_t* payload, size_t size, bool& done ) {
+
+		pager& owner = *tree.owner;
+
+		done = false;
+
+		if ( size > BTREE_MAX_LOCAL || !number )
+			return true;
+
+		page_frame* frame = get_page ( owner, number );
+
+		if ( !frame )
+			return false;
+
+		cell_info old;
+		uint32_t count = count_of ( frame->data );
+
+		if ( frame->data [ 0 ] != PAGE_TABLE_LEAF || slot >= count || !parse_cell ( frame->data, slot, old ) || old.rowid != rowid || old.overflow ) {
+
+			release_page ( frame );
+
+			return true;
+
+		}
+
+		uint8_t cell [ BTREE_MAX_LOCAL + 24 ];
+		size_t used = base::write_varint ( cell, base::zigzag ( rowid ) );
+
+		used += base::write_varint ( cell + used, size );
+
+		if ( size )
+			base::copy ( cell + used, payload, size );
+
+		used += size;
+
+		if ( !change_page ( owner, frame ) ) {
+
+			release_page ( frame );
+
+			return false;
+
+		}
+
+		if ( swap_cell ( frame->data, slot, old.size, cell, static_cast < uint32_t > ( used ) ) ) {
+
+			dirty_page ( frame );
+			done = true;
+
+		}
+
+		release_page ( frame );
+
+		return true;
+
+	}
+
 	bool index_insert ( btree& tree, const uint8_t* key, size_t size, bool& existed ) {
 
 		base::text& cell = tree.owner->cell_bytes;

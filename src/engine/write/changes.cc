@@ -490,6 +490,20 @@ namespace engine {
 		if ( record.size > 1000000000 )
 			return fail_run ( ctx, "a row cannot be larger than 1 GB" );
 
+		if ( replace && ctx.hinted && ctx.hint_rowid == rowid && ctx.hint_layout == ctx.pages->layout ) {
+
+			bool done = false;
+
+			ctx.hinted = false;
+
+			if ( !storage::table_replace_at ( tree, ctx.hint_page, ctx.hint_slot, rowid, reinterpret_cast < const uint8_t* > ( record.value ( ) ), record.size, done ) )
+				return fail_storage ( ctx, "a row could not be written" );
+
+			if ( done )
+				return true;
+
+		}
+
 		if ( !storage::table_insert ( tree, rowid, reinterpret_cast < const uint8_t* > ( record.value ( ) ), record.size, replace, existed ) )
 			return fail_storage ( ctx, "a row could not be written" );
 
@@ -538,7 +552,7 @@ namespace engine {
 
 			index_info& index = ctx.schema->indexes [ i ];
 
-			if ( !base::same_folded ( index.table, table.name ) )
+			if ( !owned_by ( index, table ) )
 				continue;
 
 			if ( other && other_rowid == rowid && same_key ( index, values, other ) )
@@ -816,7 +830,7 @@ namespace engine {
 
 			index_info& index = ctx.schema->indexes [ i ];
 
-			if ( !index.unique || !base::same_folded ( index.table, table.name ) )
+			if ( !index.unique || !owned_by ( index, table ) )
 				continue;
 
 			if ( new_rowid == old_rowid && same_key ( index, now, old ) )
@@ -1043,7 +1057,7 @@ namespace engine {
 
 			index_info& index = ctx.schema->indexes [ i ];
 
-			if ( !index.unique || !base::same_folded ( index.table, table.name ) )
+			if ( !index.unique || !owned_by ( index, table ) )
 				continue;
 
 			int64_t other = 0;
@@ -1542,6 +1556,52 @@ namespace engine {
 
 	}
 
+	static bool has_query ( const sql::expression* item ) {
+
+		if ( !item )
+			return false;
+
+		if ( item->query || has_query ( item->left ) || has_query ( item->right ) || has_query ( item->third ) )
+			return true;
+
+		for ( uint32_t i = 0; item->list && i < item->count; i++ )
+			if ( has_query ( item->list [ i ] ) )
+				return true;
+
+		return false;
+
+	}
+
+	static bool referenced ( run_context& ctx, const table_info& table ) {
+
+		for ( uint32_t t = 0; t < ctx.schema->table_count; t++ )
+			for ( uint32_t f = 0; f < ctx.schema->tables [ t ].foreign_count; f++ )
+				if ( base::same_folded ( ctx.schema->tables [ t ].foreign [ f ].parent, table.name ) )
+					return true;
+
+		return false;
+
+	}
+
+	static bool can_pass_once ( run_context& ctx, const sql::update_statement* item, const target_plan& target ) {
+
+		const table_info& table = *target.table;
+		path_kind kind = target.plan->sources [ 0 ].path.kind;
+
+		if ( kind != PATH_SCAN && kind != PATH_ROWID_RANGE && kind != PATH_ROWID_EQUAL )
+			return false;
+
+		if ( item->conflict == sql::CONFLICT_REPLACE || table.foreign_count || table.generated_count || referenced ( ctx, table ) || has_query ( item->where ) )
+			return false;
+
+		for ( uint32_t i = 0; i < item->assignment_count; i++ )
+			if ( target.columns [ i ] == table.rowid_column || has_query ( item->assignments [ i ].value ) )
+				return false;
+
+		return true;
+
+	}
+
 	static bool plan_assignments ( run_context& ctx, const sql::update_statement* item, target_plan& target ) {
 
 		table_info* table = target.table;
@@ -1575,8 +1635,118 @@ namespace engine {
 		}
 
 		target.columns = columns;
+		target.one_pass = can_pass_once ( ctx, item, target );
 
 		return true;
+
+	}
+
+	static bool update_one ( run_context& ctx, const sql::update_statement* item, table_info& table, const int32_t* columns, query_state& state, int64_t rowid, storage::value* old ) {
+
+		source_state& source = state.sources [ 0 ];
+
+		source.values = old;
+		source.rowid = rowid;
+		source.null_row = false;
+
+		storage::value* now = static_cast < storage::value* > ( ctx.scratch->take_raw ( sizeof ( storage::value ) * ( table.column_count + 1 ) ) );
+
+		if ( !now )
+			return fail_run ( ctx, "out of memory" );
+
+		base::copy ( now, old, sizeof ( storage::value ) * table.column_count );
+		now [ table.column_count ] = storage::null_value ( );
+
+		for ( uint32_t i = 0; i < item->assignment_count; i++ ) {
+
+			storage::value value;
+
+			if ( !evaluate ( ctx, &state, item->assignments [ i ].value, value ) )
+				return false;
+
+			now [ columns [ i ] ] = apply_affinity ( *ctx.scratch, value, table.columns [ columns [ i ] ].affinity );
+
+		}
+
+		bool skipped = false;
+
+		if ( !update_row ( ctx, table, rowid, old, now, item->conflict, skipped ) )
+			return false;
+
+		if ( !skipped )
+			ctx.changes++;
+
+		return true;
+
+	}
+
+	static bool update_in_pass ( run_context& ctx, const sql::update_statement* item, target_plan& target, query_state& state ) {
+
+		source_state& source = state.sources [ 0 ];
+		table_info& table = *target.table;
+
+		source.whole = true;
+
+		if ( target.plan->sources [ 0 ].path.kind != PATH_ROWID_EQUAL && !begin_writes ( ctx, true ) )
+			return false;
+
+		if ( !open_source ( ctx, &state, source ) )
+			return false;
+
+		base::arena_mark mark = ctx.scratch->mark ( );
+
+		for ( ;; ) {
+
+			bool found = false;
+			bool fine = true;
+
+			if ( !next_source ( ctx, &state, source, found ) )
+				return false;
+
+			if ( !found )
+				return true;
+
+			sql::expression* const* terms = nullptr;
+			uint32_t term_count = 0;
+
+			source_filters ( source, terms, term_count );
+
+			if ( !passes ( ctx, &state, terms, term_count, fine ) )
+				return false;
+
+			if ( fine ) {
+
+				int64_t rowid = source.rowid;
+				uint64_t layout = ctx.pages->layout;
+
+				ctx.hinted = true;
+				ctx.hint_page = source.row_page;
+				ctx.hint_slot = source.row_slot;
+				ctx.hint_rowid = rowid;
+				ctx.hint_layout = layout;
+
+				bool updated = update_one ( ctx, item, table, target.columns, state, rowid, source.values );
+
+				ctx.hinted = false;
+
+				if ( !updated )
+					return false;
+
+				if ( ctx.pages->layout != layout && source.at.valid ) {
+
+					if ( rowid == 0x7FFFFFFFFFFFFFFFll )
+						return true;
+
+					if ( !storage::cursor_seek_rowid ( source.at, source.tree, rowid + 1 ) )
+						return fail_storage ( ctx, "a table could not be searched" );
+
+				}
+
+			}
+
+			ctx.scratch->rewind ( mark );
+
+		}
 
 	}
 
@@ -1604,6 +1774,9 @@ namespace engine {
 		if ( !start_target ( ctx, plan, state ) )
 			return false;
 
+		if ( target->one_pass )
+			return update_in_pass ( ctx, item, *target, state );
+
 		int64_t* rowids = nullptr;
 		uint32_t count = 0;
 
@@ -1612,8 +1785,6 @@ namespace engine {
 
 		if ( ( count > 1 || item->conflict == sql::CONFLICT_REPLACE ) && !begin_writes ( ctx, true ) )
 			return false;
-
-		source_state& source = state.sources [ 0 ];
 
 		for ( uint32_t r = 0; r < count; r++ ) {
 
@@ -1624,38 +1795,8 @@ namespace engine {
 			if ( !read_row ( ctx, *table, rowids [ r ], old, found ) )
 				return false;
 
-			if ( !found )
-				continue;
-
-			source.values = old;
-			source.rowid = rowids [ r ];
-			source.null_row = false;
-
-			storage::value* now = ctx.scratch->make < storage::value > ( table->column_count + 1 );
-
-			if ( !now )
-				return fail_run ( ctx, "out of memory" );
-
-			base::copy ( now, old, sizeof ( storage::value ) * table->column_count );
-
-			for ( uint32_t i = 0; i < item->assignment_count; i++ ) {
-
-				storage::value value;
-
-				if ( !evaluate ( ctx, &state, item->assignments [ i ].value, value ) )
-					return false;
-
-				now [ columns [ i ] ] = apply_affinity ( *ctx.scratch, value, table->columns [ columns [ i ] ].affinity );
-
-			}
-
-			bool skipped = false;
-
-			if ( !update_row ( ctx, *table, rowids [ r ], old, now, item->conflict, skipped ) )
+			if ( found && !update_one ( ctx, item, *table, columns, state, rowids [ r ], old ) )
 				return false;
-
-			if ( !skipped )
-				ctx.changes++;
 
 			ctx.scratch->rewind ( mark );
 

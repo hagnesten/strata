@@ -44,6 +44,7 @@ namespace engine {
 		const char* name;
 		const char* table;
 		uint32_t root;
+		uint32_t table_root;
 		int64_t schema_rowid;
 		bool unique;
 		bool fulltext;
@@ -90,6 +91,12 @@ namespace engine {
 		uint64_t loads;
 
 	};
+
+	inline bool owned_by ( const index_info& index, const table_info& table ) {
+
+		return index.table_root ? index.table_root == table.root : base::same_folded ( index.table, table.name );
+
+	}
 
 	bool load_catalog ( storage::pager& pages, catalog& out, base::text& problem );
 

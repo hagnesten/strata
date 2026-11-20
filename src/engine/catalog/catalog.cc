@@ -480,6 +480,8 @@ namespace engine {
 			if ( problem.size )
 				return false;
 
+			index.table_root = table->root;
+
 		}
 
 		load_statistics ( pages, out );

@@ -347,6 +347,9 @@ namespace engine {
 		bool* quick_wanted;
 		uint32_t quick_limit;
 		int32_t quick_column;
+		uint32_t row_page;
+		uint32_t row_slot;
+		bool whole;
 		sql::expression** residual;
 		uint32_t residual_count;
 
@@ -429,6 +432,7 @@ namespace engine {
 		table_info* table;
 		prepared_select* plan;
 		int32_t* columns;
+		bool one_pass;
 
 	};
 
@@ -491,6 +495,11 @@ namespace engine {
 		bool mark_pending;
 		bool marked;
 		bool unmarked_writes;
+		bool hinted;
+		uint32_t hint_page;
+		uint32_t hint_slot;
+		int64_t hint_rowid;
+		uint64_t hint_layout;
 
 	};
 

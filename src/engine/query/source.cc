@@ -205,7 +205,7 @@ namespace engine {
 
 			index_info& index = ctx.schema->indexes [ i ];
 
-			if ( index.fulltext || !base::same_folded ( index.table, table.name ) || !index.column_count )
+			if ( index.fulltext || !owned_by ( index, table ) || !index.column_count )
 				continue;
 
 			access_path path = { };
@@ -466,7 +466,7 @@ namespace engine {
 	static bool has_fulltext ( run_context& ctx, const table_info& table ) {
 
 		for ( uint32_t i = 0; i < ctx.schema->index_count; i++ )
-			if ( ctx.schema->indexes [ i ].fulltext && base::same_folded ( ctx.schema->indexes [ i ].table, table.name ) )
+			if ( ctx.schema->indexes [ i ].fulltext && owned_by ( ctx.schema->indexes [ i ], table ) )
 				return true;
 
 		return false;
@@ -477,6 +477,15 @@ namespace engine {
 
 		if ( source.decode_ready )
 			return source.decode_limit;
+
+		if ( source.whole ) {
+
+			source.decode_limit = RECORD_COLUMNS + 1;
+			source.decode_ready = true;
+
+			return source.decode_limit;
+
+		}
 
 		const prepared_source& plan = *source.plan;
 		const table_info& table = *plan.table;
@@ -1640,6 +1649,8 @@ namespace engine {
 					size_t size = 0;
 					storage::page_frame* held = nullptr;
 					base::arena_mark mark = ctx.scratch->mark ( );
+					uint32_t row_page = source.at.page;
+					uint32_t row_slot = source.at.slot;
 
 					if ( !storage::cursor_view ( source.at, *ctx.scratch, rowid, data, size, held ) )
 						return fail_storage ( ctx, "a table could not be read" );
@@ -1702,6 +1713,8 @@ namespace engine {
 
 					}
 
+					source.row_page = row_page;
+					source.row_slot = row_slot;
 					source.rowid = rowid;
 					found = true;
 
