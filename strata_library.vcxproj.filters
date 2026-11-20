@@ -148,6 +148,7 @@
     <ClCompile Include="src\storage\btree\btree.cc"><Filter>src\storage\btree</Filter></ClCompile>
     <ClCompile Include="src\storage\btree\estimate.cc"><Filter>src\storage\btree</Filter></ClCompile>
     <ClCompile Include="src\storage\btree\copy.cc"><Filter>src\storage\btree</Filter></ClCompile>
+    <ClCompile Include="src\storage\btree\build.cc"><Filter>src\storage\btree</Filter></ClCompile>
     <ClCompile Include="src\sql\lexer\lexer.cc"><Filter>src\sql\lexer</Filter></ClCompile>
     <ClCompile Include="src\sql\parser\parse_expression.cc"><Filter>src\sql\parser</Filter></ClCompile>
     <ClCompile Include="src\sql\parser\parse_statement.cc"><Filter>src\sql\parser</Filter></ClCompile>
@@ -173,6 +174,7 @@
     <ClCompile Include="src\engine\write\changes.cc"><Filter>src\engine\write</Filter></ClCompile>
     <ClCompile Include="src\engine\write\generated.cc"><Filter>src\engine\write</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\schema.cc"><Filter>src\engine\schema</Filter></ClCompile>
+    <ClCompile Include="src\engine\schema\index_build.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\alter.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\analyze.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\engine\database\database.cc"><Filter>src\engine\database</Filter></ClCompile>

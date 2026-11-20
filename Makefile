@@ -50,7 +50,8 @@ STORAGE := \
 	src/storage/record/record.cc \
 	src/storage/btree/btree.cc \
 	src/storage/btree/estimate.cc \
-	src/storage/btree/copy.cc
+	src/storage/btree/copy.cc \
+	src/storage/btree/build.cc
 
 SQL := \
 	src/sql/lexer/lexer.cc \
@@ -80,6 +81,7 @@ ENGINE := \
 	src/engine/write/changes.cc \
 	src/engine/write/generated.cc \
 	src/engine/schema/schema.cc \
+	src/engine/schema/index_build.cc \
 	src/engine/schema/alter.cc \
 	src/engine/schema/analyze.cc \
 	src/engine/database/database.cc \

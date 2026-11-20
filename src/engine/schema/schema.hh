@@ -4,6 +4,21 @@
 
 namespace engine {
 
+	struct sort_key {
+
+		uint64_t head;
+		int64_t rowid;
+		const uint8_t* data;
+		uint32_t size;
+		uint8_t rank;
+		uint8_t kind;
+		bool exact;
+		bool nulls;
+
+	};
+
+	bool fill_index ( run_context& ctx, table_info& table, index_info& index, storage::btree& tree );
+
 	bool reserved_name ( const char* name );
 
 	bool name_taken ( run_context& ctx, const char* name, bool if_not_exists, bool& skip );

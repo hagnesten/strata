@@ -1,4 +1,5 @@
 #include "engine/search/search.hh"
+#include "engine/schema/schema.hh"
 #include "sql/print/print.hh"
 
 namespace engine {
@@ -1556,22 +1557,6 @@ namespace engine {
 
 	}
 
-	static bool has_query ( const sql::expression* item ) {
-
-		if ( !item )
-			return false;
-
-		if ( item->query || has_query ( item->left ) || has_query ( item->right ) || has_query ( item->third ) )
-			return true;
-
-		for ( uint32_t i = 0; item->list && i < item->count; i++ )
-			if ( has_query ( item->list [ i ] ) )
-				return true;
-
-		return false;
-
-	}
-
 	static bool referenced ( run_context& ctx, const table_info& table ) {
 
 		for ( uint32_t t = 0; t < ctx.schema->table_count; t++ )
@@ -1591,11 +1576,11 @@ namespace engine {
 		if ( kind != PATH_SCAN && kind != PATH_ROWID_RANGE && kind != PATH_ROWID_EQUAL )
 			return false;
 
-		if ( item->conflict == sql::CONFLICT_REPLACE || table.foreign_count || table.generated_count || referenced ( ctx, table ) || has_query ( item->where ) )
+		if ( item->conflict == sql::CONFLICT_REPLACE || table.foreign_count || table.generated_count || referenced ( ctx, table ) || uses_query ( item->where ) )
 			return false;
 
 		for ( uint32_t i = 0; i < item->assignment_count; i++ )
-			if ( target.columns [ i ] == table.rowid_column || has_query ( item->assignments [ i ].value ) )
+			if ( target.columns [ i ] == table.rowid_column || uses_query ( item->assignments [ i ].value ) )
 				return false;
 
 		return true;

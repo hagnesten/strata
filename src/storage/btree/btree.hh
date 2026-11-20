@@ -31,6 +31,29 @@ namespace storage {
 
 	};
 
+	struct build_key {
+
+		const uint8_t* data;
+		uint32_t size;
+
+	};
+
+	struct build_node {
+
+		uint32_t page;
+		const uint8_t* last;
+		uint32_t last_size;
+
+	};
+
+	struct build_level {
+
+		build_node* nodes;
+		uint32_t count;
+		uint32_t room;
+
+	};
+
 	struct cell_info {
 
 		uint32_t child;
@@ -183,6 +206,12 @@ namespace storage {
 	bool check_btree ( pager& owner, uint32_t root, bool index, tree_report& report );
 
 	bool copy_btree ( pager& from, uint32_t root, bool index, pager& to, uint32_t& made );
+
+	bool fill_page ( uint8_t* page, uint8_t kind, const cell_span* cells, uint32_t count, uint32_t a, uint32_t b );
+
+	bool key_body ( pager& owner, const uint8_t* data, size_t size, base::text& out );
+
+	bool build_index ( btree& tree, const build_key* keys, uint32_t count );
 
 	uint64_t estimate_entries ( pager& owner, uint32_t root );
 

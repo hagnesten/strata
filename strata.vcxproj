@@ -113,6 +113,7 @@
     <ClCompile Include="src\engine\write\changes.cc" />
     <ClCompile Include="src\engine\write\generated.cc" />
     <ClCompile Include="src\engine\schema\schema.cc" />
+    <ClCompile Include="src\engine\schema\index_build.cc" />
     <ClCompile Include="src\engine\schema\alter.cc" />
     <ClCompile Include="src\base\clock\clock.cc" />
     <ClCompile Include="src\engine\database\database.cc" />
@@ -120,6 +121,7 @@
     <ClCompile Include="src\engine\database\transaction.cc" />
     <ClCompile Include="src\engine\database\vacuum.cc" />
     <ClCompile Include="src\storage\btree\copy.cc" />
+    <ClCompile Include="src\storage\btree\build.cc" />
     <ClCompile Include="src\test\engine\engine_test.cc" />
     <ClCompile Include="src\test\engine\checks.cc" />
     <ClCompile Include="src\test\engine\savepoint_test.cc" />

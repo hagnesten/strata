@@ -458,6 +458,18 @@ namespace storage {
 
 	}
 
+	bool fill_page ( uint8_t* page, uint8_t kind, const cell_span* cells, uint32_t count, uint32_t a, uint32_t b ) {
+
+		return rebuild ( page, kind, cells, count, a, b );
+
+	}
+
+	bool key_body ( pager& owner, const uint8_t* data, size_t size, base::text& out ) {
+
+		return payload_body ( owner, data, size, out );
+
+	}
+
 	static bool gather ( pager& owner, const page_frame* frame, uint8_t* scratch, uint32_t& used, cell_span* cells, uint32_t& count ) {
 
 		uint32_t total = count_of ( frame->data );

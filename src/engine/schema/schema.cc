@@ -422,6 +422,40 @@ namespace engine {
 
 	}
 
+	static bool fill_documents ( run_context& ctx, table_info& table, index_info& index ) {
+
+		storage::btree rows = { ctx.pages, table.root, false };
+		storage::cursor at;
+
+		if ( !storage::cursor_first ( at, rows ) )
+			return fail_storage ( ctx, "the table could not be read" );
+
+		while ( at.valid ) {
+
+			base::arena_mark mark = ctx.scratch->mark ( );
+			int64_t rowid = 0;
+			const uint8_t* data = nullptr;
+			size_t size = 0;
+
+			if ( !storage::cursor_take ( at, *ctx.scratch, rowid, data, size ) )
+				return fail_storage ( ctx, "the table could not be read" );
+
+			storage::value* values = ctx.scratch->make < storage::value > ( table.column_count + 1 );
+
+			if ( !values )
+				return fail_run ( ctx, "out of memory" );
+
+			if ( !decode_row ( ctx, table, data, size, rowid, values ) || !index_document ( ctx, index, values, rowid, true ) )
+				return false;
+
+			ctx.scratch->rewind ( mark );
+
+		}
+
+		return true;
+
+	}
+
 	bool run_create_index ( run_context& ctx, const sql::create_index_statement* item ) {
 
 		bool skip = false;
@@ -471,91 +505,10 @@ namespace engine {
 		if ( !storage::create_btree ( *ctx.pages, true, index.root ) )
 			return fail_storage ( ctx, "the index could not be made" );
 
-		storage::btree rows = { ctx.pages, table->root, false };
 		storage::btree tree = { ctx.pages, index.root, true };
-		storage::cursor at;
-		base::text key;
-		base::text prefix;
 
-		if ( !storage::cursor_first ( at, rows ) )
-			return fail_storage ( ctx, "the table could not be read" );
-
-		while ( at.valid ) {
-
-			base::arena_mark mark = ctx.scratch->mark ( );
-			int64_t rowid = 0;
-
-			if ( !storage::cursor_rowid ( at, rowid ) || !storage::cursor_payload ( at, ctx.row_bytes ) )
-				return fail_storage ( ctx, "the table could not be read" );
-
-			char* kept = ctx.scratch->keep ( ctx.row_bytes.value ( ), ctx.row_bytes.size );
-			storage::value* values = ctx.scratch->make < storage::value > ( table->column_count + 1 );
-
-			if ( !kept || !values )
-				return fail_run ( ctx, "out of memory" );
-
-			if ( !decode_row ( ctx, *table, reinterpret_cast < const uint8_t* > ( kept ), ctx.row_bytes.size, rowid, values ) )
-				return false;
-
-			if ( index.unique ) {
-
-				bool nulls = false;
-
-				for ( uint32_t k = 0; k < index.column_count; k++ )
-					nulls = nulls || values [ index.columns [ k ] ].kind == storage::VALUE_NULL;
-
-				if ( !nulls ) {
-
-					storage::cursor probe;
-
-					make_index_key ( ctx, index, values, rowid, false, prefix );
-
-					if ( !storage::cursor_seek_key ( probe, tree, reinterpret_cast < const uint8_t* > ( prefix.value ( ) ), prefix.size, index.column_count ) )
-						return fail_storage ( ctx, "the index could not be searched" );
-
-					if ( probe.valid ) {
-
-						if ( !storage::cursor_payload ( probe, ctx.row_bytes ) )
-							return fail_storage ( ctx, "the index could not be read" );
-
-						if ( storage::compare_records ( reinterpret_cast < const uint8_t* > ( ctx.row_bytes.value ( ) ), ctx.row_bytes.size, reinterpret_cast < const uint8_t* > ( prefix.value ( ) ), prefix.size, index.column_count ) == 0 ) {
-
-							base::text message;
-
-							message.add ( "UNIQUE constraint failed: table " ).add ( table->name ).add ( " already holds duplicates for the index " ).add ( index.name );
-
-							return fail_run ( ctx, message.value ( ) );
-
-						}
-
-					}
-
-				}
-
-			}
-
-			bool existed = false;
-
-			if ( index.fulltext ) {
-
-				if ( !index_document ( ctx, index, values, rowid, true ) )
-					return false;
-
-			} else {
-
-				make_index_key ( ctx, index, values, rowid, true, key );
-
-				if ( !storage::index_insert ( tree, reinterpret_cast < const uint8_t* > ( key.value ( ) ), key.size, existed ) )
-					return fail_storage ( ctx, "the index could not be written" );
-
-			}
-
-			if ( !storage::cursor_next ( at ) )
-				return fail_storage ( ctx, "the table could not be read" );
-
-			ctx.scratch->rewind ( mark );
-
-		}
+		if ( !( index.fulltext ? fill_documents ( ctx, *table, index ) : fill_index ( ctx, *table, index, tree ) ) )
+			return false;
 
 		base::text text;
 		int64_t rowid = 0;

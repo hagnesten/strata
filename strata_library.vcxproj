@@ -80,6 +80,7 @@
     <ClCompile Include="src\storage\btree\btree.cc" />
     <ClCompile Include="src\storage\btree\estimate.cc" />
     <ClCompile Include="src\storage\btree\copy.cc" />
+    <ClCompile Include="src\storage\btree\build.cc" />
     <ClCompile Include="src\sql\lexer\lexer.cc" />
     <ClCompile Include="src\sql\parser\parse_expression.cc" />
     <ClCompile Include="src\sql\parser\parse_statement.cc" />
@@ -105,6 +106,7 @@
     <ClCompile Include="src\engine\write\changes.cc" />
     <ClCompile Include="src\engine\write\generated.cc" />
     <ClCompile Include="src\engine\schema\schema.cc" />
+    <ClCompile Include="src\engine\schema\index_build.cc" />
     <ClCompile Include="src\engine\schema\alter.cc" />
     <ClCompile Include="src\engine\schema\analyze.cc" />
     <ClCompile Include="src\engine\database\database.cc" />
