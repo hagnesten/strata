@@ -979,9 +979,30 @@ namespace sql {
 
 		}
 
-		if ( here.kind == TOKEN_NAME && ( here.start [ 0 ] == '"' || here.start [ 0 ] == '`' || here.start [ 0 ] == '[' || !reserved_word ( here ) ) ) {
+		bool keyword_call = false;
 
-			const char* first = take_name ( item, "a name" );
+		if ( here.kind == TOKEN_NAME && ( token_is ( here, "left" ) || token_is ( here, "right" ) ) ) {
+
+			const char* after = here.start + here.size;
+
+			while ( *after == ' ' || *after == '\t' || *after == '\r' || *after == '\n' )
+				after++;
+
+			keyword_call = *after == '(';
+
+		}
+
+		if ( here.kind == TOKEN_NAME && ( here.start [ 0 ] == '"' || here.start [ 0 ] == '`' || here.start [ 0 ] == '[' || !reserved_word ( here ) || keyword_call ) ) {
+
+			const char* first = nullptr;
+
+			if ( keyword_call ) {
+
+				first = token_is ( here, "left" ) ? "left" : "right";
+				advance ( item );
+
+			} else
+				first = take_name ( item, "a name" );
 
 			if ( !first )
 				return nullptr;

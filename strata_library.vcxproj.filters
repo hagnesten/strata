@@ -182,6 +182,7 @@
     <ClCompile Include="src\engine\write\returning.cc"><Filter>src\engine\write</Filter></ClCompile>
     <ClCompile Include="src\engine\write\sequence.cc"><Filter>src\engine\write</Filter></ClCompile>
     <ClCompile Include="src\engine\functions\arrays.cc"><Filter>src\engine\functions</Filter></ClCompile>
+    <ClCompile Include="src\engine\functions\strings.cc"><Filter>src\engine\functions</Filter></ClCompile>
     <ClCompile Include="src\engine\catalog\views.cc"><Filter>src\engine\catalog</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\schema.cc"><Filter>src\engine\schema</Filter></ClCompile>
     <ClCompile Include="src\engine\schema\index_build.cc"><Filter>src\engine\schema</Filter></ClCompile>

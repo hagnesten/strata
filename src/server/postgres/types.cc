@@ -160,7 +160,7 @@ namespace server {
 
 				const char* name = item->name;
 
-				if ( base::same_folded ( name, "strata_any" ) || base::same_folded ( name, "pg_terminate_backend" ) || base::same_folded ( name, "strata_contains" ) || base::same_folded ( name, "strata_overlap" ) )
+				if ( base::same_folded ( name, "strata_any" ) || base::same_folded ( name, "pg_terminate_backend" ) || base::same_folded ( name, "strata_contains" ) || base::same_folded ( name, "strata_overlap" ) || base::same_folded ( name, "starts_with" ) )
 					return PG_BOOL;
 
 				if ( base::same_folded ( name, "cardinality" ) || base::same_folded ( name, "array_length" ) )

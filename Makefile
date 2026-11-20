@@ -91,6 +91,7 @@ ENGINE := \
 	src/engine/functions/dates.cc \
 	src/engine/functions/json.cc \
 	src/engine/functions/arrays.cc \
+	src/engine/functions/strings.cc \
 	src/engine/write/changes.cc \
 	src/engine/write/generated.cc \
 	src/engine/write/returning.cc \

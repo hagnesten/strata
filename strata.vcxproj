@@ -130,6 +130,7 @@
     <ClCompile Include="src\engine\write\returning.cc" />
     <ClCompile Include="src\engine\write\sequence.cc" />
     <ClCompile Include="src\engine\functions\arrays.cc" />
+    <ClCompile Include="src\engine\functions\strings.cc" />
     <ClCompile Include="src\engine\catalog\views.cc" />
     <ClCompile Include="src\engine\schema\schema.cc" />
     <ClCompile Include="src\engine\schema\index_build.cc" />

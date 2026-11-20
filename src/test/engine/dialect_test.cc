@@ -281,6 +281,8 @@ namespace test {
 		db.schema->postgres = true;
 		rows ( db, "SELECT btrim ( E'\\t x \\n', E' \\t\\n\\r' ), length ( E'a\\x41\\u00e9' ), E'it''s'", "x|3|it's" );
 		rows ( db, "SELECT strpos ( 'alphabet', 'ph' ), strpos ( 'alpha', 'z' )", "3|0" );
+		rows ( db, "SELECT repeat ( 'ab', 3 ), lpad ( '42', 5, '0' ), rpad ( 'x', 4, 'yz' ), lpad ( 'toolong', 3 ), left ( 'héllo', 2 ), right ( 'héllo', -2 )", "ababab|00042|xyzy|too|hé|llo" );
+		rows ( db, "SELECT reverse ( 'héllo' ), split_part ( 'AAPL.US.NASDAQ', '.', 2 ), split_part ( 'a,b,c', ',', -1 ), starts_with ( 'ORD-1', 'ORD' ), initcap ( 'hello wORLD-x' ), translate ( 'a-b-c', '-b', '_' )", "olléh|US|c|1|Hello World-X|a__c" );
 		rows ( db, "SELECT CAST ( '2026-01-31 10:00:00' AS timestamp ) + INTERVAL '1 month'", "2026-02-28 10:00:00" );
 		rows ( db, "SELECT TIMESTAMP '2026-03-02 14:30:00' + INTERVAL '1 day 02:30:00', TIMESTAMP '2026-03-02 14:30:00' - INTERVAL '90 minutes'", "2026-03-03 17:00:00|2026-03-02 13:00:00" );
 		rows ( db, "SELECT TIMESTAMP '2026-03-03 16:30:00' - TIMESTAMP '2026-03-02 14:00:00'", "1 day 02:30:00" );

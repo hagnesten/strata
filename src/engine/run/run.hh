@@ -110,6 +110,16 @@ namespace engine {
 		FUNCTION_DATE_TRUNC,
 		FUNCTION_TIMEZONE,
 		FUNCTION_TERMINATE,
+		FUNCTION_REPEAT,
+		FUNCTION_LPAD,
+		FUNCTION_RPAD,
+		FUNCTION_LEFT,
+		FUNCTION_RIGHT,
+		FUNCTION_REVERSE,
+		FUNCTION_SPLIT_PART,
+		FUNCTION_STARTS_WITH,
+		FUNCTION_INITCAP,
+		FUNCTION_TRANSLATE,
 		FUNCTION_MAKE_INTERVAL,
 		FUNCTION_ARRAY_BUILD,
 		FUNCTION_ARRAY_CONTAINS,
@@ -870,6 +880,8 @@ namespace engine {
 	bool array_build ( run_context& ctx, const storage::value* args, uint32_t count, storage::value& out );
 
 	bool split_array ( base::arena& memory, const uint8_t* bytes, size_t size, array_item*& items, uint32_t& count );
+
+	bool string_function ( run_context& ctx, int32_t kind, const storage::value* args, uint32_t count, storage::value& out );
 
 	bool column_value ( run_context& ctx, const column_info& column, const storage::value& item, storage::value& out );
 

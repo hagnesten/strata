@@ -65,6 +65,16 @@ namespace engine {
 		{ "timezone", 2, 2, false, FUNCTION_TIMEZONE },
 		{ "pg_terminate_backend", 1, 2, false, FUNCTION_TERMINATE },
 		{ "make_interval", 0, 7, false, FUNCTION_MAKE_INTERVAL },
+		{ "repeat", 2, 2, false, FUNCTION_REPEAT },
+		{ "lpad", 2, 3, false, FUNCTION_LPAD },
+		{ "rpad", 2, 3, false, FUNCTION_RPAD },
+		{ "left", 2, 2, false, FUNCTION_LEFT },
+		{ "right", 2, 2, false, FUNCTION_RIGHT },
+		{ "reverse", 1, 1, false, FUNCTION_REVERSE },
+		{ "split_part", 3, 3, false, FUNCTION_SPLIT_PART },
+		{ "starts_with", 2, 2, false, FUNCTION_STARTS_WITH },
+		{ "initcap", 1, 1, false, FUNCTION_INITCAP },
+		{ "translate", 3, 3, false, FUNCTION_TRANSLATE },
 		{ "strata_array", 0, 255, false, FUNCTION_ARRAY_BUILD },
 		{ "strata_contains", 2, 2, false, FUNCTION_ARRAY_CONTAINS },
 		{ "strata_overlap", 2, 2, false, FUNCTION_ARRAY_OVERLAP },
@@ -1278,6 +1288,18 @@ namespace engine {
 				return true;
 
 			}
+
+			case FUNCTION_REPEAT:
+			case FUNCTION_LPAD:
+			case FUNCTION_RPAD:
+			case FUNCTION_LEFT:
+			case FUNCTION_RIGHT:
+			case FUNCTION_REVERSE:
+			case FUNCTION_SPLIT_PART:
+			case FUNCTION_STARTS_WITH:
+			case FUNCTION_INITCAP:
+			case FUNCTION_TRANSLATE:
+				return string_function ( ctx, item->column, args, count, out );
 
 			case FUNCTION_MAKE_INTERVAL: {
 
