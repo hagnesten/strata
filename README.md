@@ -54,7 +54,8 @@ Strata is a single-file SQL database engine and a studio app for working with it
   - `pg_catalog` and `information_schema` views
 - **Exact money:** `NUMERIC(p,s)`, `DECIMAL` and `MONEY` columns store exact decimals up to 36 digits. They round to the declared scale and use Postgres's rules for division and averages.
 - **Timestamps and JSON:** timestamps are stored in one canonical UTC form, and `jsonb` is normalized the way Postgres stores it.
-- **Concurrency:** many readers run alongside one writer. Each statement sees the latest commits (read committed), and waiting writers are served in order.
+- **Concurrency:** many readers run alongside one writer. Each statement sees the latest commits (read committed). Waiting writers drop their snapshot and are served in order, and the next one starts the moment a transaction ends.
+- **Realtime:** `LISTEN`, `UNLISTEN` and `NOTIFY` deliver events between connections. Notifications sent inside a transaction arrive only if it commits.
 
 `bindings/csharp/Compat` runs the same Npgsql, Dapper and EF Core scenarios against Strata and a real Postgres and compares every result. `bindings/csharp/Wire` is a dependency-free check with an orders-and-fills trading workload.
 
