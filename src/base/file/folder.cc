@@ -164,6 +164,24 @@ namespace base {
 
 	}
 
+	bool save_file ( const char* path, const char* data, size_t size ) {
+
+		text temporary;
+
+		temporary.add ( path ).add ( ".saving" );
+
+		if ( !write_whole ( temporary.value ( ), data, size ) )
+			return false;
+
+		if ( replace_path ( temporary.value ( ), path ) )
+			return true;
+
+		erase_path ( temporary.value ( ) );
+
+		return false;
+
+	}
+
 	bool write_whole ( const char* path, const char* data, size_t size ) {
 
 		file_handle file;
