@@ -221,6 +221,15 @@ namespace engine {
 
 	}
 
+	const prepared_select* statement_plan ( const prepared_statement& item ) {
+
+		if ( !item.statement || item.statement->kind != sql::STATEMENT_SELECT || !item.statement->select->prepared )
+			return nullptr;
+
+		return static_cast < const prepared_select* > ( item.statement->select->prepared );
+
+	}
+
 	bool statement_returns_rows ( const prepared_statement& item ) {
 
 		return item.statement && ( item.statement->kind == sql::STATEMENT_SELECT || item.statement->kind == sql::STATEMENT_EXPLAIN );

@@ -33,6 +33,8 @@ namespace engine {
 
 	bool statement_returns_rows ( const prepared_statement& item );
 
+	const prepared_select* statement_plan ( const prepared_statement& item );
+
 	void finish_statement ( prepared_statement* item );
 
 }

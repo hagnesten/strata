@@ -586,8 +586,12 @@ namespace sql {
 				return nullptr;
 
 			uint64_t number = 0;
+			bool dollar_number = here.size > 1 && here.start [ 0 ] == '$';
 
-			if ( here.size > 1 && here.start [ 0 ] == '?' ) {
+			for ( uint32_t i = 1; dollar_number && i < here.size; i++ )
+				dollar_number = here.start [ i ] >= '0' && here.start [ i ] <= '9';
+
+			if ( here.size > 1 && ( here.start [ 0 ] == '?' || dollar_number ) ) {
 
 				base::text digits;
 
