@@ -2016,6 +2016,14 @@ namespace storage {
 				at.page = number;
 				at.slot = slot;
 
+				if ( slot < count ) {
+
+					at.valid = true;
+
+					return true;
+
+				}
+
 				return settle ( at );
 
 			}
@@ -2272,7 +2280,7 @@ namespace storage {
 
 	}
 
-	bool table_lookup ( btree& tree, int64_t rowid, base::arena& memory, const uint8_t*& data, size_t& size, bool& found ) {
+	bool table_lookup ( btree& tree, int64_t rowid, base::arena& memory, const uint8_t*& data, size_t& size, bool& found, uint32_t* page, uint32_t* where ) {
 
 		pager& owner = *tree.owner;
 		uint32_t number = tree.root;
@@ -2298,6 +2306,12 @@ namespace storage {
 				if ( fine && exact && ( fine = parse_cell ( frame->data, slot, info ) ) ) {
 
 					found = true;
+
+					if ( page )
+						*page = number;
+
+					if ( where )
+						*where = slot;
 
 					if ( info.payload == info.local ) {
 

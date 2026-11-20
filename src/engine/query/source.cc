@@ -1360,16 +1360,10 @@ namespace engine {
 				if ( !evaluate ( ctx, scope, plan.path.equal [ 0 ], value ) )
 					return false;
 
-				if ( !exact_rowid ( value, source.low ) ) {
-
+				if ( !exact_rowid ( value, source.low ) )
 					source.done = true;
 
-					return true;
-
-				}
-
-				if ( !storage::cursor_seek_rowid ( source.at, source.tree, source.low ) )
-					return fail_storage ( ctx, "a table could not be searched" );
+				source.at.valid = false;
 
 				return true;
 
@@ -1618,6 +1612,63 @@ namespace engine {
 
 	}
 
+	static bool next_rowid ( run_context& ctx, query_state* scope, source_state& source, bool& found ) {
+
+		if ( !source.first ) {
+
+			source.done = true;
+
+			return true;
+
+		}
+
+		source.first = false;
+
+		if ( !source.quick_compiled ) {
+
+			source.quick_compiled = true;
+
+			if ( !compile_quick ( ctx, scope, source ) )
+				return false;
+
+		}
+
+		const uint8_t* data = nullptr;
+		size_t size = 0;
+		bool present = false;
+		uint32_t page = 0;
+		uint32_t slot = 0;
+
+		if ( !storage::table_lookup ( source.tree, source.low, *ctx.scratch, data, size, present, &page, &slot ) )
+			return fail_storage ( ctx, "a table could not be searched" );
+
+		source.done = true;
+
+		if ( !present )
+			return true;
+
+		if ( source.quick_ready && source.quick_count ) {
+
+			bool pass = true;
+
+			if ( !quick_passes ( ctx, source, source.low, data, size, pass ) )
+				return false;
+
+			if ( !pass )
+				return true;
+
+		}
+
+		source.done = false;
+		source.row_page = page;
+		source.row_slot = slot;
+		source.rowid = source.low;
+		found = true;
+
+		return decode_scanned ( ctx, source, source.low, data, size );
+
+	}
+
 	bool next_source ( run_context& ctx, query_state* scope, source_state& source, bool& found ) {
 
 		found = false;
@@ -1649,11 +1700,13 @@ namespace engine {
 
 		switch ( plan.path.kind ) {
 
-			case PATH_SCAN:
-			case PATH_ROWID_RANGE:
-			case PATH_ROWID_EQUAL: {
+			case PATH_ROWID_EQUAL:
+				return next_rowid ( ctx, scope, source, found );
 
-				if ( !source.at.valid || ( plan.path.kind == PATH_ROWID_EQUAL && !source.first ) ) {
+			case PATH_SCAN:
+			case PATH_ROWID_RANGE: {
+
+				if ( !source.at.valid ) {
 
 					source.done = true;
 
@@ -1685,7 +1738,7 @@ namespace engine {
 					if ( !storage::cursor_view ( source.at, *ctx.scratch, rowid, data, size, held ) )
 						return fail_storage ( ctx, "a table could not be read" );
 
-					if ( ( plan.path.kind == PATH_ROWID_RANGE && rowid > source.high ) || ( plan.path.kind == PATH_ROWID_EQUAL && rowid != source.low ) ) {
+					if ( plan.path.kind == PATH_ROWID_RANGE && rowid > source.high ) {
 
 						if ( held )
 							storage::release_page ( held );
@@ -1717,7 +1770,7 @@ namespace engine {
 
 							ctx.scratch->rewind ( mark );
 
-							if ( !source.at.valid || plan.path.kind == PATH_ROWID_EQUAL ) {
+							if ( !source.at.valid ) {
 
 								source.done = true;
 
