@@ -44,6 +44,9 @@ namespace engine {
 		}
 
 		item.schema->search [ 0 ] = 0;
+		item.schema->session_user [ 0 ] = 0;
+		item.schema->session_database [ 0 ] = 0;
+		item.schema->session_id = 0;
 
 		if ( !load_catalog ( item.pages, *item.schema, item.problem ) ) {
 
@@ -191,6 +194,8 @@ namespace engine {
 	}
 
 	static bool run_body ( run_context& ctx, const sql::statement* item, query_sink* sink ) {
+
+		ctx.output = sink;
 
 		switch ( item->kind ) {
 

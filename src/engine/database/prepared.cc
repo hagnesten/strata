@@ -189,7 +189,9 @@ namespace engine {
 
 		}
 
-		if ( item.statement->kind != sql::STATEMENT_SELECT )
+		bool returning = has_returning ( item.statement );
+
+		if ( item.statement->kind != sql::STATEMENT_SELECT && !returning )
 			return true;
 
 		run_context ctx = { };
@@ -199,7 +201,18 @@ namespace engine {
 		ctx.next_id = item.next_id;
 
 		uint64_t loads = owner.schema->loads;
-		prepared_select* plan = prepare_select ( ctx, item.statement->select, nullptr );
+		prepared_select* plan = nullptr;
+
+		if ( returning ) {
+
+			const char* table = nullptr;
+			const sql::returning_clause* clause = returning_of ( item.statement, table );
+			returning_plan* back = plan_returning ( ctx, table, *clause );
+
+			plan = back ? back->scope : nullptr;
+
+		} else
+			plan = prepare_select ( ctx, item.statement->select, nullptr );
 
 		item.scopes = ctx.scopes;
 		item.next_id = ctx.next_id;
@@ -223,7 +236,19 @@ namespace engine {
 
 	const prepared_select* statement_plan ( const prepared_statement& item ) {
 
-		if ( !item.statement || item.statement->kind != sql::STATEMENT_SELECT || !item.statement->select->prepared )
+		if ( !item.statement )
+			return nullptr;
+
+		if ( has_returning ( item.statement ) ) {
+
+			const char* table = nullptr;
+			const sql::returning_clause* clause = returning_of ( item.statement, table );
+
+			return clause->prepared ? static_cast < const returning_plan* > ( clause->prepared )->scope : nullptr;
+
+		}
+
+		if ( item.statement->kind != sql::STATEMENT_SELECT || !item.statement->select->prepared )
 			return nullptr;
 
 		return static_cast < const prepared_select* > ( item.statement->select->prepared );
@@ -232,7 +257,7 @@ namespace engine {
 
 	bool statement_returns_rows ( const prepared_statement& item ) {
 
-		return item.statement && ( item.statement->kind == sql::STATEMENT_SELECT || item.statement->kind == sql::STATEMENT_EXPLAIN );
+		return item.statement && ( item.statement->kind == sql::STATEMENT_SELECT || item.statement->kind == sql::STATEMENT_EXPLAIN || has_returning ( item.statement ) );
 
 	}
 
