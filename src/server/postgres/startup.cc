@@ -1,4 +1,5 @@
 #include "server/server.hh"
+#include "server/tls/tls.hh"
 #include "base/text/base64.hh"
 #include "base/hash/scram.hh"
 
@@ -216,6 +217,26 @@ namespace server {
 			int32_t code = read32 ( reader );
 
 			link.input_start += size;
+
+			if ( code == PG_SSL_REQUEST && link.owner->identity && !link.tls ) {
+
+				put_bytes ( link, "S", 1 );
+
+				if ( !flush_output ( link ) || !tls_accept ( link ) )
+					return false;
+
+				continue;
+
+			}
+
+			if ( code == PG_PROTOCOL && link.owner->settings.tls_required && !( link.tls && link.tls->active ) ) {
+
+				send_error ( link, "28000", "this server only accepts TLS connections, connect with sslmode=require" );
+				flush_output ( link );
+
+				return false;
+
+			}
 
 			if ( code == PG_SSL_REQUEST || code == PG_GSS_REQUEST ) {
 

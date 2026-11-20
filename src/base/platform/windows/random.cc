@@ -7,6 +7,12 @@ namespace base {
 
 	namespace os {
 
+		bool restrict_file ( const char* path ) {
+
+			return path != nullptr;
+
+		}
+
 		bool random_bytes ( void* out, size_t size ) {
 
 			uint8_t* at = static_cast < uint8_t* > ( out );

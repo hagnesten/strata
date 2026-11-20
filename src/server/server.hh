@@ -101,6 +101,10 @@ namespace server {
 		uint32_t backup_keep;
 		uint32_t slow_milliseconds;
 		const char* log_path;
+		bool tls;
+		bool tls_required;
+		const char* tls_certificate;
+		const char* tls_key;
 
 	};
 
@@ -177,6 +181,7 @@ namespace server {
 		base::text notices;
 		uint32_t secret;
 		uint32_t id;
+		struct tls_session* tls;
 
 	};
 
@@ -199,6 +204,7 @@ namespace server {
 		uint64_t started_ms;
 		bool released;
 		bool running;
+		struct tls_identity* identity;
 
 	};
 
@@ -259,6 +265,10 @@ namespace server {
 	bool read_message ( server_connection& link, pg_message& out );
 
 	bool flush_output ( server_connection& link );
+
+	bool reserve_input ( server_connection& link, size_t extra );
+
+	bool output_waiting ( const server_connection& link );
 
 	void begin_message ( server_connection& link, uint8_t type );
 

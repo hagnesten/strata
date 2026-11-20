@@ -1,4 +1,5 @@
 #include "server/server.hh"
+#include "server/tls/tls.hh"
 #include "base/console/console.hh"
 #include "base/clock/clock.hh"
 
@@ -24,6 +25,7 @@ namespace server {
 		if ( link->routine )
 			base::free_coroutine ( link->routine );
 
+		tls_release ( *link );
 		base::release ( link->input );
 		link->output.~text ( );
 		link->notices.~text ( );
@@ -64,7 +66,7 @@ namespace server {
 
 		resume ( *head );
 
-		if ( head->output_sent < head->output.size && !head->closed )
+		if ( output_waiting ( *head ) && !head->closed )
 			pump_output ( *head );
 
 	}
@@ -125,13 +127,56 @@ namespace server {
 
 	}
 
+	bool output_waiting ( const server_connection& link ) {
+
+		return link.output_sent < link.output.size || tls_waiting ( link );
+
+	}
+
+	static bool pending_bytes ( server_connection& link, const char*& data, size_t& size, size_t*& sent, base::text*& buffer ) {
+
+		if ( link.tls && link.tls->active ) {
+
+			if ( !tls_seal_output ( link ) )
+				return false;
+
+			buffer = &link.tls->sealed;
+			sent = &link.tls->sealed_sent;
+
+		} else {
+
+			buffer = &link.output;
+			sent = &link.output_sent;
+
+		}
+
+		data = buffer->value ( );
+		size = buffer->size;
+
+		return true;
+
+	}
+
 	static void pump_output ( server_connection& link ) {
 
-		while ( link.output_sent < link.output.size ) {
+		const char* data = nullptr;
+		size_t size = 0;
+		size_t* sent_so_far = nullptr;
+		base::text* buffer = nullptr;
+
+		if ( !pending_bytes ( link, data, size, sent_so_far, buffer ) ) {
+
+			link.closed = true;
+
+			return;
+
+		}
+
+		while ( *sent_so_far < size ) {
 
 			size_t sent = 0;
 
-			if ( !base::os::send_some ( link.socket, link.output.value ( ) + link.output_sent, link.output.size - link.output_sent, sent ) ) {
+			if ( !base::os::send_some ( link.socket, data + *sent_so_far, size - *sent_so_far, sent ) ) {
 
 				link.closed = true;
 
@@ -142,16 +187,16 @@ namespace server {
 			if ( !sent )
 				return;
 
-			link.output_sent += sent;
+			*sent_so_far += sent;
 
 		}
 
-		link.output.clear ( );
-		link.output_sent = 0;
+		buffer->clear ( );
+		*sent_so_far = 0;
 
 	}
 
-	static void pump_input ( server_connection& link ) {
+	bool reserve_input ( server_connection& link, size_t extra ) {
 
 		if ( link.input_start == link.input_end ) {
 
@@ -160,7 +205,10 @@ namespace server {
 
 		}
 
-		if ( link.input_end == link.input_room && link.input_start ) {
+		if ( link.input_room - link.input_end >= extra )
+			return true;
+
+		if ( link.input_start ) {
 
 			base::move ( link.input, link.input + link.input_start, link.input_end - link.input_start );
 			link.input_end -= link.input_start;
@@ -168,23 +216,43 @@ namespace server {
 
 		}
 
-		if ( link.input_end == link.input_room ) {
+		if ( link.input_room - link.input_end >= extra )
+			return true;
 
-			size_t grown = link.input_room * 2;
-			uint8_t* made = base::make < uint8_t > ( grown );
+		size_t grown = link.input_room * 2;
 
-			if ( !made ) {
+		while ( grown - link.input_end < extra )
+			grown *= 2;
 
-				link.closed = true;
+		uint8_t* made = base::make < uint8_t > ( grown );
 
-				return;
+		if ( !made )
+			return false;
 
-			}
+		base::copy ( made, link.input, link.input_end );
+		base::release ( link.input );
+		link.input = made;
+		link.input_room = grown;
 
-			base::copy ( made, link.input, link.input_end );
-			base::release ( link.input );
-			link.input = made;
-			link.input_room = grown;
+		return true;
+
+	}
+
+	static void pump_input ( server_connection& link ) {
+
+		if ( link.tls && link.tls->active ) {
+
+			tls_receive ( link );
+
+			return;
+
+		}
+
+		if ( !reserve_input ( link, 1 ) ) {
+
+			link.closed = true;
+
+			return;
 
 		}
 
@@ -215,6 +283,9 @@ namespace server {
 		watch_activity ( *state );
 
 		load_grants ( *state );
+
+		if ( !tls_prepare ( *state ) )
+			return 1;
 
 		if ( !load_users ( *state ) && !settings.trust ) {
 
@@ -282,7 +353,7 @@ namespace server {
 
 				server_connection& link = *state->connections [ i ];
 
-				polls [ count++ ] = { link.socket, link.reading, link.output_sent < link.output.size, false, false, false };
+				polls [ count++ ] = { link.socket, link.reading, output_waiting ( link ), false, false, false };
 				waiting = waiting || link.busy_wait;
 				locked = locked || link.lock_wait;
 
@@ -319,7 +390,7 @@ namespace server {
 				} else if ( link.busy_wait )
 					resume ( link );
 
-				if ( link.output_sent < link.output.size && !link.closed )
+				if ( output_waiting ( link ) && !link.closed )
 					pump_output ( link );
 
 				if ( state->released )
@@ -340,7 +411,7 @@ namespace server {
 
 				server_connection& link = *state->connections [ i ];
 
-				if ( link.closed || ( link.terminate && !link.active ) || ( link.finished && link.output_sent >= link.output.size ) )
+				if ( link.closed || ( link.terminate && !link.active ) || ( link.finished && !output_waiting ( link ) ) )
 					close_connection ( *state, i );
 
 			}
@@ -364,7 +435,7 @@ namespace server {
 			if ( link.closed )
 				return false;
 
-			if ( link.output_sent < link.output.size && !flush_output ( link ) )
+			if ( output_waiting ( link ) && !flush_output ( link ) )
 				return false;
 
 			link.reading = true;
@@ -379,11 +450,15 @@ namespace server {
 
 	bool flush_output ( server_connection& link ) {
 
-		while ( !link.closed && link.output_sent < link.output.size ) {
+		while ( !link.closed && output_waiting ( link ) ) {
 
+			const char* data = nullptr;
+			size_t size = 0;
+			size_t* sent_so_far = nullptr;
+			base::text* buffer = nullptr;
 			size_t sent = 0;
 
-			if ( !base::os::send_some ( link.socket, link.output.value ( ) + link.output_sent, link.output.size - link.output_sent, sent ) ) {
+			if ( !pending_bytes ( link, data, size, sent_so_far, buffer ) || !base::os::send_some ( link.socket, data + *sent_so_far, size - *sent_so_far, sent ) ) {
 
 				link.closed = true;
 
@@ -391,9 +466,14 @@ namespace server {
 
 			}
 
-			link.output_sent += sent;
+			*sent_so_far += sent;
 
-			if ( link.output_sent < link.output.size && link.output.size - link.output_sent > SERVER_OUTPUT_LIMIT ) {
+			if ( *sent_so_far >= size ) {
+
+				buffer->clear ( );
+				*sent_so_far = 0;
+
+			} else if ( size - *sent_so_far > SERVER_OUTPUT_LIMIT ) {
 
 				link.busy_wait = true;
 				base::leave_coroutine ( link.routine );
@@ -401,13 +481,6 @@ namespace server {
 
 			} else if ( !sent )
 				break;
-
-		}
-
-		if ( link.output_sent >= link.output.size ) {
-
-			link.output.clear ( );
-			link.output_sent = 0;
 
 		}
 

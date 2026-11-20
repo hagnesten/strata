@@ -222,6 +222,29 @@ namespace base {
 
 	}
 
+	bool save_private_file ( const char* path, const char* data, size_t size ) {
+
+		text temporary;
+
+		temporary.add ( path ).add ( ".saving" );
+
+		if ( !write_whole ( temporary.value ( ), "", 0 ) || !os::restrict_file ( temporary.value ( ) ) || !write_whole ( temporary.value ( ), data, size ) ) {
+
+			erase_path ( temporary.value ( ) );
+
+			return false;
+
+		}
+
+		if ( replace_path ( temporary.value ( ), path ) )
+			return true;
+
+		erase_path ( temporary.value ( ) );
+
+		return false;
+
+	}
+
 	bool write_whole ( const char* path, const char* data, size_t size ) {
 
 		file_handle file;

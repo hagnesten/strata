@@ -69,7 +69,7 @@ namespace server {
 		for ( uint32_t i = 0; i < state.grant_count; i++ )
 			written.add ( state.grants [ i ].grantee ).add ( '\t' ).add ( state.grants [ i ].object ).add ( '\t' ).number ( state.grants [ i ].privileges ).add ( '\n' );
 
-		return base::save_file ( path.value ( ), written.value ( ), written.size );
+		return base::save_private_file ( path.value ( ), written.value ( ), written.size );
 
 	}
 

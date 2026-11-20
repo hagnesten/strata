@@ -99,6 +99,8 @@ namespace base {
 
 		bool random_bytes ( void* out, size_t size );
 
+		bool restrict_file ( const char* path );
+
 		bool connect_tcp ( void*& out, const char* host, uint16_t port );
 
 		bool send_all ( void* socket, const void* data, size_t size );

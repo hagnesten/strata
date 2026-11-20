@@ -196,7 +196,7 @@ namespace server {
 
 		}
 
-		return base::save_file ( file_path.value ( ), written.value ( ), written.size );
+		return base::save_private_file ( file_path.value ( ), written.value ( ), written.size );
 
 	}
 

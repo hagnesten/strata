@@ -438,6 +438,12 @@ namespace base {
 
 		}
 
+		bool restrict_file ( const char* path ) {
+
+			return call4 ( LINUX_FCHMODAT, LINUX_AT_CWD, reinterpret_cast < long > ( path ), 0600, 0 ) == 0;
+
+		}
+
 		bool random_bytes ( void* out, size_t size ) {
 
 			uint8_t* at = static_cast < uint8_t* > ( out );

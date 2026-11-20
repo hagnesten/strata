@@ -88,6 +88,17 @@ namespace app {
 				settings.backup_folder = arguments [ ++i ];
 			else if ( base::same ( arguments [ i ], "--log" ) && i + 1 < count )
 				settings.log_path = arguments [ ++i ];
+			else if ( base::same ( arguments [ i ], "--tls" ) )
+				settings.tls = true;
+			else if ( base::same ( arguments [ i ], "--tls-required" ) )
+				settings.tls = settings.tls_required = true;
+			else if ( base::same ( arguments [ i ], "--tls-cert" ) && i + 1 < count ) {
+
+				settings.tls = true;
+				settings.tls_certificate = arguments [ ++i ];
+
+			} else if ( base::same ( arguments [ i ], "--tls-key" ) && i + 1 < count )
+				settings.tls_key = arguments [ ++i ];
 			else if ( ( base::same ( arguments [ i ], "--backup-every" ) || base::same ( arguments [ i ], "--backup-keep" ) || base::same ( arguments [ i ], "--slow" ) ) && i + 1 < count && base::read_number ( arguments [ i + 1 ], number ) && number < 100000000 ) {
 
 				if ( base::same ( arguments [ i ], "--backup-every" ) )
@@ -107,7 +118,7 @@ namespace app {
 
 			} else {
 
-				base::write_error ( "strata --serve <file> [--port 5432] [--host 0.0.0.0] [--trust] [--backup-folder <dir> --backup-every <minutes> --backup-keep <count>] [--slow <ms>] [--log <file>]\n" );
+				base::write_error ( "strata --serve <file> [--port 5432] [--host 0.0.0.0] [--trust] [--backup-folder <dir> --backup-every <minutes> --backup-keep <count>] [--slow <ms>] [--log <file>] [--tls] [--tls-required] [--tls-cert <pem> --tls-key <pem>]\n" );
 
 				return 2;
 
