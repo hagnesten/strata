@@ -83,6 +83,33 @@ namespace engine {
 
 	}
 
+	static int32_t text_truth ( const char* text, size_t size ) {
+
+		while ( size && ( *text == ' ' || *text == '\t' ) ) {
+
+			text++;
+			size--;
+
+		}
+
+		while ( size && ( text [ size - 1 ] == ' ' || text [ size - 1 ] == '\t' ) )
+			size--;
+
+		static const char* const yes [ ] = { "t", "true", "y", "yes", "on", "1" };
+		static const char* const no [ ] = { "f", "false", "n", "no", "off", "0" };
+
+		for ( const char* word : yes )
+			if ( base::length ( word ) == size && base::same_folded_size ( text, word, size ) )
+				return 1;
+
+		for ( const char* word : no )
+			if ( base::length ( word ) == size && base::same_folded_size ( text, word, size ) )
+				return 0;
+
+		return -1;
+
+	}
+
 	static truth_kind negate ( truth_kind truth ) {
 
 		return truth == TRUTH_NULL ? TRUTH_NULL : truth == TRUTH_TRUE ? TRUTH_FALSE : TRUTH_TRUE;
@@ -655,7 +682,23 @@ namespace engine {
 
 				storage::value value;
 
-				return evaluate ( ctx, scope, item->left, value ) && cast_value ( ctx, value, item->cast, out );
+				if ( !evaluate ( ctx, scope, item->left, value ) )
+					return false;
+
+				if ( value.kind == storage::VALUE_TEXT && item->name && ( base::same_folded ( item->name, "bool" ) || base::same_folded ( item->name, "boolean" ) ) ) {
+
+					int32_t truth = text_truth ( reinterpret_cast < const char* > ( value.bytes ), value.size );
+
+					if ( truth < 0 )
+						return fail_run ( ctx, "invalid input syntax for type boolean" );
+
+					out = storage::integer_value ( truth );
+
+					return true;
+
+				}
+
+				return cast_value ( ctx, value, item->cast, out );
 
 			}
 

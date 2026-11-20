@@ -518,6 +518,18 @@ namespace engine {
 				add_time ( made, moment );
 				break;
 
+			case FUNCTION_NOW: {
+
+				int64_t milli = ( moment % 1000 + 1000 ) % 1000;
+
+				add_date ( made, moment );
+				made.add ( ' ' );
+				add_time ( made, moment );
+				made.add ( '.' ).add ( static_cast < char > ( '0' + milli / 100 ) ).add ( static_cast < char > ( '0' + milli / 10 % 10 ) ).add ( static_cast < char > ( '0' + milli % 10 ) );
+				break;
+
+			}
+
 			case FUNCTION_JULIANDAY:
 				out = storage::real_value ( static_cast < double > ( moment ) / DATE_DAY );
 

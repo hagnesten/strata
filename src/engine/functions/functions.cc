@@ -42,6 +42,25 @@ namespace engine {
 		{ "unicode", 1, 1, false, FUNCTION_UNICODE },
 		{ "upper", 1, 1, false, FUNCTION_UPPER },
 		{ "zeroblob", 1, 1, false, FUNCTION_ZEROBLOB },
+		{ "version", 0, 0, false, FUNCTION_SERVER_VERSION },
+		{ "current_database", 0, 0, false, FUNCTION_CURRENT_DATABASE },
+		{ "current_catalog", 0, 0, false, FUNCTION_CURRENT_DATABASE },
+		{ "current_schema", 0, 0, false, FUNCTION_CURRENT_SCHEMA },
+		{ "current_user", 0, 0, false, FUNCTION_CURRENT_USER },
+		{ "session_user", 0, 0, false, FUNCTION_CURRENT_USER },
+		{ "pg_backend_pid", 0, 0, false, FUNCTION_BACKEND_PID },
+		{ "current_setting", 1, 2, false, FUNCTION_CURRENT_SETTING },
+		{ "gen_random_uuid", 0, 0, false, FUNCTION_RANDOM_UUID },
+		{ "uuid_generate_v4", 0, 0, false, FUNCTION_RANDOM_UUID },
+		{ "pg_advisory_unlock_all", 0, 0, false, FUNCTION_NOTHING },
+		{ "pg_advisory_lock", 1, 2, false, FUNCTION_NOTHING },
+		{ "pg_advisory_unlock", 1, 2, false, FUNCTION_NOTHING },
+		{ "pg_advisory_xact_lock", 1, 2, false, FUNCTION_NOTHING },
+		{ "set_config", 3, 3, false, FUNCTION_NOTHING },
+		{ "now", 0, 0, false, FUNCTION_NOW },
+		{ "statement_timestamp", 0, 0, false, FUNCTION_NOW },
+		{ "transaction_timestamp", 0, 0, false, FUNCTION_NOW },
+		{ "clock_timestamp", 0, 0, false, FUNCTION_NOW },
 		{ "date", 0, 255, false, FUNCTION_DATE },
 		{ "time", 0, 255, false, FUNCTION_TIME },
 		{ "datetime", 0, 255, false, FUNCTION_DATETIME },
@@ -1133,6 +1152,76 @@ namespace engine {
 
 				return true;
 
+			case FUNCTION_SERVER_VERSION: {
+
+				base::text made;
+
+				made.add ( "PostgreSQL 16.0 (Strata " ).add ( ENGINE_VERSION ).add ( ") on x86_64" );
+
+				return make_text ( ctx, made, out );
+
+			}
+
+			case FUNCTION_CURRENT_DATABASE:
+			case FUNCTION_CURRENT_SCHEMA:
+			case FUNCTION_CURRENT_USER: {
+
+				function_kind kind = static_cast < function_kind > ( item->column );
+				const char* value = kind == FUNCTION_CURRENT_DATABASE ? ctx.schema->session_database : kind == FUNCTION_CURRENT_USER ? ctx.schema->session_user : ctx.schema->search;
+				base::text made;
+
+				made.add ( value [ 0 ] ? value : kind == FUNCTION_CURRENT_DATABASE ? "strata" : kind == FUNCTION_CURRENT_USER ? "strata" : "public" );
+
+				return make_text ( ctx, made, out );
+
+			}
+
+			case FUNCTION_BACKEND_PID:
+				out = storage::integer_value ( ctx.schema->session_id );
+
+				return true;
+
+			case FUNCTION_CURRENT_SETTING: {
+
+				storage::value name = text_of ( *ctx.scratch, args [ 0 ] );
+				base::text wanted;
+				base::text made;
+
+				wanted.add ( reinterpret_cast < const char* > ( name.bytes ), name.size );
+				setting_value ( *ctx.schema, wanted.value ( ), made );
+
+				return make_text ( ctx, made, out );
+
+			}
+
+			case FUNCTION_RANDOM_UUID: {
+
+				static const char digits [ ] = "0123456789abcdef";
+				uint8_t bytes [ 16 ];
+				base::text made;
+
+				for ( uint32_t i = 0; i < 16; i++ )
+					bytes [ i ] = static_cast < uint8_t > ( next_random ( ctx ) >> 24 );
+
+				bytes [ 6 ] = static_cast < uint8_t > ( ( bytes [ 6 ] & 0x0F ) | 0x40 );
+				bytes [ 8 ] = static_cast < uint8_t > ( ( bytes [ 8 ] & 0x3F ) | 0x80 );
+
+				for ( uint32_t i = 0; i < 16; i++ ) {
+
+					if ( i == 4 || i == 6 || i == 8 || i == 10 )
+						made.add ( '-' );
+
+					made.add ( digits [ bytes [ i ] >> 4 ] ).add ( digits [ bytes [ i ] & 15 ] );
+
+				}
+
+				return make_text ( ctx, made, out );
+
+			}
+
+			case FUNCTION_NOTHING:
+				return true;
+
 			case FUNCTION_RANDOMBLOB:
 			case FUNCTION_ZEROBLOB: {
 
@@ -1283,6 +1372,7 @@ namespace engine {
 
 			}
 
+			case FUNCTION_NOW:
 			case FUNCTION_DATE:
 			case FUNCTION_TIME:
 			case FUNCTION_DATETIME:
