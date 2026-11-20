@@ -370,6 +370,18 @@ namespace engine {
 
 	};
 
+	struct scan_filter {
+
+		struct run_context* ctx;
+		source_state* source;
+		bool checked;
+		bool early;
+		bool range;
+		bool failed;
+		int64_t high;
+
+	};
+
 	struct query_state {
 
 		prepared_select* plan;

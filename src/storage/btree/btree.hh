@@ -114,6 +114,30 @@ namespace storage {
 
 	};
 
+	enum scan_outcome : uint32_t {
+
+		SCAN_REJECT,
+		SCAN_TAKE,
+		SCAN_STOP,
+		SCAN_FAIL,
+		SCAN_END,
+
+	};
+
+	typedef scan_outcome ( *row_filter ) ( void* context, int64_t rowid, const uint8_t* data, size_t size );
+
+	struct scan_result {
+
+		scan_outcome outcome;
+		int64_t rowid;
+		const uint8_t* data;
+		size_t size;
+		uint32_t page;
+		uint32_t slot;
+		uint64_t examined;
+
+	};
+
 	enum seek_match : uint8_t {
 
 		SEEK_UNKNOWN,
@@ -129,6 +153,7 @@ namespace storage {
 		uint32_t slot;
 		bool valid;
 		seek_match match;
+		page_frame* frame;
 
 	};
 
@@ -200,6 +225,8 @@ namespace storage {
 	bool cursor_take ( cursor& at, base::arena& memory, int64_t& rowid, const uint8_t*& data, size_t& size );
 
 	bool cursor_view ( cursor& at, base::arena& memory, int64_t& rowid, const uint8_t*& data, size_t& size, page_frame*& held );
+
+	bool cursor_scan ( cursor& at, base::arena& memory, row_filter filter, void* context, scan_result& out );
 
 	bool table_replace_at ( btree& tree, uint32_t number, uint32_t slot, int64_t rowid, const uint8_t* payload, size_t size, bool& done );
 

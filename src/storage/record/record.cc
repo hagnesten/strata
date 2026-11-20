@@ -436,6 +436,21 @@ namespace storage {
 
 		present = true;
 
+		if ( at < size && data [ at ] == VALUE_INTEGER ) {
+
+			uint64_t bits = 0;
+
+			at++;
+
+			if ( !base::read_varint ( data, size, at, bits ) )
+				return false;
+
+			out = integer_value ( base::unzigzag ( bits ) );
+
+			return true;
+
+		}
+
 		return decode_one ( data, size, at, out );
 
 	}

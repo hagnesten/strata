@@ -1612,6 +1612,93 @@ namespace engine {
 
 	}
 
+	static storage::scan_outcome scan_check ( void* context, int64_t rowid, const uint8_t* data, size_t size ) {
+
+		scan_filter& item = *static_cast < scan_filter* > ( context );
+		run_context& ctx = *item.ctx;
+		source_state& source = *item.source;
+		bool pass = true;
+
+		if ( item.range && rowid > item.high )
+			return storage::SCAN_STOP;
+
+		if ( item.checked ) {
+
+			bool mixed = source.quick_column == QUICK_MIXED;
+			base::arena_mark mark = { };
+
+			if ( mixed )
+				mark = ctx.scratch->mark ( );
+
+			if ( !quick_passes ( ctx, source, rowid, data, size, pass ) ) {
+
+				item.failed = true;
+
+				return storage::SCAN_FAIL;
+
+			}
+
+			if ( !pass ) {
+
+				if ( mixed )
+					ctx.scratch->rewind ( mark );
+
+				return storage::SCAN_REJECT;
+
+			}
+
+		}
+
+		if ( item.early ) {
+
+			if ( !sorts_in ( ctx, source, rowid, data, size, pass ) ) {
+
+				item.failed = true;
+
+				return storage::SCAN_FAIL;
+
+			}
+
+			if ( !pass )
+				return storage::SCAN_REJECT;
+
+		}
+
+		return storage::SCAN_TAKE;
+
+	}
+
+	static bool next_filtered ( run_context& ctx, source_state& source, bool checked, bool early, bool& found ) {
+
+		scan_filter filter = { &ctx, &source, checked, early, source.plan->path.kind == PATH_ROWID_RANGE, false, source.high };
+		storage::scan_result result;
+
+		if ( !storage::cursor_scan ( source.at, *ctx.scratch, scan_check, &filter, result ) )
+			return fail_storage ( ctx, "a table could not be read" );
+
+		if ( result.examined > 1 )
+			ctx.rows_examined += result.examined - 1;
+
+		if ( result.outcome == storage::SCAN_FAIL )
+			return false;
+
+		if ( result.outcome != storage::SCAN_TAKE ) {
+
+			source.done = true;
+
+			return true;
+
+		}
+
+		source.row_page = result.page;
+		source.row_slot = result.slot;
+		source.rowid = result.rowid;
+		found = true;
+
+		return decode_scanned ( ctx, source, result.rowid, result.data, result.size );
+
+	}
+
 	static bool next_rowid ( run_context& ctx, query_state* scope, source_state& source, bool& found ) {
 
 		if ( !source.first ) {
@@ -1725,91 +1812,55 @@ namespace engine {
 
 				}
 
-				for ( ;; ) {
+				bool checked = source.quick_ready && source.quick_count;
+				bool early = source.early_pipe && ( source.quick_ready ? !source.residual_count : !plan.filter_count );
 
-					int64_t rowid = 0;
-					const uint8_t* data = nullptr;
-					size_t size = 0;
-					storage::page_frame* held = nullptr;
-					base::arena_mark mark = ctx.scratch->mark ( );
-					uint32_t row_page = source.at.page;
-					uint32_t row_slot = source.at.slot;
+				if ( checked || early )
+					return next_filtered ( ctx, source, checked, early, found );
 
-					if ( !storage::cursor_view ( source.at, *ctx.scratch, rowid, data, size, held ) )
-						return fail_storage ( ctx, "a table could not be read" );
+				int64_t rowid = 0;
+				const uint8_t* data = nullptr;
+				size_t size = 0;
+				storage::page_frame* held = nullptr;
+				uint32_t row_page = source.at.page;
+				uint32_t row_slot = source.at.slot;
 
-					if ( plan.path.kind == PATH_ROWID_RANGE && rowid > source.high ) {
+				if ( !storage::cursor_view ( source.at, *ctx.scratch, rowid, data, size, held ) )
+					return fail_storage ( ctx, "a table could not be read" );
 
-						if ( held )
-							storage::release_page ( held );
+				if ( plan.path.kind == PATH_ROWID_RANGE && rowid > source.high ) {
 
-						source.done = true;
-
-						return true;
-
-					}
-
-					bool checked = source.quick_ready && source.quick_count;
-					bool early = source.early_pipe && ( source.quick_ready ? !source.residual_count : !plan.filter_count );
-
-					if ( checked || early ) {
-
-						bool pass = true;
-						bool fine = !checked || quick_passes ( ctx, source, rowid, data, size, pass );
-
-						if ( fine && pass && early )
-							fine = sorts_in ( ctx, source, rowid, data, size, pass );
-
-						if ( held && ( !fine || !pass ) )
-							storage::release_page ( held );
-
-						if ( !fine )
-							return false;
-
-						if ( !pass ) {
-
-							ctx.scratch->rewind ( mark );
-
-							if ( !source.at.valid ) {
-
-								source.done = true;
-
-								return true;
-
-							}
-
-							ctx.rows_examined++;
-
-							continue;
-
-						}
-
-					}
-
-					if ( held ) {
-
-						uint8_t* kept = static_cast < uint8_t* > ( ctx.scratch->take_raw ( size + 1 ) );
-
-						if ( kept )
-							base::copy ( kept, data, size );
-
+					if ( held )
 						storage::release_page ( held );
 
-						if ( !kept )
-							return fail_run ( ctx, "out of memory" );
+					source.done = true;
 
-						data = kept;
-
-					}
-
-					source.row_page = row_page;
-					source.row_slot = row_slot;
-					source.rowid = rowid;
-					found = true;
-
-					return decode_scanned ( ctx, source, rowid, data, size );
+					return true;
 
 				}
+
+				if ( held ) {
+
+					uint8_t* kept = static_cast < uint8_t* > ( ctx.scratch->take_raw ( size + 1 ) );
+
+					if ( kept )
+						base::copy ( kept, data, size );
+
+					storage::release_page ( held );
+
+					if ( !kept )
+						return fail_run ( ctx, "out of memory" );
+
+					data = kept;
+
+				}
+
+				source.row_page = row_page;
+				source.row_slot = row_slot;
+				source.rowid = rowid;
+				found = true;
+
+				return decode_scanned ( ctx, source, rowid, data, size );
 
 			}
 

@@ -337,6 +337,23 @@ namespace storage {
 
 	}
 
+	page_frame* reuse_page ( pager& item, page_frame* known, uint32_t number ) {
+
+		if ( known && number && known->number == number && number <= item.header.page_count ) {
+
+			item.wal.read_any = true;
+			known->pins++;
+			known->recent = true;
+			item.stats.hits++;
+
+			return known;
+
+		}
+
+		return get_page ( item, number );
+
+	}
+
 	page_frame* get_page ( pager& item, uint32_t number ) {
 
 		if ( !number || number > item.header.page_count ) {
@@ -546,6 +563,9 @@ namespace storage {
 	bool commit_pager ( pager& item ) {
 
 		clear_marks ( item );
+
+		if ( item.wal.shared.header && !item.wal.writing )
+			return true;
 
 		if ( !has_changes ( item ) ) {
 

@@ -1947,6 +1947,7 @@ namespace storage {
 		at.tree = tree;
 		at.valid = false;
 		at.match = SEEK_UNKNOWN;
+		at.frame = nullptr;
 
 		if ( hinted ) {
 
@@ -2155,10 +2156,12 @@ namespace storage {
 			return false;
 
 		pager& owner = *at.tree.owner;
-		page_frame* frame = get_page ( owner, at.page );
+		page_frame* frame = reuse_page ( owner, at.frame, at.page );
 
 		if ( !frame )
 			return false;
+
+		at.frame = frame;
 
 		cell_info info;
 		uint32_t count = count_of ( frame->data );
@@ -2217,16 +2220,157 @@ namespace storage {
 
 	}
 
+	static bool step_page ( cursor& at, uint32_t next ) {
+
+		at.page = next;
+		at.slot = 0;
+
+		return settle ( at );
+
+	}
+
+	bool cursor_scan ( cursor& at, base::arena& memory, row_filter filter, void* context, scan_result& out ) {
+
+		out.outcome = SCAN_END;
+		out.examined = 0;
+
+		while ( at.valid ) {
+
+			pager& owner = *at.tree.owner;
+			page_frame* frame = reuse_page ( owner, at.frame, at.page );
+
+			if ( !frame )
+				return false;
+
+			at.frame = frame;
+
+			const uint8_t* page = frame->data;
+			uint32_t count = count_of ( page );
+			uint32_t next = link_a ( page );
+
+			while ( at.slot < count ) {
+
+				cell_info info;
+
+				if ( !parse_cell ( page, at.slot, info ) ) {
+
+					release_page ( frame );
+					corrupt ( owner, "a cell runs past its page", at.page );
+
+					return false;
+
+				}
+
+				const uint8_t* data = info.local_data;
+				size_t size = info.local;
+				bool copied = false;
+				base::arena_mark before = { };
+
+				if ( info.payload != info.local ) {
+
+					base::text whole;
+
+					before = memory.mark ( );
+
+					if ( !read_full ( owner, info, whole ) ) {
+
+						release_page ( frame );
+
+						return false;
+
+					}
+
+					data = reinterpret_cast < const uint8_t* > ( memory.keep ( whole.value ( ), whole.size ) );
+					size = whole.size;
+					copied = true;
+
+					if ( !data ) {
+
+						release_page ( frame );
+
+						return false;
+
+					}
+
+				}
+
+				out.examined++;
+
+				scan_outcome verdict = filter ( context, info.rowid, data, size );
+
+				if ( verdict == SCAN_REJECT ) {
+
+					if ( copied )
+						memory.rewind ( before );
+
+					at.slot++;
+
+					continue;
+
+				}
+
+				if ( verdict != SCAN_TAKE ) {
+
+					release_page ( frame );
+					out.outcome = verdict;
+
+					return true;
+
+				}
+
+				if ( !copied ) {
+
+					uint8_t* kept = static_cast < uint8_t* > ( memory.take_raw ( size + 1 ) );
+
+					if ( !kept ) {
+
+						release_page ( frame );
+
+						return false;
+
+					}
+
+					base::copy ( kept, data, size );
+					data = kept;
+
+				}
+
+				out.outcome = SCAN_TAKE;
+				out.rowid = info.rowid;
+				out.data = data;
+				out.size = size;
+				out.page = at.page;
+				out.slot = at.slot;
+				release_page ( frame );
+				at.slot++;
+
+				return at.slot < count || step_page ( at, next );
+
+			}
+
+			release_page ( frame );
+
+			if ( !step_page ( at, next ) )
+				return false;
+
+		}
+
+		return true;
+
+	}
+
 	bool cursor_take ( cursor& at, base::arena& memory, int64_t& rowid, const uint8_t*& data, size_t& size ) {
 
 		if ( !at.valid )
 			return false;
 
 		pager& owner = *at.tree.owner;
-		page_frame* frame = get_page ( owner, at.page );
+		page_frame* frame = reuse_page ( owner, at.frame, at.page );
 
 		if ( !frame )
 			return false;
+
+		at.frame = frame;
 
 		cell_info info;
 		uint32_t count = count_of ( frame->data );

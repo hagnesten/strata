@@ -236,6 +236,8 @@ namespace storage {
 
 	page_frame* get_page ( pager& item, uint32_t number );
 
+	page_frame* reuse_page ( pager& item, page_frame* known, uint32_t number );
+
 	page_frame* cached_frame ( pager& item, uint32_t number );
 
 	page_frame* new_page ( pager& item, page_kind kind );
