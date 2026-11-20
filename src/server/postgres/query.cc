@@ -2,6 +2,8 @@
 
 namespace server {
 
+	static void drop_statement ( server_connection& link, const char* name );
+
 	static bool word_at ( const char* text, size_t size, size_t& at, const char* word ) {
 
 		size_t start = at;
@@ -142,6 +144,18 @@ namespace server {
 		if ( word_at ( sql, size, at, "deallocate" ) ) {
 
 			base::copy_text ( tag, tag_room, "DEALLOCATE" );
+			word_at ( sql, size, at, "prepare" );
+
+			while ( at < size && sql [ at ] == ' ' )
+				at++;
+
+			size_t length = 0;
+			char quote = at < size && sql [ at ] == '"' ? sql [ at++ ] : 0;
+
+			while ( at < size && length + 1 < show_room && sql [ at ] != ';' && ( quote ? sql [ at ] != quote : sql [ at ] != ' ' ) )
+				show [ length++ ] = sql [ at++ ];
+
+			show [ length ] = 0;
 
 			return true;
 
@@ -363,6 +377,22 @@ namespace server {
 
 		}
 
+		if ( base::same ( statement.tag, "DISCARD ALL" ) ) {
+
+			forget_statements ( link );
+			engine::set_search ( *link.db->database.schema, "public" );
+
+		}
+
+		if ( base::same ( statement.tag, "DEALLOCATE" ) ) {
+
+			if ( base::same_folded ( statement.control_text, "all" ) )
+				forget_statements ( link );
+			else
+				drop_statement ( link, statement.control_text );
+
+		}
+
 		if ( base::same ( statement.tag, "BEGIN" ) ) {
 
 			if ( !strata_in_transaction ( link.db ) && strata_exec ( link.db, "BEGIN" ) != STRATA_OK ) {
@@ -498,7 +528,8 @@ namespace server {
 		const char* end = sql + size;
 		bool any = false;
 
-		forget_statements ( link );
+		drop_statement ( link, "" );
+		link.portal = { };
 
 		while ( at < end ) {
 
